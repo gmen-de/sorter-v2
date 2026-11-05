@@ -37,6 +37,7 @@ from .bin_layout import (
 from .parse_user_toml import (
     loadMachineSpecificParams,
     loadServoChannelConfig,
+    loadWaveshareBleServoConfig,
     loadWaveshareServoConfig,
 )
 from hardware_settings.chute import boardDefaults, readChuteSettings
@@ -1105,12 +1106,14 @@ def _bindHardware(irl_interface: IRLInterface, config: IRLConfig, gc: GlobalConf
         irl_interface.servos = []
     else:
         waveshare_config = loadWaveshareServoConfig(gc, machine_specific_params)
+        waveshare_ble_config = loadWaveshareBleServoConfig(gc, machine_specific_params)
         irl_interface.servo_controller = build_servo_controller(
             gc,
             control_boards=control_boards,
             servo_channel_config=servo_channel_config,
             waveshare_config=waveshare_config,
             mcu_ports=mcu_ports,
+            waveshare_ble_config=waveshare_ble_config,
         )
         irl_interface.servos = irl_interface.servo_controller.create_layer_servos(
             irl_interface.distribution_layout

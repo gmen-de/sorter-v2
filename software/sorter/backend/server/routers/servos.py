@@ -16,11 +16,18 @@ from bin_layout_store import set_servo_channel_angle
 from irl.bin_layout import channelIdForLayer, getBinLayout
 from server import shared_state
 from server.routers.steppers import _ensure_not_homing
+from server.waveshare_ble_inventory import (
+    _active_waveshare_ble_bridge,
+    get_status as _get_waveshare_ble_status,
+    get_waveshare_ble_bridge_for_api,
+)
 from server.waveshare_inventory import (
     _active_waveshare_service,
     _configured_waveshare_port,
     get_waveshare_inventory_manager,
 )
+
+_SERVO_BACKENDS = {"pca9685", "waveshare", "waveshare_ble"}
 
 router = APIRouter()
 
@@ -55,6 +62,7 @@ class ServoHardwareSettingsPayload(BaseModel):
     close_speed: Optional[int] = None
     homing_speed: Optional[int] = None
     port: Optional[str] = None
+    device: Optional[str] = None  # BLE address, for backend == "waveshare_ble"
     channels: List[ServoChannelConfigPayload] = []
 
 
@@ -106,6 +114,30 @@ def _pca_available_servo_channels() -> List[int]:
         if channels:
             return sorted(channels)
     return list(range(_PCA9685_CHANNEL_COUNT))
+
+
+def _waveshare_ble_available_gate_ids(config: Dict[str, Any]) -> List[int]:
+    """Gate numbers to suggest in the setup UI: configured ones, plus
+    whatever the bridge most recently reported reachable. Never opens a new
+    BLE connection just to answer this — only uses what's already cached."""
+    found_ids: set[int] = set()
+
+    servo = config.get("servo", {})
+    if isinstance(servo, dict):
+        channels_raw = servo.get("channels", [])
+        if isinstance(channels_raw, list):
+            for item in channels_raw:
+                if not isinstance(item, dict):
+                    continue
+                channel_id = item.get("id")
+                if isinstance(channel_id, int) and not isinstance(channel_id, bool) and channel_id > 0:
+                    found_ids.add(channel_id)
+
+    bridge = _active_waveshare_ble_bridge()
+    if bridge is not None:
+        found_ids.update(bridge.known_gates)
+
+    return sorted(found_ids)
 
 
 def _waveshare_available_servo_ids(config: Dict[str, Any]) -> List[int]:
@@ -240,12 +272,16 @@ def _servo_settings_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
         servo = {}
 
     backend = servo.get("backend", "pca9685")
-    if backend not in {"pca9685", "waveshare"}:
+    if backend not in _SERVO_BACKENDS:
         backend = "pca9685"
 
     port = servo.get("port")
     if port is not None and not isinstance(port, str):
         port = None
+
+    device = servo.get("device")
+    if device is not None and not isinstance(device, str):
+        device = None
 
     layer_count = _distribution_layer_count()
     parsed_channels: List[Dict[str, Any]] = []
@@ -271,7 +307,7 @@ def _servo_settings_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
     channels: List[Dict[str, Any]] = []
     for index in range(layer_count):
         existing = parsed_channels[index] if index < len(parsed_channels) else None
-        default_id = index + 1 if backend == "waveshare" else index
+        default_id = index + 1 if backend in {"waveshare", "waveshare_ble"} else index
         channels.append(
             {
                 "id": (int(existing["id"]) if existing is not None and existing["id"] is not None else None)
@@ -281,18 +317,22 @@ def _servo_settings_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
 
+    if backend == "pca9685":
+        available_channel_ids = _pca_available_servo_channels()
+    elif backend == "waveshare":
+        available_channel_ids = _waveshare_available_servo_ids(config)
+    else:
+        available_channel_ids = _waveshare_ble_available_gate_ids(config)
+
     return {
         "backend": backend,
         **asdict(readServoSpeeds(config)),
         "port": port.strip() if isinstance(port, str) and port.strip() else None,
+        "device": device.strip() if isinstance(device, str) and device.strip() else None,
         "channels": channels,
         "layer_count": layer_count,
-        "available_channel_ids": (
-            _pca_available_servo_channels()
-            if backend == "pca9685"
-            else _waveshare_available_servo_ids(config)
-        ),
-        "supports_calibration": backend == "waveshare",
+        "available_channel_ids": available_channel_ids,
+        "supports_calibration": backend in {"waveshare", "waveshare_ble"},
         "issues": _servo_hardware_issues(),
     }
 
@@ -301,10 +341,11 @@ def _servo_settings_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
 def save_servo_hardware_config(
     payload: ServoHardwareSettingsPayload,
 ) -> Dict[str, Any]:
-    backend = payload.backend if payload.backend in {"pca9685", "waveshare"} else "pca9685"
+    backend = payload.backend if payload.backend in _SERVO_BACKENDS else "pca9685"
     # Speeds the request leaves out stay as saved (the setup wizard sends none).
     speed_changes = {key: getattr(payload, key) for key in SPEEDS if key in payload.model_fields_set}
     port = payload.port.strip() if isinstance(payload.port, str) and payload.port.strip() else None
+    device = payload.device.strip() if isinstance(payload.device, str) and payload.device.strip() else None
     available_pca_channels = _pca_available_servo_channels()
     # Validate against the persisted layout we actually index into below, not the
     # live distribution layout. After a layer add/remove the storage-layers save
@@ -337,6 +378,9 @@ def save_servo_hardware_config(
         if backend == "waveshare":
             valid = 1 <= channel_id <= 253
             help_text = "an SC servo ID between 1 and 253"
+        elif backend == "waveshare_ble":
+            valid = 1 <= channel_id <= 60
+            help_text = "a gate number between 1 and 60"
         else:
             valid = channel_id >= 0 and (
                 not available_pca_channels or channel_id in available_pca_channels
@@ -356,6 +400,12 @@ def save_servo_hardware_config(
         seen_ids.add(channel_id)
         channels.append({"id": channel_id, "invert": bool(channel.invert)})
 
+    if backend == "waveshare_ble" and device is None:
+        raise HTTPException(
+            status_code=400,
+            detail="The Waveshare BLE backend needs the bridge board's BLE address.",
+        )
+
     with machine_toml.edit() as config:
         previous = _servo_settings_from_config(config)
 
@@ -368,6 +418,10 @@ def save_servo_hardware_config(
             servo_table["port"] = port
         else:
             servo_table.pop("port", None)
+        if backend == "waveshare_ble" and device is not None:
+            servo_table["device"] = device
+        else:
+            servo_table.pop("device", None)
         if backend != "waveshare":
             servo_table.pop("highest_seen_id", None)
         config["servo"] = servo_table
@@ -385,6 +439,7 @@ def save_servo_hardware_config(
         backend != previous["backend"]
         or channel_ids != previous_ids
         or (backend == "waveshare" and port != previous["port"])
+        or (backend == "waveshare_ble" and device != previous["device"])
     )
 
     active_irl = shared_state.getActiveIRL()
@@ -397,7 +452,7 @@ def save_servo_hardware_config(
             if len(live_servos) == len(channels):
                 for index, servo in enumerate(live_servos):
                     invert = channel_inverts[index]
-                    if backend == "waveshare":
+                    if backend in {"waveshare", "waveshare_ble"}:
                         if hasattr(servo, "set_invert"):
                             servo.set_invert(invert)
                     else:
@@ -857,3 +912,181 @@ def nudge_waveshare_servo(servo_id: int, payload: ServoNudgePayload) -> Dict[str
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to nudge servo: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Waveshare BLE gate bridge (esp32_ble_servo_bridge) — all servo intelligence
+# (open/closed/blocked, auto ID assignment, calibration) lives on the board
+# itself, so there's no raw position/nudge/lock-angle surface here, unlike
+# the wired Waveshare endpoints above.
+# ---------------------------------------------------------------------------
+
+
+class WaveshareBleGateMovePayload(BaseModel):
+    position: str  # "open" | "close"
+
+
+@router.get("/api/hardware-config/waveshare-ble/status")
+def get_waveshare_ble_status(device: str | None = None) -> Dict[str, Any]:
+    return _get_waveshare_ble_status(device=device)
+
+
+@router.post("/api/hardware-config/waveshare-ble/rescan")
+def rescan_waveshare_ble(device: str | None = None) -> Dict[str, Any]:
+    _ensure_not_homing("rescan the Waveshare BLE bridge")
+    return _get_waveshare_ble_status(device=device)
+
+
+@router.post("/api/hardware-config/waveshare-ble/learn")
+def learn_waveshare_ble_servo(device: str | None = None) -> Dict[str, Any]:
+    """Assign the next free gate ID (11, 12, 13, ...) to a servo sitting at
+    the factory-default ID and calibrate it. Connect exactly one new servo
+    to the bus before calling this — see the firmware README's one-at-a-time
+    onboarding flow."""
+    _ensure_not_homing("learn a new Waveshare BLE servo")
+    try:
+        bridge = get_waveshare_ble_bridge_for_api(device)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    try:
+        response = bridge.learn()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"LEARN failed: {exc}")
+
+    if response.startswith("LEARN NONE"):
+        raise HTTPException(
+            status_code=404,
+            detail="No new servo found at the factory-default ID. Connect one new servo and retry.",
+        )
+    if response.startswith("LEARN ERR") or (response.startswith("LEARNED") and response.endswith("NOCAL")):
+        message = (
+            f"A new servo got an ID but calibration failed ({response}). It can be retried with "
+            "the per-gate calibrate action."
+            if response.startswith("LEARNED")
+            else f"LEARN failed: {response}"
+        )
+        gate = None
+        if response.startswith("LEARNED"):
+            parts = response.split()
+            gate = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+        try:
+            bridge.refresh_known_gates()
+        except Exception:
+            pass
+        return {"ok": True, "raw": response, "gate": gate, "calibrated": False, "message": message}
+
+    parts = response.split()
+    gate = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+    try:
+        bridge.refresh_known_gates()
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "raw": response,
+        "gate": gate,
+        "calibrated": True,
+        "message": f"Gate {gate} learned and calibrated." if gate is not None else response,
+    }
+
+
+@router.post("/api/hardware-config/waveshare-ble/reset-all")
+def reset_all_waveshare_ble_servos(device: str | None = None) -> Dict[str, Any]:
+    """Factory-reset every servo currently reachable (ID back to 1, angle
+    limits back to 0-1023) so the one-at-a-time LEARN flow can restart."""
+    _ensure_not_homing("factory-reset the Waveshare BLE servos")
+    try:
+        bridge = get_waveshare_ble_bridge_for_api(device)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    try:
+        response = bridge.reset_all()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"RESETALL failed: {exc}")
+
+    try:
+        bridge.refresh_known_gates()
+    except Exception:
+        pass
+
+    parts = response.split()
+    count = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else None
+    return {
+        "ok": True,
+        "raw": response,
+        "count": count,
+        "message": (
+            f"{count} servo(s) reset to factory defaults." if count is not None else response
+        ),
+    }
+
+
+@router.post("/api/hardware-config/waveshare-ble/gates/{gate}/move")
+def move_waveshare_ble_gate(gate: int, payload: WaveshareBleGateMovePayload) -> Dict[str, Any]:
+    _ensure_not_homing("move a Waveshare BLE gate")
+    if gate < 1 or gate > 60:
+        raise HTTPException(status_code=400, detail="Gate must be between 1 and 60.")
+    target = (payload.position or "").lower().strip()
+    if target not in {"open", "close"}:
+        raise HTTPException(status_code=400, detail="position must be 'open' or 'close'.")
+
+    try:
+        bridge = get_waveshare_ble_bridge_for_api()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    try:
+        response = bridge.open_gate(gate) if target == "open" else bridge.close_gate(gate)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to move gate {gate}: {exc}")
+
+    state = response.split()[1] if len(response.split()) > 1 else "ERR"
+    return {
+        "ok": True,
+        "gate": gate,
+        "raw": response,
+        "state": state,
+        "message": f"Gate {gate}: {state}.",
+    }
+
+
+@router.get("/api/hardware-config/waveshare-ble/gates/{gate}/status")
+def status_waveshare_ble_gate(gate: int) -> Dict[str, Any]:
+    if gate < 1 or gate > 60:
+        raise HTTPException(status_code=400, detail="Gate must be between 1 and 60.")
+
+    try:
+        bridge = get_waveshare_ble_bridge_for_api()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    try:
+        response = bridge.status_gate(gate)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read gate {gate}: {exc}")
+
+    state = response.split()[1] if len(response.split()) > 1 else "ERR"
+    return {"ok": True, "gate": gate, "raw": response, "state": state}
+
+
+@router.post("/api/hardware-config/waveshare-ble/gates/{gate}/calibrate")
+def calibrate_waveshare_ble_gate(gate: int) -> Dict[str, Any]:
+    _ensure_not_homing("calibrate a Waveshare BLE gate")
+    if gate < 1 or gate > 60:
+        raise HTTPException(status_code=400, detail="Gate must be between 1 and 60.")
+
+    try:
+        bridge = get_waveshare_ble_bridge_for_api()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    try:
+        response = bridge.calibrate_gate(gate)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Calibration failed: {exc}")
+
+    if not response.startswith("CALIBRATED"):
+        raise HTTPException(status_code=500, detail=f"Calibration failed: {response}")
+    return {"ok": True, "gate": gate, "raw": response, "message": f"Gate {gate} calibrated."}

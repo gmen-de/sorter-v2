@@ -4,6 +4,7 @@ import sys
 from types import SimpleNamespace
 import types
 import unittest
+from unittest.mock import patch
 
 
 serial_stub = types.ModuleType("serial")
@@ -23,9 +24,14 @@ irl_stub = types.ModuleType("irl")
 parse_user_toml_stub = types.ModuleType("irl.parse_user_toml")
 parse_user_toml_stub.ServoChannelConfig = object
 parse_user_toml_stub.WaveshareServoConfig = object
+parse_user_toml_stub.WaveshareBleServoConfig = object
 irl_stub.parse_user_toml = parse_user_toml_stub
 sys.modules.setdefault("irl", irl_stub)
 sys.modules.setdefault("irl.parse_user_toml", parse_user_toml_stub)
+
+bleak_stub = types.ModuleType("bleak")
+bleak_stub.BleakClient = object
+sys.modules.setdefault("bleak", bleak_stub)
 
 machine_platform_stub = types.ModuleType("machine_platform")
 control_board_stub = types.ModuleType("machine_platform.control_board")
@@ -43,6 +49,7 @@ spec.loader.exec_module(servo_controller)
 
 LayerServoAssignment = servo_controller.LayerServoAssignment
 WaveshareServoController = servo_controller.WaveshareServoController
+WaveshareBleServoController = servo_controller.WaveshareBleServoController
 
 
 class _Logger:
@@ -80,6 +87,69 @@ class WaveshareServoControllerTests(unittest.TestCase):
         self.assertIsNone(assignments[1][1].id)
         self.assertIsNone(assignments[2][1].id)
         self.assertIsNone(assignments[3][1].id)
+
+
+class WaveshareBleServoControllerTests(unittest.TestCase):
+    def test_missing_assignments_default_to_sequential_gates(self) -> None:
+        controller = WaveshareBleServoController(
+            SimpleNamespace(logger=_Logger()),
+            device="AA:BB:CC:DD:EE:FF",
+            assignments=[LayerServoAssignment(id=5, invert=True)],
+        )
+        layout = SimpleNamespace(
+            layers=[
+                SimpleNamespace(enabled=True),
+                SimpleNamespace(enabled=True),
+                SimpleNamespace(enabled=True),
+            ]
+        )
+
+        assignments = controller._iter_layer_assignments(layout)
+
+        self.assertEqual(3, len(assignments))
+        self.assertEqual(5, assignments[0][1].id)
+        # No explicit config for layers 1 and 2 -> gate = layer index + 1,
+        # matching the order servos are LEARNed onto the bus in.
+        self.assertEqual(2, assignments[1][1].id)
+        self.assertEqual(3, assignments[2][1].id)
+
+    def test_configured_gate_missing_from_post_connect_scan_is_flagged(self) -> None:
+        class _FakeBridge:
+            known_gates = [1, 2]  # gate 3 never answered the post-connect scan
+
+            def connect(self) -> None:
+                return
+
+        controller = WaveshareBleServoController(
+            SimpleNamespace(logger=_Logger()),
+            device="AA:BB:CC:DD:EE:FF",
+            assignments=[],  # defaults to gates 1, 2, 3 for 3 layers
+        )
+        layout = SimpleNamespace(
+            layers=[SimpleNamespace(enabled=True) for _ in range(3)]
+        )
+
+        with patch("hardware.waveshare_ble_bridge.get_waveshare_ble_bridge", return_value=_FakeBridge()):
+            servos = controller.create_layer_servos(layout)
+
+        self.assertEqual(3, len(servos))
+        missing_gate_issues = [issue for issue in controller.issues if issue.get("servo_id") == 3]
+        self.assertEqual(1, len(missing_gate_issues))
+        self.assertEqual(0, len([i for i in controller.issues if i.get("servo_id") in (1, 2)]))
+
+    def test_missing_device_marks_enabled_layers_offline(self) -> None:
+        controller = WaveshareBleServoController(
+            SimpleNamespace(logger=_Logger()),
+            device="",
+            assignments=[],
+        )
+        layout = SimpleNamespace(layers=[SimpleNamespace(enabled=True)])
+
+        servos = controller.create_layer_servos(layout)
+
+        self.assertEqual(1, len(servos))
+        self.assertFalse(servos[0].available)
+        self.assertEqual(1, len(controller.issues))
 
 
 if __name__ == "__main__":

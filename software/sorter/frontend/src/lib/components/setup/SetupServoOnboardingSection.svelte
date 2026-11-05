@@ -4,13 +4,16 @@
 	import { onMount } from 'svelte';
 	import SerialPortPanel from './servo/SerialPortPanel.svelte';
 	import ServoInventoryList from './servo/ServoInventoryList.svelte';
+	import BleGatePanel from './servo/BleGatePanel.svelte';
 	import ServoLayerCalibrator from '$lib/components/servo/ServoLayerCalibrator.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
+	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 
-	type ServoBackend = 'pca9685' | 'waveshare';
+	type ServoBackend = 'pca9685' | 'waveshare' | 'waveshare_ble';
+	type BleGateState = 'open' | 'closed' | 'blocked' | 'unknown' | 'error' | undefined;
 
 	type HardwareIssue = {
 		kind: string;
@@ -50,7 +53,7 @@
 		last_error?: string | null;
 	};
 
-	type ServoSource = 'waveshare' | 'pca';
+	type ServoSource = 'waveshare' | 'pca' | 'waveshare_ble';
 
 	let {
 		servoSource = 'pca',
@@ -88,6 +91,17 @@
 	let highestSeenId = $state<number>(0);
 	let servoIssues = $state<HardwareIssue[]>([]);
 
+	// -- Waveshare BLE (esp32_ble_servo_bridge) state --------------------------
+	let device = $state('');
+	let bleConnected = $state(false);
+	let bleKnownGates = $state<number[]>([]);
+	let bleLastError = $state<string | null>(null);
+	let bleStatusLoading = $state(false);
+	let bleLearning = $state(false);
+	let bleResettingAll = $state(false);
+	let bleBusyByGate = $state<Record<number, string>>({});
+	let bleStateByGate = $state<Record<number, BleGateState>>({});
+
 	let layerCount = $state<number>(0);
 	let storageLayers = $state<Array<{ bin_count: number; enabled: boolean }>>([]);
 	// servoId → layer index (1-based). For PCA, channelId → layer index.
@@ -110,7 +124,9 @@
 
 	// Effective number of assignable layers. If we have more servos on the bus
 	// than the configured storage layers, expand so every servo can be mapped.
-	const effectiveLayerCount = $derived(Math.max(layerCount, busServos.length));
+	const effectiveLayerCount = $derived(
+		Math.max(layerCount, busServos.length, bleKnownGates.length)
+	);
 
 	function currentBackendBaseUrl(): string {
 		return (
@@ -192,10 +208,16 @@
 		const storageLayersRaw = Array.isArray(storage?.layers) ? storage.layers : [];
 		const servoChannels = Array.isArray(servo?.channels) ? servo.channels : [];
 
-		backend = servoSource === 'waveshare' ? 'waveshare' : 'pca9685';
+		backend =
+			servoSource === 'waveshare'
+				? 'waveshare'
+				: servoSource === 'waveshare_ble'
+					? 'waveshare_ble'
+					: 'pca9685';
 		openAngle = Number(servo.open_angle ?? 10);
 		closedAngle = Number(servo.closed_angle ?? 83);
 		port = typeof servo.port === 'string' ? servo.port : '';
+		device = typeof servo.device === 'string' ? servo.device : '';
 		servoIssues = Array.isArray(servo.issues)
 			? servo.issues.filter(
 					(value: unknown): value is HardwareIssue =>
@@ -209,7 +231,7 @@
 		layerCount = Math.max(storageLayersRaw.length, Number(servo.layer_count ?? 0));
 		storageLayers = storageLayersRaw.map((sl: any) => ({
 			bin_count: Number(sl?.bin_count ?? 12),
-			enabled: sl?.enabled !== false,
+			enabled: sl?.enabled !== false
 		}));
 
 		const newAssignments: Record<number, number> = {};
@@ -249,6 +271,8 @@
 			settingsLoaded = true;
 			if (backend === 'waveshare') {
 				void loadWaveshareInventory({ refresh: false, silent: true });
+			} else if (backend === 'waveshare_ble') {
+				void loadBleStatus({ silent: true });
 			}
 		} catch (e: any) {
 			errorMsg = e.message ?? 'Failed to load servo setup';
@@ -415,7 +439,9 @@
 			}
 			const data = await res.json();
 			if (typeof data.raw_position === 'number' && data.limits) {
-				busServos = busServos.map(s => s.id === servoId ? { ...s, position: data.raw_position } : s);
+				busServos = busServos.map((s) =>
+					s.id === servoId ? { ...s, position: data.raw_position } : s
+				);
 			}
 		} catch (e: any) {
 			errorMsg = e.message ?? `Failed to nudge servo ${servoId}`;
@@ -456,6 +482,130 @@
 			errorMsg = e.message ?? `Failed to change servo ID`;
 		} finally {
 			setBusy(currentId, null);
+		}
+	}
+
+	function setBleBusy(gate: number, kind: string | null) {
+		if (kind === null) {
+			const next = { ...bleBusyByGate };
+			delete next[gate];
+			bleBusyByGate = next;
+		} else {
+			bleBusyByGate = { ...bleBusyByGate, [gate]: kind };
+		}
+	}
+
+	async function loadBleStatus(options: { silent?: boolean } = {}) {
+		if (backend !== 'waveshare_ble') return;
+		bleStatusLoading = true;
+		if (!options.silent) errorMsg = null;
+		try {
+			const url = new URL(`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/status`);
+			if (device.trim()) url.searchParams.set('device', device.trim());
+			const res = await fetch(url.toString());
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			bleConnected = Boolean(payload?.connected);
+			bleKnownGates = Array.isArray(payload?.gates)
+				? payload.gates.filter((g: unknown): g is number => typeof g === 'number')
+				: [];
+			bleLastError = typeof payload?.last_error === 'string' ? payload.last_error : null;
+		} catch (e: any) {
+			if (!options.silent) errorMsg = e.message ?? 'Failed to reach the BLE bridge';
+			bleConnected = false;
+		} finally {
+			bleStatusLoading = false;
+		}
+	}
+
+	async function learnBleServo() {
+		bleLearning = true;
+		errorMsg = null;
+		statusMsg = '';
+		try {
+			const res = await fetch(
+				`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/learn`,
+				{
+					method: 'POST'
+				}
+			);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			statusMsg = payload?.message ?? 'Servo learned.';
+			await loadBleStatus();
+		} catch (e: any) {
+			errorMsg = e.message ?? 'Failed to learn a new servo';
+		} finally {
+			bleLearning = false;
+		}
+	}
+
+	async function resetAllBleServos() {
+		bleResettingAll = true;
+		errorMsg = null;
+		statusMsg = '';
+		try {
+			const res = await fetch(
+				`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/reset-all`,
+				{
+					method: 'POST'
+				}
+			);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			statusMsg = payload?.message ?? 'Servos reset to factory defaults.';
+			bleStateByGate = {};
+			await loadBleStatus();
+		} catch (e: any) {
+			errorMsg = e.message ?? 'Failed to reset the servos';
+		} finally {
+			bleResettingAll = false;
+		}
+	}
+
+	async function moveBleGate(gate: number, position: 'open' | 'close') {
+		setBleBusy(gate, position === 'open' ? 'opening' : 'closing');
+		errorMsg = null;
+		try {
+			const res = await fetch(
+				`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/gates/${gate}/move`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ position })
+				}
+			);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			const state = String(payload?.state ?? '').toLowerCase();
+			bleStateByGate = {
+				...bleStateByGate,
+				[gate]: (['open', 'closed', 'blocked'].includes(state) ? state : 'unknown') as BleGateState
+			};
+		} catch (e: any) {
+			errorMsg = e.message ?? `Failed to move gate ${gate}`;
+			bleStateByGate = { ...bleStateByGate, [gate]: 'error' };
+		} finally {
+			setBleBusy(gate, null);
+		}
+	}
+
+	async function calibrateBleGate(gate: number) {
+		setBleBusy(gate, 'calibrating');
+		errorMsg = null;
+		statusMsg = '';
+		try {
+			const res = await fetch(
+				`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/gates/${gate}/calibrate`,
+				{ method: 'POST' }
+			);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			statusMsg = payload?.message ?? `Gate ${gate} calibrated.`;
+		} catch (e: any) {
+			errorMsg = e.message ?? `Failed to calibrate gate ${gate}`;
+		} finally {
+			setBleBusy(gate, null);
 		}
 	}
 
@@ -522,7 +672,8 @@
 		const upper = Math.max(layerCount, effectiveLayerCount);
 		for (let layer = 1; layer <= upper; layer++) {
 			const id =
-				servoByLayer[layer] ?? (backend === 'waveshare' ? layer : layer - 1);
+				servoByLayer[layer] ??
+				(backend === 'waveshare' || backend === 'waveshare_ble' ? layer : layer - 1);
 			channels.push({
 				id,
 				invert: Boolean(invertByLayer[layer])
@@ -532,7 +683,12 @@
 	}
 
 	function buildStorageLayersForSave() {
-		const result: Array<{ bin_count: number; enabled: boolean; servo_open_angle: number | null; servo_closed_angle: number | null }> = [];
+		const result: Array<{
+			bin_count: number;
+			enabled: boolean;
+			servo_open_angle: number | null;
+			servo_closed_angle: number | null;
+		}> = [];
 		for (let i = 0; i < layerCount; i++) {
 			const sl = storageLayers[i];
 			const openStr = openAngleByLayer[i + 1] ?? '';
@@ -543,7 +699,7 @@
 				bin_count: sl?.bin_count ?? 12,
 				enabled: sl?.enabled ?? true,
 				servo_open_angle: openVal !== null && Number.isFinite(openVal) ? openVal : null,
-				servo_closed_angle: closedVal !== null && Number.isFinite(closedVal) ? closedVal : null,
+				servo_closed_angle: closedVal !== null && Number.isFinite(closedVal) ? closedVal : null
 			});
 		}
 		return result;
@@ -557,11 +713,14 @@
 			const channels = buildChannelsForSave();
 
 			const storageLayers = buildStorageLayersForSave();
-			const storageRes = await fetch(`${currentBackendBaseUrl()}/api/hardware-config/storage-layers`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ layers: storageLayers })
-			});
+			const storageRes = await fetch(
+				`${currentBackendBaseUrl()}/api/hardware-config/storage-layers`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ layers: storageLayers })
+				}
+			);
 			if (!storageRes.ok) throw new Error(await storageRes.text());
 
 			const res = await fetch(`${currentBackendBaseUrl()}/api/hardware-config/servo`, {
@@ -572,6 +731,7 @@
 					open_angle: openAngle,
 					closed_angle: closedAngle,
 					port: backend === 'waveshare' ? port.trim() || null : null,
+					device: backend === 'waveshare_ble' ? device.trim() || null : null,
 					channels
 				})
 			});
@@ -599,23 +759,36 @@
 	});
 
 	$effect(() => {
-		const desired = servoSource === 'waveshare' ? 'waveshare' : 'pca9685';
+		const desired: ServoBackend =
+			servoSource === 'waveshare'
+				? 'waveshare'
+				: servoSource === 'waveshare_ble'
+					? 'waveshare_ble'
+					: 'pca9685';
 		if (backend === desired) return;
 		backend = desired;
 		if (desired === 'waveshare') {
 			void loadWaveshareInventory({ refresh: false, silent: true });
 		} else {
 			busServos = [];
+			if (desired === 'waveshare_ble') {
+				void loadBleStatus({ silent: true });
+			}
 		}
 	});
 
 	onMount(() => {
 		const interval = setInterval(() => {
-			if (backend !== 'waveshare') return;
-			// Skip auto-refresh while a per-servo action is running so we don't fight it.
-			if (Object.keys(busyByServoId).length > 0) return;
-			if (scanningBus) return;
-			void loadWaveshareInventory({ refresh: false, silent: true });
+			if (backend === 'waveshare') {
+				// Skip auto-refresh while a per-servo action is running so we don't fight it.
+				if (Object.keys(busyByServoId).length > 0) return;
+				if (scanningBus) return;
+				void loadWaveshareInventory({ refresh: false, silent: true });
+			} else if (backend === 'waveshare_ble') {
+				if (Object.keys(bleBusyByGate).length > 0) return;
+				if (bleStatusLoading) return;
+				void loadBleStatus({ silent: true });
+			}
 		}, 4000);
 
 		function handleKeydown(e: KeyboardEvent) {
@@ -672,7 +845,9 @@
 				{/if}
 			{/snippet}
 			<p class="text-sm text-ink-muted">
-				{#if servoSource !== 'waveshare'}
+				{#if servoSource === 'waveshare_ble'}
+					Using Waveshare SC15 servos over the ESP32 BLE gate bridge.
+				{:else if servoSource !== 'waveshare'}
 					No Waveshare servo bus found, so a PCA9685 on a control board is assumed.
 				{:else if discoveredServoSource === 'waveshare'}
 					The Waveshare SC serial bus was found{#if discoveredWaveshareServos > 0}, with
@@ -684,6 +859,18 @@
 					Using the Waveshare SC serial bus.
 				{/if}
 			</p>
+			{#if onSourceChange}
+				<SegmentedControl
+					label="Servo backend"
+					value={servoSource}
+					options={[
+						{ value: 'pca', label: 'PCA9685' },
+						{ value: 'waveshare', label: 'Waveshare (wired)' },
+						{ value: 'waveshare_ble', label: 'Waveshare (BLE)' }
+					]}
+					onchange={(value) => onSourceChange?.(value)}
+				/>
+			{/if}
 		</Panel>
 
 		{#if servoSource === 'waveshare'}
@@ -714,6 +901,28 @@
 				onToggleOpenClose={toggleOpenClose}
 				onToggleInvert={toggleInvertForLayer}
 				onNudge={(servoId, degrees) => void nudgeServo(servoId, degrees)}
+			/>
+		{:else if servoSource === 'waveshare_ble'}
+			<BleGatePanel
+				bind:device
+				connected={bleConnected}
+				knownGates={bleKnownGates}
+				lastError={bleLastError}
+				statusLoading={bleStatusLoading}
+				learning={bleLearning}
+				resettingAll={bleResettingAll}
+				busyByGate={bleBusyByGate}
+				stateByGate={bleStateByGate}
+				layerByGate={layerByAssignment}
+				{invertByLayer}
+				{unassignedLayers}
+				onLoadStatus={() => void loadBleStatus()}
+				onLearn={() => void learnBleServo()}
+				onResetAll={() => void resetAllBleServos()}
+				onAssignLayer={assignLayer}
+				onToggleInvert={toggleInvertForLayer}
+				onMoveGate={(gate, position) => void moveBleGate(gate, position)}
+				onCalibrateGate={(gate) => void calibrateBleGate(gate)}
 			/>
 		{:else}
 			<ServoLayerCalibrator />

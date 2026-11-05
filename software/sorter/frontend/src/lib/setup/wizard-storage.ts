@@ -6,7 +6,7 @@ export type PersistedVerificationState = {
 	verifiedSteppers?: Record<string, boolean>;
 };
 
-export type PersistedServoSource = 'waveshare' | 'pca';
+export type PersistedServoSource = 'waveshare' | 'pca' | 'waveshare_ble';
 
 export function progressStorageKey(machineId: string): string {
 	return `setup-wizard-progress:${machineId}`;
@@ -92,17 +92,14 @@ export function loadStoredServoSource(machineId: string): PersistedServoSource |
 	if (typeof window === 'undefined' || !machineId) return null;
 	try {
 		const raw = window.localStorage.getItem(servoSourceStorageKey(machineId));
-		if (raw === 'waveshare' || raw === 'pca') return raw;
+		if (raw === 'waveshare' || raw === 'pca' || raw === 'waveshare_ble') return raw;
 		return null;
 	} catch {
 		return null;
 	}
 }
 
-export function persistServoSource(
-	machineId: string,
-	value: PersistedServoSource | null
-): void {
+export function persistServoSource(machineId: string, value: PersistedServoSource | null): void {
 	if (typeof window === 'undefined' || !machineId) return;
 	try {
 		if (value === null) {

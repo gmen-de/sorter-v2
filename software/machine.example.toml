@@ -4,12 +4,20 @@
 # This file is for parameters that vary between machines and local setups.
 
 [servo]
-# For PCA9685 (default):
-# backend = "pca9685"
-# PCA9685 open/closed angles are calibrated per-layer (see [layers] below), not
-# globally — there is no machine-wide default open/closed angle.
+# Waveshare SC15 servos over the ESP32 BLE gate bridge (recommended — see
+# software/firmware/esp32_ble_servo_bridge/README.md). The board does its own
+# open/closed/blocked detection, ID assignment and calibration, so no
+# [[servo.channels]] are needed at all if layers map 1:1 to gates in the order
+# the servos were LEARNed onto the bus (gate N = layer N):
+# backend = "waveshare_ble"
+# device = "AA:BB:CC:DD:EE:FF"  # BLE address of the esp32_ble_servo_bridge board
+#
+# Only needed to reorder gates or invert one:
+# [[servo.channels]]
+# id = 1       # gate number, not a raw SC servo id
+# invert = false
 
-# For Waveshare SC bus servos, uncomment below:
+# For Waveshare SC bus servos wired directly over USB-TTL (no ESP32/BLE board):
 # backend = "waveshare"
 # port = "/dev/cu.usbmodem5A7C1215731"  # optional, auto-detected if omitted
 #
@@ -20,6 +28,11 @@
 # [[servo.channels]]
 # id = 2
 # invert = false
+
+# For PCA9685 (default when [servo] is left out entirely):
+# backend = "pca9685"
+# PCA9685 open/closed angles are calibrated per-layer (see [layers] below), not
+# globally — there is no machine-wide default open/closed angle.
 
 # Each entry in sections is one layer's bin layout (bottom to top).
 # servo_open_angles / servo_closed_angles set the PCA9685 servo open/closed

@@ -29,6 +29,12 @@ class WaveshareServoConfig:
     channels: list[ServoChannelConfig]
 
 
+@dataclass
+class WaveshareBleServoConfig:
+    device: str  # BLE address (or platform-specific identifier) of the esp32_ble_servo_bridge
+    channels: list[ServoChannelConfig]  # id here is a *gate number*, not a raw SC servo id
+
+
 def loadServoChannelConfig(
     gc: GlobalConfig,
     machine_specific_params: dict[str, object] | None = None,
@@ -75,6 +81,9 @@ def loadServoChannelConfig(
         if backend_name == "waveshare":
             valid = 1 <= ch_id <= 253
             valid_text = "int 1-253"
+        elif backend_name == "waveshare_ble":
+            valid = 1 <= ch_id <= 60
+            valid_text = "a gate number from 1-60"
         else:
             valid = ch_id >= 0
             valid_text = "non-negative int"
@@ -118,4 +127,41 @@ def loadWaveshareServoConfig(
     return WaveshareServoConfig(
         port=port,
         channels=loadServoChannelConfig(gc, raw, backend="waveshare"),
+    )
+
+
+def loadWaveshareBleServoConfig(
+    gc: GlobalConfig,
+    machine_specific_params: dict[str, object] | None = None,
+) -> WaveshareBleServoConfig | None:
+    """Parse the ESP32 BLE gate-servo bridge config from TOML. Returns None
+    if backend is not 'waveshare_ble'. See
+    software/firmware/esp32_ble_servo_bridge/README.md for the device this
+    talks to."""
+    raw = machine_specific_params
+    if raw is None:
+        raw = loadMachineSpecificParams(gc)
+
+    if not isinstance(raw, dict):
+        return None
+
+    servo_params = raw.get("servo")
+    if not isinstance(servo_params, dict):
+        return None
+
+    backend = servo_params.get("backend", "pca9685")
+    if backend != "waveshare_ble":
+        return None
+
+    device = servo_params.get("device")
+    if not isinstance(device, str) or not device.strip():
+        gc.logger.warning(
+            "servo.backend is 'waveshare_ble' but servo.device (the BLE address of the "
+            "esp32_ble_servo_bridge board) is missing."
+        )
+        device = ""
+
+    return WaveshareBleServoConfig(
+        device=device.strip(),
+        channels=loadServoChannelConfig(gc, raw, backend="waveshare_ble"),
     )

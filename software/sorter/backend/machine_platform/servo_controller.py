@@ -7,7 +7,7 @@ from typing import Any, Sequence
 import serial.tools.list_ports
 
 from global_config import GlobalConfig
-from irl.parse_user_toml import ServoChannelConfig, WaveshareServoConfig
+from irl.parse_user_toml import ServoChannelConfig, WaveshareBleServoConfig, WaveshareServoConfig
 from machine_platform.control_board import ControlBoard
 
 
@@ -348,6 +348,148 @@ class WaveshareServoController(ServoController):
         return None
 
 
+class WaveshareBleServoController(ServoController):
+    """Layer servos driven over BLE by the esp32_ble_servo_bridge firmware
+    (see software/firmware/esp32_ble_servo_bridge/README.md). Gate numbers,
+    not raw SC servo ids: open/closed/blocked detection, ID assignment and
+    calibration all happen on the board itself."""
+
+    backend_name = "waveshare_ble"
+    supports_feedback = True
+    supports_calibration = True
+
+    def __init__(
+        self,
+        gc: GlobalConfig,
+        *,
+        device: str,
+        assignments: Sequence[LayerServoAssignment],
+    ):
+        self._gc = gc
+        self._device = device
+        self._assignments = tuple(assignments)
+        self._bridge = None
+        self.issues = []
+
+    @property
+    def bridge(self):
+        return self._bridge
+
+    def create_layer_servos(self, distribution_layout: Any) -> list[Any]:
+        from hardware.waveshare_ble_bridge import BleGateServo, get_waveshare_ble_bridge
+
+        if not self._device:
+            error = "Waveshare BLE servo backend configured but servo.device (BLE address) is missing."
+            self._gc.logger.warning(error)
+            return [
+                self._make_offline_servo(index, assignment, error)
+                for index, assignment in self._iter_layer_assignments(distribution_layout)
+            ]
+
+        try:
+            bridge = get_waveshare_ble_bridge(self._device)
+            bridge.connect()
+            self._bridge = bridge
+        except Exception as exc:
+            error = f"Failed to connect to Waveshare BLE servo bridge {self._device}: {exc}"
+            self._gc.logger.warning(error)
+            return [
+                self._make_offline_servo(index, assignment, error)
+                for index, assignment in self._iter_layer_assignments(distribution_layout)
+            ]
+
+        known_gates = set(bridge.known_gates)
+        if known_gates:
+            self._gc.logger.info(
+                f"Waveshare BLE bridge {self._device}: {len(known_gates)} gate(s) reachable "
+                f"({sorted(known_gates)})"
+            )
+        else:
+            self._gc.logger.warning(
+                f"Waveshare BLE bridge {self._device}: no gates reported reachable after connecting."
+            )
+
+        layer_servos: list[Any] = []
+        for index, assignment in self._iter_layer_assignments(distribution_layout):
+            layer = distribution_layout.layers[index]
+            if assignment.id is None:
+                if bool(getattr(layer, "enabled", True)):
+                    error = "No gate assigned for enabled layer."
+                    layer_servos.append(self._make_offline_servo(index, assignment, error))
+                else:
+                    servo = UnassignedServoMotor(invert=assignment.invert, layer_index=index)
+                    servo.set_name(f"layer_{index}_servo")
+                    layer_servos.append(servo)
+                continue
+            if known_gates and assignment.id not in known_gates:
+                self.issues.append(
+                    {
+                        "kind": "servo",
+                        "backend": self.backend_name,
+                        "layer_index": index,
+                        "servo_id": assignment.id,
+                        "message": (
+                            f"Gate {assignment.id} is configured for layer {index + 1} but the bridge's "
+                            f"post-connect scan did not see it. Check wiring, or run LEARN if it's new."
+                        ),
+                    }
+                )
+            servo = BleGateServo(bridge, assignment.id, invert=assignment.invert)
+            servo.set_name(f"layer_{index}_servo")
+            layer_servos.append(servo)
+            self._gc.logger.info(
+                f"Initialized Waveshare BLE gate servo 'layer_{index}_servo' gate={assignment.id}, "
+                f"invert={assignment.invert}"
+            )
+        return layer_servos
+
+    def shutdown(self) -> None:
+        if self._bridge is None:
+            return
+        try:
+            self._bridge.close()
+        finally:
+            self._bridge = None
+
+    def _iter_layer_assignments(self, distribution_layout: Any) -> list[tuple[int, LayerServoAssignment]]:
+        assignments: list[tuple[int, LayerServoAssignment]] = []
+        for index, _layer in enumerate(distribution_layout.layers):
+            # Zero-config default: gate N for layer N (1-based), matching the
+            # order servos are LEARNed onto the bus in. Only needed when the
+            # layer count exceeds what's explicitly configured.
+            assignment = (
+                self._assignments[index]
+                if index < len(self._assignments)
+                else LayerServoAssignment(id=index + 1)
+            )
+            assignments.append((index, assignment))
+        return assignments
+
+    def _make_offline_servo(
+        self,
+        index: int,
+        assignment: LayerServoAssignment,
+        error: str,
+    ) -> OfflineServoMotor:
+        issue = {
+            "kind": "servo",
+            "backend": self.backend_name,
+            "layer_index": index,
+            "message": error,
+        }
+        if assignment.id is not None:
+            issue["servo_id"] = assignment.id
+        self.issues.append(issue)
+        offline = OfflineServoMotor(
+            servo_id=assignment.id,
+            invert=assignment.invert,
+            error=error,
+            layer_index=index,
+        )
+        offline.set_name(f"layer_{index}_servo")
+        return offline
+
+
 def build_servo_controller(
     gc: GlobalConfig,
     *,
@@ -355,11 +497,19 @@ def build_servo_controller(
     servo_channel_config: Sequence[ServoChannelConfig],
     waveshare_config: WaveshareServoConfig | None,
     mcu_ports: Sequence[str],
+    waveshare_ble_config: WaveshareBleServoConfig | None = None,
 ) -> ServoController:
     assignments = [
         LayerServoAssignment(id=channel.id, invert=channel.invert)
         for channel in servo_channel_config
     ]
+
+    if waveshare_ble_config is not None:
+        return WaveshareBleServoController(
+            gc,
+            device=waveshare_ble_config.device,
+            assignments=assignments,
+        )
 
     if waveshare_config is not None:
         return WaveshareServoController(
