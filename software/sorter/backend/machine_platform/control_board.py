@@ -101,6 +101,23 @@ BASICALLY_V1_2_DISTRIBUTION_PROFILE = BoardProfile(
     chute_home_active_high=False,
 )
 
+OCTOPUS_DISTRIBUTION_PROFILE = BoardProfile(
+    family="octopus",
+    role="distribution",
+    physical_to_canonical_stepper_names={
+        "chute_stepper": "chute_stepper",
+        "c_channel_1_rotor": "c_channel_1_rotor",
+        "c_channel_3_rotor": "c_channel_3_rotor",
+        "carousel": "carousel",
+        "c_channel_2_rotor": "c_channel_2_rotor",
+    },
+    # No chute home switch: the chute now rotates continuously past 350°
+    # (slip ring) and gets its position from a magnet-ring encoder exposed
+    # over a separate command table, not a digital input. See
+    # software/firmware/octopus_control_board/README.md.
+    input_aliases={},
+)
+
 GENERIC_PROFILE = BoardProfile(
     family="generic_sorter_interface",
     role="unknown",
@@ -371,6 +388,15 @@ def _reported_stepper_names(sorter_interface: SorterInterface) -> tuple[str, ...
 
 
 def _detect_board_profile(sorter_interface: SorterInterface) -> BoardProfile:
+    # The "basically" v1.2 and Octopus boards report the same stepper names
+    # and the same digital input/output counts, so the heuristic below can't
+    # tell them apart — check the firmware's own "hw" id first for any board
+    # family where that matters. GET_OBSERVABILITY is cached after the first
+    # call, so this costs one extra bus round-trip only the first time.
+    hw_id = sorter_interface.get_observability_info().get("hw", "")
+    if hw_id.startswith("octopus"):
+        return OCTOPUS_DISTRIBUTION_PROFILE
+
     physical_names = frozenset(_reported_stepper_names(sorter_interface))
     digital_output_count = len(sorter_interface.digital_outputs)
 
