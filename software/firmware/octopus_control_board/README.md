@@ -122,6 +122,27 @@ and this firmware's pin table is independent of which one is fitted.
 pio run -e octopus
 ```
 
+**Confirmed compiling and linking cleanly (2026-11-06)** against
+`platform = ststm32@20.0.0` / `framework-arduinoststm32@3.0.0` (RAM 2.4%,
+Flash 6.9% of a 512KB/128KB F446ZE). Getting there needed two non-obvious
+fixes, both already applied in this project and worth knowing about if you
+ever touch the board/platform config:
+- A custom variant folder (`boards/variants/octopus_f446/`) trimmed from
+  the upstream framework's shared `STM32F4xx/F446Z(C-E)(H-J-T)` variant,
+  containing only the generic-board files (that shared folder also has a
+  NUCLEO-specific variant file).
+- `-DARDUINO_GENERIC_F446ZETX` in `boards/octopus_f446.json`'s
+  `extra_flags` — the generic variant's `digitalPin[]`/`analogInputPin[]`
+  tables and `SystemClock_Config()` are gated behind
+  `#if defined(ARDUINO_GENERIC_F446Z...)` macros tied to upstream "Generic
+  Fxxx" board IDs, which a custom board like this one never defines on its
+  own; without it those symbols silently don't exist and the final link
+  fails with "undefined reference" errors that look unrelated to the real
+  cause.
+
+This only proves the C++ compiles and links — it says nothing about
+whether it runs correctly on real silicon. See "Known limitations" below.
+
 **No SWD header is broken out on the Octopus Pro** (confirmed via a
 stm32duino core maintainer's own forum report on that board) — the
 standard board shares the same PCB family, so the same is assumed true
@@ -142,14 +163,15 @@ and verify this assumption against the real board/schematic.
 
 ## Known limitations — not yet verified on real hardware
 
-Nothing below has been bench-tested; this firmware was written from the
-RP2040 original's exact logic plus Marlin's/Klipper's published pin tables
-for this board family, following the same "write it carefully, flag what's
-unverified" approach as this repo's ESP32 BLE servo bridge firmware. Note:
-the two community forum reports below were specifically about the
-**Octopus Pro**, not the standard board this firmware now targets — likely
-still relevant (same PCB family, same STM32duino core) but not confirmed
-against the standard board itself.
+The firmware compiles and links cleanly (see above), but nothing below has
+been bench-tested; this firmware was written from the RP2040 original's
+exact logic plus Marlin's/Klipper's published pin tables for this board
+family, following the same "write it carefully, flag what's unverified"
+approach as this repo's ESP32 BLE servo bridge firmware. Note: the two
+community forum reports below were specifically about the **Octopus Pro**,
+not the standard board this firmware now targets — likely still relevant
+(same PCB family, same STM32duino core) but not confirmed against the
+standard board itself.
 
 - **USB-CDC (`Serial`) enumeration**: a PlatformIO community report found
   `Serial` not reliably enumerating on the Octopus Pro with some

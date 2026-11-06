@@ -1,12 +1,17 @@
 {
   "build": {
+    "arduino": {
+      "variant_h": "variant_generic.h"
+    },
     "core": "stm32",
     "cpu": "cortex-m4",
-    "extra_flags": "-DSTM32F4xx -DSTM32F446xx -DSTM32F446ZEx",
+    "extra_flags": "-DSTM32F4xx -DSTM32F446xx -DSTM32F446ZEx -DARDUINO_GENERIC_F446ZETX",
     "f_cpu": "180000000L",
     "mcu": "stm32f446zet6",
+    "flash_offset": "0x8000",
     "product_line": "STM32F446xx",
-    "variant": "STM32F4xx/F446Z(C-E)(H-J-T)"
+    "variant": "octopus_f446",
+    "variants_dir": "boards/variants"
   },
   "debug": {
     "jlink_device": "STM32F446ZE",
@@ -15,6 +20,7 @@
   },
   "frameworks": ["arduino", "cmsis"],
   "name": "BIGTREETECH Octopus, standard/non-Pro (STM32F446ZE) - custom, not an official PlatformIO entry",
+  "url": "https://github.com/bigtreetech/BIGTREETECH-OCTOPUS-V1.0",
   "upload": {
     "maximum_ram_size": 131072,
     "maximum_size": 524288,
