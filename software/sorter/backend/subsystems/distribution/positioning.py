@@ -86,6 +86,20 @@ class Positioning(BaseState):
         self._servo_bus_pause_enqueued: bool = False
         # A position check runs on a thread before the move that falls due.
         self._check_done = threading.Event()
+        # Door selection runs on a thread too, so a backend whose gate
+        # commands block until physically confirmed (e.g. the Waveshare BLE
+        # servos) doesn't serialize with the chute move the way it would if
+        # called inline — see _startDoorSelectAsync(). The piece's physical
+        # release still waits on both _isDoorServoStopped() and
+        # chute.stepper.stopped in the "moving" phase regardless of how/when
+        # either command was issued, so this is purely a speed change.
+        self._door_select_done = threading.Event()
+        self._door_select_result: bool | None = None
+        self._pending_door_layer_index: int | None = None
+        self._door_select_started_at: float = 0.0
+        self._phase_after_door_select: str = "moving"
+        self._pending_piece = None
+        self._pending_category_id: str | None = None
 
     def _setOccupancyState(self, state_name: str) -> None:
         if self._occupancy_state == state_name:
@@ -274,56 +288,66 @@ class Positioning(BaseState):
             self.logger.info(
                 f"Positioning: moving to bin at layer={address.layer_index}, section={address.section_index}, bin={address.bin_index}"
             )
-            if not self._selectDoor(address.layer_index):
-                self.logger.warning(
-                    f"Positioning: layer {address.layer_index} is unavailable for distribution, retrying with remaining layers"
-                )
-                # If every layer is now blocked AND the root cause is that
-                # every configured servo is offline, this is the fatal
-                # servo-bus case: the controller can no longer dispense
-                # anything. Pause + red banner.
-                usable_count = sum(
-                    1
-                    for li, layer in enumerate(self.layout.layers)
-                    if getattr(layer, "enabled", True) and li not in self._blocked_layers
-                )
-                if usable_count == 0 and self._allEnabledLayersServoOffline():
-                    self._raiseServoBusOfflineAlert(
-                        "no layer servo responded during door selection"
-                    )
-                return DistributionState.IDLE
-
-            piece.stage = PieceStage.distributing
-            piece.distributing_at = time.time()
-            piece.distribution_target_selected_at = piece.distributing_at
-            piece.category_id = category_id
-            piece.destination_bin = (
-                address.layer_index,
-                address.section_index,
-                address.bin_index,
-            )
-            piece.updated_at = time.time()
-            self._piece = piece
-            self.event_queue.put(knownObjectToEvent(piece))
-
-            if not self.gc.disable_servos:
-                self._door_servo_index = address.layer_index
+            # Door selection runs on a background thread (_startDoorSelectAsync)
+            # instead of blocking here, so a backend whose gate commands block
+            # until physically confirmed (the Waveshare BLE servos) doesn't
+            # serialize with the chute move the way it would if called inline
+            # — see the "selecting_door" phase below for the safety argument.
+            # Piece-stamping (stage, category, destination_bin) stays deferred
+            # until door selection actually succeeds, exactly as before.
+            self._pending_piece = piece
+            self._pending_category_id = category_id
             self._target_address = address
+            self._startDoorSelectAsync(address.layer_index)
+            if self.chute.positionCheckDue():
+                # Rare path (~1/position_check_every pieces): the check itself
+                # drives the chute, so there is nothing useful to overlap the
+                # door-select with here. Wait for the door first, same order
+                # as before, just off the main thread.
+                self._phase = "selecting_door_before_check"
+                return None
+            # Start the chute move right now, in parallel with the door-select
+            # thread already running — this is the actual speed win. Stamp the
+            # motion-started telemetry directly on the pending piece: at this
+            # point self._piece is still the previous piece's (or None), so
+            # _startChuteMove()'s own internal stamp (gated on self._piece)
+            # would otherwise silently miss it.
+            if piece.distribution_motion_started_at is None:
+                piece.distribution_motion_started_at = time.time()
+            self._startChuteMove()  # sets self._phase to "moving" or "start_chute"
+            self._phase_after_door_select = self._phase
+            self._phase = "selecting_door"
+            self._moving_started_at = time.monotonic()
+            return None
+
+        if self._phase == "selecting_door":
+            self._setOccupancyState("positioning.selecting_door")
+            if not self._door_select_done.is_set():
+                return None
+            if not self._door_select_result:
+                return self._handleDoorSelectFailure()
+            self._commitDoorSelectSuccess()
+            # The chute move was already started in "init"; only now (door
+            # confirmed) do we let the state machine actually land on
+            # "moving" (or "start_chute" if the chute had refused and needs
+            # the existing retry-once-stopped dance) — never skipping ahead
+            # of a confirmed door, same safety property as before, just with
+            # the chute's own travel time already partly spent waiting.
+            self._phase = self._phase_after_door_select
+            return None
+
+        if self._phase == "selecting_door_before_check":
+            self._setOccupancyState("positioning.selecting_door")
+            if not self._door_select_done.is_set():
+                return None
+            if not self._door_select_result:
+                return self._handleDoorSelectFailure()
+            self._commitDoorSelectSuccess()
             if self.chute.positionCheckDue():
                 self._startPositionCheck()
-                return None
-            self._startChuteMove()
-            # Re-read the clock: `now` was taken at the top of step(), and the
-            # init phase above (bin lookup, servo selection, the move command
-            # itself) can block for seconds on the serial bus or a disk stall,
-            # which is not part of the move.
-            now = time.monotonic()
-            self._moving_started_at = now
-            init_ms = (now - self._state_entered_at) * 1000
-            if self.gc.disable_servos:
-                self.logger.info(f"Positioning: init phase took {init_ms:.0f}ms, now waiting for chute")
             else:
-                self.logger.info(f"Positioning: init phase took {init_ms:.0f}ms, now waiting for servo+chute")
+                self._startChuteMove()
+                self._moving_started_at = time.monotonic()
             return None
 
         if self._phase == "start_chute":
@@ -382,6 +406,74 @@ class Positioning(BaseState):
 
         threading.Thread(target=run, daemon=True, name="chute-position-check").start()
 
+    def _startDoorSelectAsync(self, target_layer_index: int) -> None:
+        """Run _selectDoor() on a background thread instead of blocking the
+        main loop on it. For the PCA9685 backend _selectDoor() already
+        returns almost instantly (its open()/close() are fire-and-forget), so
+        this costs nothing there. For the Waveshare BLE servo backend,
+        open()/close() block until the firmware's position/load-verified
+        response comes back over BLE — without this, _selectDoor()'s own
+        loop over every usable layer's servo would serialize with (and
+        precede) the chute move instead of overlapping it. _selectDoor()
+        itself is unchanged: same _markLayerUnavailable() calls, same
+        meaning of its return value — only where it runs changes.
+        """
+        self._pending_door_layer_index = target_layer_index
+        self._door_select_done = threading.Event()
+        self._door_select_result = None
+        self._door_select_started_at = time.monotonic()
+
+        def run() -> None:
+            try:
+                self._door_select_result = self._selectDoor(target_layer_index)
+            except Exception as exc:
+                self.logger.error(f"Positioning: door selection failed: {exc}")
+                self._door_select_result = False
+            finally:
+                self._door_select_done.set()
+
+        threading.Thread(target=run, daemon=True, name="door-select").start()
+
+    def _handleDoorSelectFailure(self) -> DistributionState:
+        # Same handling _selectDoor()'s caller always had, just reached from
+        # the async phases below instead of inline. The chute may already be
+        # moving toward this now-abandoned target (started in parallel with
+        # the door-select thread) — leave it be rather than interrupting a
+        # stepper move mid-flight: harmless, since the piece's physical
+        # release in the "moving" phase can never happen without a confirmed
+        # door, and the next attempt's moveToBin() corrects the position
+        # regardless (retrying via "start_chute" if the stepper is still busy).
+        layer_index = self._pending_door_layer_index
+        self.logger.warning(
+            f"Positioning: layer {layer_index} is unavailable for distribution, retrying with remaining layers"
+        )
+        usable_count = sum(
+            1
+            for li, layer in enumerate(self.layout.layers)
+            if getattr(layer, "enabled", True) and li not in self._blocked_layers
+        )
+        if usable_count == 0 and self._allEnabledLayersServoOffline():
+            self._raiseServoBusOfflineAlert("no layer servo responded during door selection")
+        return DistributionState.IDLE
+
+    def _commitDoorSelectSuccess(self) -> None:
+        door_select_ms = (time.monotonic() - self._door_select_started_at) * 1000
+        self.logger.info(f"Positioning: door selected in {door_select_ms:.0f}ms")
+        piece = self._pending_piece
+        category_id = self._pending_category_id
+        address = self._target_address
+        assert piece is not None and address is not None
+        piece.stage = PieceStage.distributing
+        piece.distributing_at = time.time()
+        piece.distribution_target_selected_at = piece.distributing_at
+        piece.category_id = category_id
+        piece.destination_bin = (address.layer_index, address.section_index, address.bin_index)
+        piece.updated_at = time.time()
+        self._piece = piece
+        self.event_queue.put(knownObjectToEvent(piece))
+        if not self.gc.disable_servos:
+            self._door_servo_index = self._pending_door_layer_index
+
     def _startChuteMove(self) -> None:
         assert self._target_address is not None
         self.shared.set_chute_motion(True, target_bin=self._target_address)
@@ -409,6 +501,9 @@ class Positioning(BaseState):
         self._state_entered_at = 0.0
         self._moving_started_at = 0.0
         self._piece = None
+        self._pending_piece = None
+        self._pending_category_id = None
+        self._pending_door_layer_index = None
         self.shared.set_chute_motion(False, target_bin=target_address)
 
     def _layerMaxDimensionMm(self, layer_index: int) -> Optional[float]:
