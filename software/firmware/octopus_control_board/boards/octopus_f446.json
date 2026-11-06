@@ -1,0 +1,25 @@
+{
+  "build": {
+    "core": "stm32",
+    "cpu": "cortex-m4",
+    "extra_flags": "-DSTM32F4xx -DSTM32F446xx -DSTM32F446ZEx",
+    "f_cpu": "180000000L",
+    "mcu": "stm32f446zet6",
+    "product_line": "STM32F446xx",
+    "variant": "STM32F4xx/F446Z(C-E)(H-J-T)"
+  },
+  "debug": {
+    "jlink_device": "STM32F446ZE",
+    "openocd_target": "stm32f4x",
+    "svd_path": "STM32F446.svd"
+  },
+  "frameworks": ["arduino", "cmsis"],
+  "name": "BIGTREETECH Octopus, standard/non-Pro (STM32F446ZE) - custom, not an official PlatformIO entry",
+  "upload": {
+    "maximum_ram_size": 131072,
+    "maximum_size": 524288,
+    "protocol": "dfu",
+    "protocols": ["dfu"]
+  },
+  "vendor": "BIGTREETECH"
+}
