@@ -153,6 +153,11 @@ class ChuteStressTestRunner:
                 raise ValueError("speed_microsteps_per_sec must be > 0")
             if params.mode not in ("sweep", "random"):
                 raise ValueError("mode must be 'sweep' or 'random'")
+            if params.mode == "sweep" and self.chute.home_pin is None:
+                # Encoder-mode boards have no mechanical switch for
+                # _homeToZero()'s hand-rolled homing to drive against; this
+                # mode hasn't been adapted for that yet.
+                raise ValueError("mode 'sweep' needs a chute with an endstop; this board uses an encoder.")
 
             now = time.time()
             run_id = str(uuid.uuid4())

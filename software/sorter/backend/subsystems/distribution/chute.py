@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from global_config import GlobalConfig
 from hardware_settings.chute import (
+    DEFAULT_ENCODER_COUNTS_PER_REVOLUTION,
     DEFAULT_FIRST_SECTION_OFFSET_DEG,
     DEFAULT_NUM_SECTIONS,
     DEFAULT_OPERATING_SPEED_MICROSTEPS_PER_SEC,
@@ -13,7 +14,7 @@ from hardware_settings.chute import (
 from irl.bin_layout import DistributionLayout
 
 if TYPE_CHECKING:
-    from hardware.sorter_interface import StepperMotor, DigitalInputPin
+    from hardware.sorter_interface import ChuteEncoder, StepperMotor, DigitalInputPin
     from .position_check import PositionCheck
 
 GEAR_RATIO = 120 / 25  # 25T motor gear -> 25T idle gear -> 120T chute gear
@@ -63,7 +64,7 @@ class Chute:
         self,
         gc: GlobalConfig,
         stepper: "StepperMotor",
-        home_pin: "DigitalInputPin",
+        home_pin: "DigitalInputPin | None",
         layout: DistributionLayout,
         num_sections: int = DEFAULT_NUM_SECTIONS,
         section_width_deg: float = DEFAULT_SECTION_WIDTH_DEG,
@@ -72,11 +73,21 @@ class Chute:
         operating_speed_microsteps_per_second: int = DEFAULT_OPERATING_SPEED_MICROSTEPS_PER_SEC,
         position_check: bool = DEFAULT_POSITION_CHECK,
         position_check_every: int = DEFAULT_POSITION_CHECK_EVERY,
+        chute_encoder: "ChuteEncoder | None" = None,
+        encoder_counts_per_revolution: int = DEFAULT_ENCODER_COUNTS_PER_REVOLUTION,
     ):
+        if (home_pin is None) == (chute_encoder is None):
+            raise ValueError("Chute needs exactly one of home_pin or chute_encoder.")
         self.gc = gc
         self.logger = gc.logger
         self.stepper = stepper
         self.home_pin = home_pin
+        self.chute_encoder = chute_encoder
+        self.encoder_counts_per_revolution = max(1, int(encoder_counts_per_revolution))
+        # Encoder count recorded exactly when the stepper's own position was
+        # last zeroed (see _homeEncoder()) — the reference point for
+        # position_check.checkPositionEncoder()'s drift comparison.
+        self._encoder_zero_count: int | None = None
         self.layout = layout
         self.num_sections = max(1, int(num_sections))
         self.section_width_deg = float(section_width_deg)
@@ -90,6 +101,10 @@ class Chute:
         self.position_check_every = max(1, int(position_check_every))
         self.pieces_since_check = 0
         self.checking = False
+
+    @property
+    def chute_position_sensor(self) -> str:
+        return "endstop" if self.home_pin is not None else "encoder"
 
     @property
     def homed(self) -> bool:
@@ -155,14 +170,17 @@ class Chute:
         )
 
     def checkPosition(self) -> "PositionCheck":
-        """Find the home switch and say how far the chute had drifted, putting
-        it back on its true position (position_check.py). Blocks for about two
-        seconds, so a caller on the main loop runs it on a thread."""
-        from .position_check import checkPosition, recordCheck
+        """Say how far the chute had drifted since it was last homed/checked.
+        In endstop mode this finds the switch again and puts the chute back on
+        its true position (blocks for about two seconds, so a caller on the
+        main loop runs it on a thread); in encoder mode it is a non-blocking
+        comparison against the magnet-ring encoder's own running count — no
+        motion needed. See position_check.py."""
+        from .position_check import checkPosition, checkPositionEncoder, recordCheck
 
         self.checking = True
         try:
-            check = checkPosition(self)
+            check = checkPositionEncoder(self) if self.chute_encoder is not None else checkPosition(self)
         finally:
             self.checking = False
             self.pieces_since_check = 0
@@ -194,12 +212,26 @@ class Chute:
 
     @property
     def raw_endstop_active(self) -> bool:
+        if self.home_pin is None:
+            raise RuntimeError("Chute: raw_endstop_active is not available in encoder mode.")
         return bool(self.home_pin.value)
 
     @property
     def endstop_triggered(self) -> bool:
         raw_value = self.raw_endstop_active
         return raw_value if self.endstop_active_high else not raw_value
+
+    @property
+    def encoder_count(self) -> int:
+        if self.chute_encoder is None:
+            raise RuntimeError("Chute: encoder_count is not available in endstop mode.")
+        return self.chute_encoder.get_count()
+
+    @property
+    def encoder_synced(self) -> bool:
+        if self.chute_encoder is None:
+            raise RuntimeError("Chute: encoder_synced is not available in endstop mode.")
+        return self.chute_encoder.is_index_synced()
 
     @property
     def current_angle(self) -> float:
@@ -344,6 +376,66 @@ class Chute:
             return False
 
     def home(self) -> bool:
+        if self.chute_encoder is not None:
+            return self._homeEncoder()
+        return self._homeEndstop()
+
+    def _homeEncoder(self) -> bool:
+        """Home against the magnet-ring encoder's index gap instead of a
+        mechanical switch: rotate until the encoder reports an index-sync
+        event, then zero the stepper's own position right there — the same
+        "zero the counter at a known fixed physical landmark" convention the
+        endstop case uses (see _homeEndstop()), just with the index gap as
+        the landmark instead of the switch. _backoffToFirstBin() then moves
+        from that zero to bin 0's leading edge exactly as it already does
+        for the endstop case, so the two modes end up at the same place.
+
+        Known approximation, not yet bench-verified: the stepper is stopped
+        on Python's next poll after is_index_synced() flips true, not at the
+        exact instant the firmware's ISR saw the index event, so there is a
+        small poll-latency-proportional position error here that the
+        endstop case does not have (its zero is set inside the firmware's
+        own step-tick ISR). get_count_at_index() could correct for this
+        using the encoder's own ISR-precise running count, but doing that
+        safely needs the encoder's count-to-direction sign convention
+        confirmed against real hardware first — deliberately not attempted
+        here; see ChuteEncoder.h's own "not bench-calibrated" caveat.
+        """
+        self.logger.info("Chute: homing via magnet-ring encoder")
+        assert self.chute_encoder is not None
+        pos_before = self.current_angle
+        self.chute_encoder.clear_index_synced()
+        self.stepper.move_at_speed(HOME_SPEED_MICROSTEPS_PER_SEC)
+        start = time.monotonic()
+        while not self.chute_encoder.is_index_synced():
+            if (time.monotonic() - start) * 1000 > HOME_TIMEOUT_MS:
+                self.stepper.move_at_speed(0)
+                self.logger.error(
+                    f"Chute: encoder homing timed out after {HOME_TIMEOUT_MS}ms without an "
+                    f"index-sync event (moved={self.current_angle - pos_before:.2f}° so far)."
+                )
+                return False
+            time.sleep(0.01)
+        self.stepper.move_at_speed(0)
+        stop_start = time.monotonic()
+        while not self.stepper.stopped:
+            if (time.monotonic() - stop_start) * 1000 > HOME_TIMEOUT_MS:
+                self.logger.error("Chute: encoder homing: stepper did not stop after the index-sync event.")
+                return False
+            time.sleep(0.01)
+        self.stepper.position = 0
+        self._encoder_zero_count = self.chute_encoder.get_count()
+        if not self._backoffToFirstBin():
+            return False
+        self.logger.info(
+            "Chute: encoder-homed successfully "
+            f"(count_at_index={self.chute_encoder.get_count_at_index()}, zero_count={self._encoder_zero_count})"
+        )
+        self._homed = True
+        self.pieces_since_check = 0
+        return True
+
+    def _homeEndstop(self) -> bool:
         self.logger.info("Chute: homing via sensor")
         pos_before = self.current_angle
         raw_before = self.raw_endstop_active

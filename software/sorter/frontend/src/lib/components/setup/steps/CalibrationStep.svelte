@@ -8,18 +8,24 @@
 	import Field from '$lib/components/ui/Field.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
+	import ChuteEncoderPanel from '$lib/components/setup/ChuteEncoderPanel.svelte';
 
 	type ChuteLiveStatus = {
 		live_available: boolean;
+		chute_position_sensor?: 'endstop' | 'encoder';
 		endstop_triggered: boolean | null;
 		raw_endstop_high: boolean | null;
 		endstop_active_high: boolean | null;
 		endstop_error?: string;
+		encoder_count?: number | null;
+		encoder_index_synced?: boolean | null;
+		encoder_error?: string;
 		stepper_direction_inverted: boolean | null;
 		current_angle: number | null;
 		stepper_position_degrees: number | null;
 		stepper_microsteps: number | null;
 		stepper_stopped: boolean | null;
+		homed?: boolean | null;
 		digital_inputs: Array<{ channel: number; raw_high: boolean }>;
 		home_pin_channel: number | null;
 	};
@@ -43,19 +49,24 @@
 	let chuteFirstBinCenter = $state(8.25);
 	let chutePillarWidthDeg = $state(8.25);
 	let chuteEndstopActiveHigh = $state(true);
+	let chuteEncoderCountsPerRevolution = $state(144);
 	let chuteLive = $state<ChuteLiveStatus>({
 		live_available: false,
 		endstop_triggered: null,
 		raw_endstop_high: null,
 		endstop_active_high: null,
+		encoder_count: null,
+		encoder_index_synced: null,
 		stepper_direction_inverted: null,
 		current_angle: null,
 		stepper_position_degrees: null,
 		stepper_microsteps: null,
 		stepper_stopped: null,
+		homed: null,
 		digital_inputs: [],
 		home_pin_channel: null
 	});
+	const chuteSensorMode = $derived(chuteLive.chute_position_sensor ?? 'endstop');
 
 	function currentBackendBaseUrl(): string {
 		return (
@@ -99,6 +110,9 @@
 				chuteFirstBinCenter = Number(configPayload?.first_bin_center ?? 8.25);
 				chutePillarWidthDeg = Number(configPayload?.pillar_width_deg ?? 8.25);
 				chuteEndstopActiveHigh = Boolean(configPayload?.endstop_active_high ?? true);
+				chuteEncoderCountsPerRevolution = Number(
+					configPayload?.encoder_counts_per_revolution ?? 144
+				);
 				configuredHomePinChannel = optionalChannel(configPayload?.home_pin_channel);
 			}
 			if (liveRes.ok) {
@@ -183,12 +197,34 @@
 			);
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
-			chuteStatus = payload?.message ?? 'Chute endstop found.';
+			chuteStatus = payload?.message ?? 'Chute reference found.';
 			await loadChuteSettings();
 		} catch (e: any) {
-			chuteError = e.message ?? 'Failed to find chute endstop';
+			chuteError = e.message ?? 'Failed to find the chute reference';
 		} finally {
 			chuteHoming = false;
+		}
+	}
+
+	async function saveEncoderCountsPerRevolution(value: number) {
+		chuteEncoderCountsPerRevolution = value;
+		chuteSaving = true;
+		chuteError = null;
+		chuteStatus = '';
+		try {
+			const res = await fetch(`${currentBackendBaseUrl()}/api/hardware-config/chute`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ encoder_counts_per_revolution: Math.round(value) })
+			});
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			chuteStatus = payload?.message ?? 'Chute settings saved.';
+			await loadChuteSettings();
+		} catch (e: any) {
+			chuteError = e.message ?? 'Failed to save the encoder calibration';
+		} finally {
+			chuteSaving = false;
 		}
 	}
 
@@ -257,110 +293,164 @@
 		</Alert>
 	{/if}
 
-	<Panel
-		title="Chute endstop and home"
-		description="Check the chute's endstop before homing: set its polarity, and make sure the chute can find its mechanical reference."
-	>
-		{#snippet actions()}
-			<Button size="sm" variant="ghost" icon={Cable} onclick={() => (showEndstopWiringHelp = !showEndstopWiringHelp)}>
-				<span class="max-sm:sr-only">{showEndstopWiringHelp ? 'Hide the wiring' : 'Show the wiring'}</span>
-			</Button>
-		{/snippet}
-		<div class="flex flex-col gap-4">
-			{#if showEndstopWiringHelp}
-				<div class="grid grid-cols-1 gap-4 rounded-control bg-well p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-					<a href={SKR_PICO_WIRING_DIAGRAM_URL} target="_blank" rel="noopener noreferrer" class="block">
-						<img
-							src={SKR_PICO_WIRING_DIAGRAM_URL}
-							alt="SKR Pico V1.0 board with labeled headers"
-							loading="lazy"
-							class="block h-auto w-full rounded-control"
+	{#if chuteSensorMode === 'encoder'}
+		<ChuteEncoderPanel
+			connected={chuteLive.live_available}
+			encoderCount={chuteLive.encoder_count ?? null}
+			indexSynced={chuteLive.encoder_index_synced ?? null}
+			homed={chuteLive.homed ?? null}
+			bind:countsPerRevolution={chuteEncoderCountsPerRevolution}
+			homing={chuteHoming}
+			canceling={chuteCanceling}
+			error={chuteError}
+			status={chuteStatus}
+			onFindIndex={findChuteEndstop}
+			onCancel={cancelChute}
+			onSaveCountsPerRevolution={saveEncoderCountsPerRevolution}
+		/>
+	{:else}
+		<Panel
+			title="Chute endstop and home"
+			description="Check the chute's endstop before homing: set its polarity, and make sure the chute can find its mechanical reference."
+		>
+			{#snippet actions()}
+				<Button
+					size="sm"
+					variant="ghost"
+					icon={Cable}
+					onclick={() => (showEndstopWiringHelp = !showEndstopWiringHelp)}
+				>
+					<span class="max-sm:sr-only"
+						>{showEndstopWiringHelp ? 'Hide the wiring' : 'Show the wiring'}</span
+					>
+				</Button>
+			{/snippet}
+			<div class="flex flex-col gap-4">
+				{#if showEndstopWiringHelp}
+					<div
+						class="grid grid-cols-1 gap-4 rounded-control bg-well p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+					>
+						<a
+							href={SKR_PICO_WIRING_DIAGRAM_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="block"
+						>
+							<img
+								src={SKR_PICO_WIRING_DIAGRAM_URL}
+								alt="SKR Pico V1.0 board with labeled headers"
+								loading="lazy"
+								class="block h-auto w-full rounded-control"
+							/>
+						</a>
+						<div class="flex flex-col gap-2 text-sm">
+							<h3 class="font-medium text-ink">SKR Pico endstop wiring</h3>
+							<p class="text-ink-muted">
+								The SKR Pico V1.0 endstop header the distributor board uses.
+							</p>
+							<p>
+								<span class="text-ink-muted">Chute endstop</span>
+								<span class="font-mono text-ink">Distributor · E0-STOP</span>
+							</p>
+						</div>
+					</div>
+				{/if}
+
+				<p class="text-sm text-ink-muted">
+					First, trigger the chute's endstop by hand and check that it reads Triggered below. If it
+					stays Not triggered, flip the polarity.
+				</p>
+				<div
+					class="flex items-center justify-between rounded-control px-4 py-3 transition-colors {endstopStatusClass(
+						chuteLive.endstop_triggered,
+						chuteLive.endstop_error
+					)}"
+				>
+					<span class="text-sm">Chute endstop</span>
+					<span class="text-base font-semibold">
+						{endstopStatusLabel(
+							chuteLive.endstop_triggered,
+							chuteLive.endstop_error,
+							chuteLive.live_available
+						)}
+					</span>
+				</div>
+				<p class="text-sm text-ink-muted">
+					Input channel <span class="font-medium text-ink">{chuteLive.home_pin_channel ?? '–'}</span
+					>
+					{#if chuteLive.raw_endstop_high !== null}
+						· raw signal <span class="font-medium text-ink"
+							>{chuteLive.raw_endstop_high ? 'high' : 'low'}</span
+						>
+					{/if}
+				</p>
+				{#if chuteLive.endstop_error}
+					<Alert tone="danger">The live endstop read failed: {chuteLive.endstop_error}</Alert>
+				{/if}
+
+				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+					<Field label="First bin center" for="setup-first-bin" help="Saved when you continue.">
+						<Input id="setup-first-bin" type="number" step={0.1} bind:value={chuteFirstBinCenter} />
+					</Field>
+					<Field label="Pillar width" for="setup-pillar" help="Saved when you continue.">
+						<Input
+							id="setup-pillar"
+							type="number"
+							step={0.1}
+							unit="°"
+							bind:value={chutePillarWidthDeg}
 						/>
-					</a>
-					<div class="flex flex-col gap-2 text-sm">
-						<h3 class="font-medium text-ink">SKR Pico endstop wiring</h3>
-						<p class="text-ink-muted">The SKR Pico V1.0 endstop header the distributor board uses.</p>
-						<p>
-							<span class="text-ink-muted">Chute endstop</span>
-							<span class="font-mono text-ink">Distributor · E0-STOP</span>
-						</p>
+					</Field>
+				</div>
+
+				<div class="flex flex-col gap-3 text-sm text-ink-muted">
+					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+						<Button size="sm" loading={chuteSaving} onclick={flipChutePolarity}
+							>Flip the polarity</Button
+						>
+						<span>
+							If the trigger looks inverted. The input reads as
+							<span class="font-medium text-ink"
+								>{chuteEndstopActiveHigh ? 'active-high' : 'active-low'}</span
+							>.
+						</span>
+					</div>
+					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+						<Button size="sm" loading={chuteSaving} onclick={flipChuteDirection}
+							>Flip the direction</Button
+						>
+						<span>
+							If the chute moves the wrong way. Its direction is
+							<span class="font-medium text-ink">
+								{chuteLive.stepper_direction_inverted === null
+									? '–'
+									: chuteLive.stepper_direction_inverted
+										? 'inverted'
+										: 'normal'}</span
+							>.
+						</span>
 					</div>
 				</div>
-			{/if}
 
-			<p class="text-sm text-ink-muted">
-				First, trigger the chute's endstop by hand and check that it reads Triggered below. If it
-				stays Not triggered, flip the polarity.
-			</p>
-			<div
-				class="flex items-center justify-between rounded-control px-4 py-3 transition-colors {endstopStatusClass(
-					chuteLive.endstop_triggered,
-					chuteLive.endstop_error
-				)}"
-			>
-				<span class="text-sm">Chute endstop</span>
-				<span class="text-base font-semibold">
-					{endstopStatusLabel(chuteLive.endstop_triggered, chuteLive.endstop_error, chuteLive.live_available)}
-				</span>
-			</div>
-			<p class="text-sm text-ink-muted">
-				Input channel <span class="font-medium text-ink">{chuteLive.home_pin_channel ?? '–'}</span>
-				{#if chuteLive.raw_endstop_high !== null}
-					· raw signal <span class="font-medium text-ink">{chuteLive.raw_endstop_high ? 'high' : 'low'}</span>
+				{#if chuteError}
+					<Alert tone="danger">{chuteError}</Alert>
+				{:else if chuteStatus}
+					<Alert tone="success">{chuteStatus}</Alert>
 				{/if}
-			</p>
-			{#if chuteLive.endstop_error}
-				<Alert tone="danger">The live endstop read failed: {chuteLive.endstop_error}</Alert>
-			{/if}
-
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-				<Field label="First bin center" for="setup-first-bin" help="Saved when you continue.">
-					<Input id="setup-first-bin" type="number" step={0.1} bind:value={chuteFirstBinCenter} />
-				</Field>
-				<Field label="Pillar width" for="setup-pillar" help="Saved when you continue.">
-					<Input id="setup-pillar" type="number" step={0.1} unit="°" bind:value={chutePillarWidthDeg} />
-				</Field>
 			</div>
-
-			<div class="flex flex-col gap-3 text-sm text-ink-muted">
-				<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-					<Button size="sm" loading={chuteSaving} onclick={flipChutePolarity}>Flip the polarity</Button>
-					<span>
-						If the trigger looks inverted. The input reads as
-						<span class="font-medium text-ink">{chuteEndstopActiveHigh ? 'active-high' : 'active-low'}</span>.
-					</span>
-				</div>
-				<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-					<Button size="sm" loading={chuteSaving} onclick={flipChuteDirection}>Flip the direction</Button>
-					<span>
-						If the chute moves the wrong way. Its direction is
-						<span class="font-medium text-ink">
-							{chuteLive.stepper_direction_inverted === null
-								? '–'
-								: chuteLive.stepper_direction_inverted
-									? 'inverted'
-									: 'normal'}</span
-						>.
-					</span>
-				</div>
-			</div>
-
-			{#if chuteError}
-				<Alert tone="danger">{chuteError}</Alert>
-			{:else if chuteStatus}
-				<Alert tone="success">{chuteStatus}</Alert>
-			{/if}
-		</div>
-		{#snippet footer()}
-			<Button variant="ghost" loading={chuteCanceling} onclick={cancelChute}>Stop the motion</Button>
-			<Button
-				variant="primary"
-				loading={chuteHoming}
-				disabled={!(systemState === 'ready' || systemState === 'initialized')}
-				onclick={findChuteEndstop}
-			>
-				Find the chute endstop
-			</Button>
-		{/snippet}
-	</Panel>
+			{#snippet footer()}
+				<Button variant="ghost" loading={chuteCanceling} onclick={cancelChute}
+					>Stop the motion</Button
+				>
+				<Button
+					variant="primary"
+					loading={chuteHoming}
+					disabled={!(systemState === 'ready' || systemState === 'initialized')}
+					onclick={findChuteEndstop}
+				>
+					Find the chute endstop
+				</Button>
+			{/snippet}
+		</Panel>
+	{/if}
 </div>

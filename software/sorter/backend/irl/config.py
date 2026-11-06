@@ -1160,14 +1160,28 @@ def _bindHardware(irl_interface: IRLInterface, config: IRLConfig, gc: GlobalConf
         raise RuntimeError("Distribution board not found — cannot initialize chute homing")
     chute_settings = readChuteSettings(
         machine_specific_params,
-        **boardDefaults(distribution_board.input_aliases, distribution_board.chute_home_active_high),
+        **boardDefaults(
+            distribution_board.input_aliases,
+            distribution_board.chute_home_active_high,
+            distribution_board.chute_position_sensor,
+        ),
         logger=gc.logger,
     )
-    chute_home_pin = distribution_board.get_input(chute_settings.home_pin_channel)
-    if chute_home_pin is None:
-        raise RuntimeError(
-            f"Distribution board chute home input channel {chute_settings.home_pin_channel} is unavailable."
-        )
+    chute_home_pin = None
+    chute_encoder = None
+    if chute_settings.chute_position_sensor == "encoder":
+        chute_encoder = distribution_board.chute_encoder
+        if chute_encoder is None:
+            raise RuntimeError(
+                'chute.chute_position_sensor is "encoder" but this control board has no chute encoder '
+                "(only Octopus-family boards do — check machine.toml's [chute] section)."
+            )
+    else:
+        chute_home_pin = distribution_board.get_input(chute_settings.home_pin_channel)
+        if chute_home_pin is None:
+            raise RuntimeError(
+                f"Distribution board chute home input channel {chute_settings.home_pin_channel} is unavailable."
+            )
     irl_interface.chute = Chute(
         gc,
         irl_interface.chute_stepper,
@@ -1180,5 +1194,7 @@ def _bindHardware(irl_interface: IRLInterface, config: IRLConfig, gc: GlobalConf
         operating_speed_microsteps_per_second=chute_settings.operating_speed_microsteps_per_second,
         position_check=chute_settings.position_check,
         position_check_every=chute_settings.position_check_every,
+        chute_encoder=chute_encoder,
+        encoder_counts_per_revolution=chute_settings.encoder_counts_per_revolution,
     )
     gc.logger.info(f"Chute configured: {chute_settings.describe()}")

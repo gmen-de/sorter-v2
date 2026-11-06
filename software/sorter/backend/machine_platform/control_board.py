@@ -8,7 +8,7 @@ from typing import Mapping, Sequence
 from global_config import GlobalConfig
 from hardware.bus import MCUBus
 from hardware.fault import HardwareFault
-from hardware.sorter_interface import DigitalInputPin, ServoMotor, SorterInterface, StepperMotor
+from hardware.sorter_interface import ChuteEncoder, DigitalInputPin, ServoMotor, SorterInterface, StepperMotor
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,11 @@ class BoardProfile:
     # Polarity of the chute home switch as this board is shipped, when it
     # differs from hardware_settings.chute's default. machine.toml still wins.
     chute_home_active_high: bool | None = None
+    # How this board reports chute position: "endstop" (mechanical home
+    # switch, the default) or "encoder" (magnet-ring Hall encoder, no
+    # switch — see hardware/sorter_interface.py's ChuteEncoder). Same
+    # machine.toml-overridable-default pattern as chute_home_active_high.
+    chute_position_sensor: str = "endstop"
 
 
 SKR_PICO_FEEDER_PROFILE = BoardProfile(
@@ -116,6 +121,7 @@ OCTOPUS_DISTRIBUTION_PROFILE = BoardProfile(
     # over a separate command table, not a digital input. See
     # software/firmware/octopus_control_board/README.md.
     input_aliases={},
+    chute_position_sensor="encoder",
 )
 
 GENERIC_PROFILE = BoardProfile(
@@ -157,6 +163,14 @@ class ControlBoard(ABC):
 
     @property
     def chute_home_active_high(self) -> bool | None:
+        return None
+
+    @property
+    def chute_position_sensor(self) -> str:
+        return "endstop"
+
+    @property
+    def chute_encoder(self) -> ChuteEncoder | None:
         return None
 
     @abstractmethod
@@ -232,6 +246,14 @@ class SorterInterfaceControlBoard(ControlBoard):
     @property
     def chute_home_active_high(self) -> bool | None:
         return self._profile.chute_home_active_high
+
+    @property
+    def chute_position_sensor(self) -> str:
+        return self._profile.chute_position_sensor
+
+    @property
+    def chute_encoder(self) -> ChuteEncoder | None:
+        return self._interface.chute_encoder
 
     def iter_steppers(self) -> tuple[DiscoveredStepper, ...]:
         return self._discovered_steppers

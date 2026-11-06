@@ -117,6 +117,42 @@ def checkPosition(chute: "Chute") -> PositionCheck:
     )
 
 
+def checkPositionEncoder(chute: "Chute") -> PositionCheck:
+    """Compare the magnet-ring encoder's own running count against the
+    stepper's open-loop position, both measured from the same zero that
+    Chute._homeEncoder() set — no motion needed, unlike checkPosition()
+    above (a real improvement: this check can run as often as the operator
+    likes without ever pausing the chute).
+
+    Not yet bench-verified: if the encoder's count direction turns out to
+    run opposite the stepper's own direction convention, this will show a
+    large, constant drift on every single check rather than the occasional
+    small drift a real lost-step event would cause — that would be the
+    first sign the sign convention (or encoder_counts_per_revolution
+    itself, still a nominal guess per ChuteEncoder.h) needs correcting.
+    """
+    from .chute import GEAR_RATIO
+
+    started = time.monotonic()
+
+    def failed(error: str) -> PositionCheck:
+        chute.markUnhomed(f"position check: {error}")
+        return PositionCheck(time.time(), False, duration_s=time.monotonic() - started, error=error)
+
+    if chute.chute_encoder is None or chute._encoder_zero_count is None:
+        return failed("no encoder zero reference recorded; home the chute first")
+
+    degrees_per_count = 360.0 / chute.encoder_counts_per_revolution
+    encoder_deg_since_zero = (chute.chute_encoder.get_count() - chute._encoder_zero_count) * degrees_per_count
+    drift_deg = chute.current_angle - encoder_deg_since_zero
+    drift_steps = chute.stepper.microsteps_for_degrees(drift_deg * GEAR_RATIO)
+    duration = round(time.monotonic() - started, 2)
+    return PositionCheck(
+        time.time(), True, drift_steps, round(drift_deg, 3),
+        precision_deg=round(degrees_per_count, 3), duration_s=duration,
+    )
+
+
 # --- What the checks found, for the chute's StallGuard tab ---
 
 

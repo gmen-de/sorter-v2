@@ -31,6 +31,7 @@
 	import StepperEndstopSettings from './stepper/StepperEndstopSettings.svelte';
 	import StepperChuteOperation from './stepper/StepperChuteOperation.svelte';
 	import StepperChuteStressTest from './stepper/StepperChuteStressTest.svelte';
+	import ChuteEncoderPanel from '$lib/components/setup/ChuteEncoderPanel.svelte';
 
 	let {
 		stepperKey,
@@ -129,6 +130,10 @@
 	let chuteFirstBinCenter = $state(8.25);
 	let chutePillarWidthDeg = $state(8.25);
 	let chuteOperatingSpeed = $state(3000);
+	let chuteSensorMode = $state<'endstop' | 'encoder'>('endstop');
+	let chuteEncoderCount = $state<number | null>(null);
+	let chuteEncoderIndexSynced = $state<boolean | null>(null);
+	let chuteEncoderCountsPerRevolution = $state(144);
 
 	// --- TMC driver settings ---
 	let tmcIrun = $state(16);
@@ -288,6 +293,15 @@
 				? payload.stepper_position_degrees
 				: null;
 		chuteHomed = typeof payload?.homed === 'boolean' ? payload.homed : null;
+		if (typeof payload?.chute_position_sensor === 'string') {
+			chuteSensorMode = payload.chute_position_sensor === 'encoder' ? 'encoder' : 'endstop';
+		}
+		chuteEncoderCount =
+			typeof payload?.encoder_count === 'number' && Number.isFinite(payload.encoder_count)
+				? payload.encoder_count
+				: null;
+		chuteEncoderIndexSynced =
+			typeof payload?.encoder_index_synced === 'boolean' ? payload.encoder_index_synced : null;
 	}
 
 	async function loadSettings() {
@@ -305,6 +319,10 @@
 					chutePillarWidthDeg = Number(payload?.pillar_width_deg ?? chutePillarWidthDeg);
 					chuteOperatingSpeed = Number(
 						payload?.operating_speed_microsteps_per_second ?? chuteOperatingSpeed
+					);
+					chuteSensorMode = payload?.chute_position_sensor === 'encoder' ? 'encoder' : 'endstop';
+					chuteEncoderCountsPerRevolution = Number(
+						payload?.encoder_counts_per_revolution ?? chuteEncoderCountsPerRevolution
 					);
 				}
 				stepperDirectionInverted = Boolean(
@@ -508,6 +526,33 @@
 			statusMsg = customMessage ?? payload?.message ?? 'Chute settings saved.';
 		} catch (e: any) {
 			errorMsg = e.message ?? 'Failed to save chute settings';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function saveChuteEncoderCountsPerRevolution(value: number) {
+		if (!endstop || stepperKey !== 'chute') return;
+		chuteEncoderCountsPerRevolution = value;
+		saving = true;
+		scope = 'endstop';
+		errorMsg = null;
+		statusMsg = '';
+		try {
+			const res = await fetch(`${currentBackendBaseUrl()}${endstop.configEndpoint}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ encoder_counts_per_revolution: Math.round(value) })
+			});
+			if (!res.ok) throw new Error(await readErrorMessage(res));
+			const payload = await res.json();
+			chuteEncoderCountsPerRevolution = Number(
+				payload?.settings?.encoder_counts_per_revolution ?? chuteEncoderCountsPerRevolution
+			);
+			applyLiveStatus(payload?.status ?? payload);
+			statusMsg = payload?.message ?? 'Chute settings saved.';
+		} catch (e: any) {
+			errorMsg = e.message ?? 'Failed to save the encoder calibration';
 		} finally {
 			saving = false;
 		}
@@ -826,7 +871,9 @@
 				{/if}
 				{#if hasEndstop}
 					<p class="mt-1 text-sm text-ink-muted">
-						Homing finds the endstop slowly. Cancel stops every stepper, in case the wrong motor
+						{isChute && chuteSensorMode === 'encoder'
+							? 'Homing finds the magnet-ring index slowly.'
+							: 'Homing finds the endstop slowly.'} Cancel stops every stepper, in case the wrong motor
 						moves.
 					</p>
 				{/if}
@@ -931,7 +978,22 @@
 			{/snippet}
 		</Panel>
 
-		{#if hasEndstop}
+		{#if chuteSensorMode === 'encoder'}
+			<ChuteEncoderPanel
+				connected={true}
+				encoderCount={chuteEncoderCount}
+				indexSynced={chuteEncoderIndexSynced}
+				homed={chuteHomed}
+				bind:countsPerRevolution={chuteEncoderCountsPerRevolution}
+				{homing}
+				{canceling}
+				error={errorMsg}
+				status={statusMsg}
+				onFindIndex={homeToEndstop}
+				onCancel={cancelHoming}
+				onSaveCountsPerRevolution={saveChuteEncoderCountsPerRevolution}
+			/>
+		{:else if hasEndstop}
 			<Panel title="Endstop settings" flush>
 				{@render endstopSettings()}
 				{#snippet footer()}

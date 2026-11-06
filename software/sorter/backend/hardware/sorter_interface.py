@@ -58,6 +58,13 @@ class InterfaceCommandCode(BaseCommandCode):
     SERVO_SET_ENABLED = 0x46
     SERVO_SET_DUTY_LIMITS = 0x47
     SERVO_MOVE_TO_AND_RELEASE = 0x48  # payload: uint16 pos (0.1°), uint16 max_duration_ms (0 = firmware default)
+    # Chute magnet-ring encoder commands (Octopus board only — see
+    # software/firmware/octopus_control_board/README.md). Channel is always 0.
+    CHUTE_ENCODER_GET_COUNT = 0x50
+    CHUTE_ENCODER_SET_COUNT = 0x51
+    CHUTE_ENCODER_IS_INDEX_SYNCED = 0x52
+    CHUTE_ENCODER_GET_COUNT_AT_INDEX = 0x53
+    CHUTE_ENCODER_CLEAR_INDEX_SYNCED = 0x54
 
 
 class DigitalInputPin:
@@ -74,7 +81,46 @@ class DigitalInputPin:
     @property
     def channel(self):
         return self._channel
-    
+
+
+class ChuteEncoder:
+    """The chute's magnet-ring Hall encoder (Octopus board only). Replaces a
+    mechanical home switch: a signed running quadrature count plus an
+    "index-synced" flag that latches once the ring's one index gap (one
+    missing magnet out of 72 nominal positions) has been seen, together with
+    the count value captured at that moment. See
+    software/firmware/octopus_control_board/ChuteEncoder.h for the firmware
+    side and its "not yet bench-calibrated" caveat — the same caveat applies
+    here: nothing below has been exercised against real hardware.
+
+    There is exactly one of these per board; channel is always 0.
+    """
+
+    def __init__(self, device: MCUDevice, channel: int, gc: GlobalConfig):
+        self._dev = device
+        self._channel = channel
+        self._gc = gc
+
+    def get_count(self) -> int:
+        res = self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_GET_COUNT, self._channel, b"")
+        return struct.unpack("<i", res.payload)[0]
+
+    def set_count(self, count: int) -> None:
+        payload = struct.pack("<i", count)
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_SET_COUNT, self._channel, payload)
+
+    def is_index_synced(self) -> bool:
+        res = self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_IS_INDEX_SYNCED, self._channel, b"")
+        return bool(res.payload[0])
+
+    def get_count_at_index(self) -> int:
+        res = self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_GET_COUNT_AT_INDEX, self._channel, b"")
+        return struct.unpack("<i", res.payload)[0]
+
+    def clear_index_synced(self) -> None:
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_CLEAR_INDEX_SYNCED, self._channel, b"")
+
+
 # Duty is a uint16 on the wire. The firmware wraps its PWM counter at 65534 so
 # that 0 is genuinely always-low and DIGITAL_OUTPUT_DUTY_MAX always-high.
 DIGITAL_OUTPUT_DUTY_MAX = 65535
@@ -1007,6 +1053,17 @@ class SorterInterface(MCUDevice):
         # Read the device name from the board info, or use a default name based on the address if not provided
         self._name = self._board_info.get("device_name", f"SorterInterface_{address}")
         self.hw_id: str = self._board_info.get("hw", "unknown")
+        # "hw" is usually absent from the INIT response above (the firmware
+        # drops it once stepper_names fits the payload budget — see
+        # dump_configuration()'s tiered fallback), so self.hw_id is unreliable.
+        # GET_OBSERVABILITY always includes it; this is the same check
+        # machine_platform/control_board.py's board-profile detection uses.
+        # Calling it here (instead of only later, from there) just moves the
+        # one cached bus round-trip earlier — no extra traffic.
+        observability_hw = self.get_observability_info().get("hw", "")
+        self.chute_encoder: ChuteEncoder | None = (
+            ChuteEncoder(self, 0, gc) if observability_hw.startswith("octopus") else None
+        )
 
     def shutdown(self):
         for dout in self.digital_outputs:

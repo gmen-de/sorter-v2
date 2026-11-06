@@ -142,6 +142,13 @@ class _ChuteRandomMotion(_SweepMotion):
     def _home_if_needed(self) -> None:
         if bool(getattr(self._chute, "homed", False)):
             return
+        if getattr(self._chute, "home_pin", None) is None:
+            # Encoder-mode board: no mechanical switch to home against
+            # directly here, and this sweep's own hand-rolled homing isn't
+            # encoder-aware yet. Delegate to the chute's own home(), which
+            # already dispatches correctly for either mode.
+            self._chute.home()
+            return
         from subsystems.distribution.chute import HOME_SPEED_MICROSTEPS_PER_SEC, HOME_TIMEOUT_MS
 
         st = self._chute.stepper

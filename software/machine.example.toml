@@ -66,6 +66,14 @@ sections = [
 # first_bin_center = 8.4
 # pillar_width_deg = 1.9
 # endstop_active_high = true
+# How the chute reports its position: "endstop" (mechanical home switch,
+# the default on older boards) or "encoder" (magnet-ring Hall encoder, no
+# switch — the default on Octopus-family boards). Overrides the board's own
+# default either way.
+# chute_position_sensor = "encoder"
+# Only meaningful in "encoder" mode. Nominal guess, not bench-calibrated —
+# see software/firmware/octopus_control_board/ChuteEncoder.h.
+# encoder_counts_per_revolution = 144
 
 # --- Stepper binding and direction overrides ---
 # Use stepper_bindings when the physical wiring does not match the firmware's

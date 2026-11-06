@@ -41,6 +41,11 @@ class ChuteHardwareSettingsPayload(BaseModel):
     operating_speed_microsteps_per_second: Optional[int] = None
     position_check: Optional[bool] = None
     position_check_every: Optional[int] = None
+    # "endstop" or "encoder" — takes effect on the next hardware start (same
+    # as home_pin_channel/endstop_active_high today).
+    chute_position_sensor: Optional[str] = None
+    # Nominal, not bench-calibrated — only meaningful in "encoder" mode.
+    encoder_counts_per_revolution: Optional[int] = None
 
 
 class ChuteAimingSettingsPayload(BaseModel):
@@ -91,8 +96,9 @@ def _live_chute() -> Any | None:
 
 
 def _board_defaults() -> Dict[str, Any]:
-    """The distribution board's own home input and polarity, used where none is
-    saved. Only the running chute knows them; it was built with them."""
+    """The distribution board's own home input, polarity and position-sensor
+    mode, used where none is saved. Only the running chute knows them; it
+    was built with them."""
     chute = _live_chute()
     defaults: Dict[str, Any] = {}
     channel = _pin_channel(getattr(chute, "home_pin", None))
@@ -102,6 +108,9 @@ def _board_defaults() -> Dict[str, Any]:
     defaults["endstop_active_high"] = (
         active_high if isinstance(active_high, bool) else DEFAULT_ENDSTOP_ACTIVE_HIGH
     )
+    sensor = getattr(chute, "chute_position_sensor", None)
+    if sensor in ("endstop", "encoder"):
+        defaults["chute_position_sensor"] = sensor
     return defaults
 
 
@@ -120,6 +129,8 @@ def _chute_payload(settings: ChuteSettings) -> Dict[str, Any]:
         "position_check": settings.position_check,
         "position_check_every": settings.position_check_every,
         "home_pin_channel": settings.home_pin_channel,
+        "chute_position_sensor": settings.chute_position_sensor,
+        "encoder_counts_per_revolution": settings.encoder_counts_per_revolution,
         "max_angle_deg": CHUTE_MAX_ANGLE,
     }
 
@@ -150,9 +161,12 @@ def _live_chute_status() -> Dict[str, Any]:
     if chute is None or stepper is None:
         return {
             "live_available": False,
+            "chute_position_sensor": None,
             "endstop_triggered": None,
             "raw_endstop_high": None,
             "endstop_active_high": None,
+            "encoder_count": None,
+            "encoder_index_synced": None,
             "current_angle": None,
             "stepper_position_degrees": None,
             "stepper_microsteps": None,
@@ -163,11 +177,15 @@ def _live_chute_status() -> Dict[str, Any]:
 
     interfaces = getattr(irl, "interfaces", {})
     distribution_board = interfaces.get("DISTRIBUTION MB") if isinstance(interfaces, dict) else None
+    sensor_mode = getattr(chute, "chute_position_sensor", "endstop")
     status: Dict[str, Any] = {
         "live_available": True,
+        "chute_position_sensor": sensor_mode,
         "endstop_triggered": None,
         "raw_endstop_high": None,
         "endstop_active_high": getattr(chute, "endstop_active_high", DEFAULT_ENDSTOP_ACTIVE_HIGH),
+        "encoder_count": None,
+        "encoder_index_synced": None,
         "stepper_direction_inverted": bool(getattr(stepper, "direction_inverted", True)),
         "current_angle": None,
         "stepper_position_degrees": None,
@@ -183,19 +201,26 @@ def _live_chute_status() -> Dict[str, Any]:
     except Exception:
         pass
 
-    try:
-        status["raw_endstop_high"] = bool(chute.home_pin.value)
-        if hasattr(chute, "endstop_triggered"):
-            status["endstop_triggered"] = bool(chute.endstop_triggered)
-        elif status["raw_endstop_high"] is not None:
-            active_high = bool(status["endstop_active_high"])
-            status["endstop_triggered"] = (
-                bool(status["raw_endstop_high"])
-                if active_high
-                else not bool(status["raw_endstop_high"])
-            )
-    except Exception as e:
-        status["endstop_error"] = str(e)
+    if sensor_mode == "encoder":
+        try:
+            status["encoder_count"] = int(chute.encoder_count)
+            status["encoder_index_synced"] = bool(chute.encoder_synced)
+        except Exception as e:
+            status["encoder_error"] = str(e)
+    else:
+        try:
+            status["raw_endstop_high"] = bool(chute.home_pin.value)
+            if hasattr(chute, "endstop_triggered"):
+                status["endstop_triggered"] = bool(chute.endstop_triggered)
+            elif status["raw_endstop_high"] is not None:
+                active_high = bool(status["endstop_active_high"])
+                status["endstop_triggered"] = (
+                    bool(status["raw_endstop_high"])
+                    if active_high
+                    else not bool(status["raw_endstop_high"])
+                )
+        except Exception as e:
+            status["endstop_error"] = str(e)
 
     try:
         status["current_angle"] = float(chute.current_angle)
@@ -267,20 +292,28 @@ def calibrate_chute_find_endstop() -> Dict[str, Any]:
     if chute is None or not hasattr(chute, "home"):
         raise HTTPException(status_code=503, detail="Chute subsystem unavailable.")
 
+    sensor_mode = getattr(chute, "chute_position_sensor", "endstop")
+    reference_name = "the magnet-ring index" if sensor_mode == "encoder" else "the endstop"
     try:
         homed = bool(chute.home())
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to find chute endstop: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to find {reference_name}: {e}")
     if not homed:
-        raise HTTPException(
-            status_code=409,
-            detail="Chute homing stopped before the endstop triggered. It's possible that the switch is not making good contact with the chute. Try moving it closer to the chute.",
+        detail = (
+            "Chute homing timed out without an index-sync event from the magnet-ring encoder. "
+            "This mode hasn't been bench-verified yet."
+            if sensor_mode == "encoder"
+            else (
+                "Chute homing stopped before the endstop triggered. It's possible that the switch is "
+                "not making good contact with the chute. Try moving it closer to the chute."
+            )
         )
+        raise HTTPException(status_code=409, detail=detail)
 
     return {
         "ok": True,
         "status": _live_chute_status(),
-        "message": "Step 1 complete. Chute moved slowly until the endstop was found and then moved to bin 1.",
+        "message": f"Step 1 complete. Chute moved slowly until {reference_name} was found and then moved to bin 1.",
     }
 
 

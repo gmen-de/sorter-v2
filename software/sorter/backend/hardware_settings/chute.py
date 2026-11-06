@@ -32,6 +32,13 @@ DEFAULT_HOME_PIN_CHANNEL = 3
 DEFAULT_ENDSTOP_ACTIVE_HIGH = True
 DEFAULT_POSITION_CHECK = False
 DEFAULT_POSITION_CHECK_EVERY = 50
+# "endstop" (mechanical home switch) or "encoder" (magnet-ring Hall encoder,
+# no switch — see hardware/sorter_interface.py's ChuteEncoder).
+DEFAULT_CHUTE_POSITION_SENSOR = "endstop"
+VALID_CHUTE_POSITION_SENSORS = ("endstop", "encoder")
+# Nominal guess (2 quadrature counts per magnet-ish), NOT bench-calibrated —
+# see software/firmware/octopus_control_board/ChuteEncoder.h's own caveat.
+DEFAULT_ENCODER_COUNTS_PER_REVOLUTION = 144
 
 GEOMETRY = ("num_sections", "section_width_deg", "first_section_offset_deg")
 LEGACY_GEOMETRY = ("first_bin_center", "pillar_width_deg")
@@ -40,6 +47,8 @@ CHANGEABLE = GEOMETRY + LEGACY_GEOMETRY + (
     "operating_speed_microsteps_per_second",
     "position_check",
     "position_check_every",
+    "chute_position_sensor",
+    "encoder_counts_per_revolution",
 )
 
 
@@ -54,6 +63,10 @@ class ChuteSettings:
     # Check the chute's position against its home switch every this many pieces.
     position_check: bool
     position_check_every: int
+    # "endstop" or "encoder" — see DEFAULT_CHUTE_POSITION_SENSOR.
+    chute_position_sensor: str
+    # Nominal, not bench-calibrated — only meaningful in "encoder" mode.
+    encoder_counts_per_revolution: int
     # The settings machine.toml holds; the others are defaults.
     saved: frozenset[str] = frozenset()
 
@@ -66,24 +79,34 @@ class ChuteSettings:
         return self.section_pitch_deg - self.section_width_deg
 
     def describe(self) -> str:
+        sensor_desc = (
+            f"endstop on input {self.home_pin_channel} active "
+            f"{'high' if self.endstop_active_high else 'low'}"
+            if self.chute_position_sensor == "endstop"
+            else f"magnet-ring encoder ({self.encoder_counts_per_revolution} counts/rev)"
+        )
         return (
             f"{self.num_sections} sections {self.section_width_deg:.2f}° wide, the first at "
-            f"{self.first_section_offset_deg:.2f}°, endstop on input {self.home_pin_channel} "
-            f"active {'high' if self.endstop_active_high else 'low'}, operating speed "
+            f"{self.first_section_offset_deg:.2f}°, {sensor_desc}, operating speed "
             f"{self.operating_speed_microsteps_per_second} µsteps/s, position check "
             f"{f'every {self.position_check_every} pieces' if self.position_check else 'off'}; from machine.toml: "
             f"{', '.join(sorted(self.saved)) or 'none, all defaults'}"
         )
 
 
-def boardDefaults(input_aliases: Mapping[str, int], endstop_active_high: bool | None) -> dict[str, Any]:
-    """The home input and polarity a distribution board comes with, as
-    readChuteSettings takes them."""
+def boardDefaults(
+    input_aliases: Mapping[str, int],
+    endstop_active_high: bool | None,
+    chute_position_sensor: str = DEFAULT_CHUTE_POSITION_SENSOR,
+) -> dict[str, Any]:
+    """The home input, polarity and position-sensor mode a distribution board
+    comes with, as readChuteSettings takes them."""
     return {
         "home_pin_channel": input_aliases.get("chute_home", DEFAULT_HOME_PIN_CHANNEL),
         "endstop_active_high": (
             DEFAULT_ENDSTOP_ACTIVE_HIGH if endstop_active_high is None else endstop_active_high
         ),
+        "chute_position_sensor": chute_position_sensor,
     }
 
 
@@ -92,10 +115,12 @@ def readChuteSettings(
     *,
     home_pin_channel: int = DEFAULT_HOME_PIN_CHANNEL,
     endstop_active_high: bool = DEFAULT_ENDSTOP_ACTIVE_HIGH,
+    chute_position_sensor: str = DEFAULT_CHUTE_POSITION_SENSOR,
     logger: Any = None,
 ) -> ChuteSettings:
-    """The chute's settings. `home_pin_channel` and `endstop_active_high` are
-    the distribution board's own, used unless machine.toml sets them."""
+    """The chute's settings. `home_pin_channel`, `endstop_active_high` and
+    `chute_position_sensor` are the distribution board's own, used unless
+    machine.toml sets them."""
     if config is None:
         config = machine_toml.read()
     raw = config.get(CHUTE)
@@ -156,6 +181,14 @@ def readChuteSettings(
         position_check_every=read(
             "position_check_every", DEFAULT_POSITION_CHECK_EVERY, _positiveInt, "a whole number of pieces above 0",
         ),
+        chute_position_sensor=read(
+            "chute_position_sensor", chute_position_sensor,
+            lambda value: value in VALID_CHUTE_POSITION_SENSORS, "\"endstop\" or \"encoder\"",
+        ),
+        encoder_counts_per_revolution=read(
+            "encoder_counts_per_revolution", DEFAULT_ENCODER_COUNTS_PER_REVOLUTION,
+            _positiveInt, "a whole number of counts above 0",
+        ),
         saved=frozenset(saved),
     )
 
@@ -165,6 +198,7 @@ def saveChuteSettings(
     *,
     home_pin_channel: int = DEFAULT_HOME_PIN_CHANNEL,
     endstop_active_high: bool = DEFAULT_ENDSTOP_ACTIVE_HIGH,
+    chute_position_sensor: str = DEFAULT_CHUTE_POSITION_SENSOR,
 ) -> ChuteSettings:
     """Save some of the chute's settings; raises ValueError naming a bad one,
     saving none. The geometry can be given the aiming way (GEOMETRY) or the
@@ -204,6 +238,12 @@ def saveChuteSettings(
         every = changes.get("position_check_every")
         if every is not None and not _positiveInt(every):
             raise ValueError("position_check_every must be a whole number of pieces above 0.")
+        sensor = changes.get("chute_position_sensor")
+        if sensor is not None and sensor not in VALID_CHUTE_POSITION_SENSORS:
+            raise ValueError('chute_position_sensor must be "endstop" or "encoder".')
+        counts_per_rev = changes.get("encoder_counts_per_revolution")
+        if counts_per_rev is not None and not _positiveInt(counts_per_rev):
+            raise ValueError("encoder_counts_per_revolution must be a whole number of counts above 0.")
 
         chute = config.get(CHUTE)
         if not isinstance(chute, dict):
@@ -225,8 +265,13 @@ def saveChuteSettings(
             chute["position_check"] = check
         if every is not None:
             chute["position_check_every"] = every
+        if sensor is not None:
+            chute["chute_position_sensor"] = sensor
+        if counts_per_rev is not None:
+            chute["encoder_counts_per_revolution"] = counts_per_rev
     return readChuteSettings(
-        config, home_pin_channel=home_pin_channel, endstop_active_high=endstop_active_high
+        config, home_pin_channel=home_pin_channel, endstop_active_high=endstop_active_high,
+        chute_position_sensor=chute_position_sensor,
     )
 
 

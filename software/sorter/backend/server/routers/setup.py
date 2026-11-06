@@ -40,6 +40,9 @@ def _board_summary(board: Any) -> dict[str, Any]:
         "logical_steppers": list(getattr(board, "logical_stepper_names", tuple())),
         "servo_count": len(getattr(board, "servos", [])),
         "input_aliases": dict(getattr(board, "input_aliases", {})),
+        # "endstop" or "encoder" — the distribution board's own default for
+        # the chute wiring wizard step; machine.toml can still override it.
+        "chute_position_sensor": getattr(board, "chute_position_sensor", "endstop"),
     }
 
 
