@@ -23,7 +23,8 @@ from machine_platform.control_board import (
     BASICALLY_V1_2_DISTRIBUTION_PROFILE,
     OCTOPUS_DISTRIBUTION_PROFILE,
 )
-from subsystems.distribution.chute import Chute
+from subsystems.distribution.chute import GEAR_RATIO, Chute
+from subsystems.distribution.position_check import checkPositionEncoder
 
 
 class _NullLogger:
@@ -45,17 +46,39 @@ def _fake_gc() -> SimpleNamespace:
 
 
 class _FakeStepper:
-    """Just enough of StepperMotor's surface for Chute's homing dispatch."""
+    """Just enough of StepperMotor's surface for Chute's homing dispatch and
+    for moveToAngle()/moveToAngleBlocking(). Simplified unit model: 1
+    "microstep" == 1 motor-degree, so position_degrees == position exactly
+    (chute.py already does the real GEAR_RATIO scaling itself; this fake
+    just needs to track whatever degree amount it was told to move)."""
 
     def __init__(self):
         self.enabled = False
-        self.position = 0
+        self.position = 0.0
         self.stopped = True  # the homing poll loop exits immediately
         self.move_at_speed_calls: list[int] = []
+        self.move_degrees_calls: list[float] = []
 
     def move_at_speed(self, speed: int, **kwargs) -> bool:
         self.move_at_speed_calls.append(speed)
         return True
+
+    def set_speed_limits(self, *a, **k) -> None:
+        pass
+
+    def estimateMoveDegreesMs(self, delta_deg: float, max_speed: int = 5000) -> int:
+        return int(abs(delta_deg))
+
+    def move_degrees(self, delta_deg: float, **kwargs) -> bool:
+        self.move_degrees_calls.append(delta_deg)
+        self.position += delta_deg
+        return True
+
+    def move_degrees_blocking(self, delta_deg: float, timeout_ms: int = 5000) -> bool:
+        return self.move_degrees(delta_deg)
+
+    def microsteps_for_degrees(self, degrees: float) -> int:
+        return int(round(degrees))
 
     @property
     def position_degrees(self) -> float:
@@ -172,6 +195,99 @@ class ChuteEncoderHomingTests(unittest.TestCase):
         chute = self._chute(_FakeChuteEncoder(), _FakeStepper())
         with self.assertRaises(RuntimeError):
             _ = chute.raw_endstop_active
+
+
+class ChuteShortestPathTests(unittest.TestCase):
+    """The reason for switching from endstop to encoder in the first place:
+    once the chute can cross 0/360, moves should take the shorter way
+    around, not just be unbounded."""
+
+    def _chute(self, *, encoder: bool) -> tuple[Chute, _FakeStepper]:
+        stepper = _FakeStepper()
+        if encoder:
+            chute = Chute(
+                _fake_gc(), stepper, None, _empty_layout(), chute_encoder=_FakeChuteEncoder()
+            )
+        else:
+            chute = Chute(_fake_gc(), stepper, object(), _empty_layout())
+        return chute, stepper
+
+    def test_encoder_mode_picks_the_shorter_way_across_zero(self) -> None:
+        chute, stepper = self._chute(encoder=True)
+        stepper.position = 10.0 * GEAR_RATIO  # current_angle == 10°
+        chute.moveToAngle(350.0)
+        delta_deg = stepper.move_degrees_calls[-1] / GEAR_RATIO
+        # -20°, not +340° (the "long way" the old direct-delta math would
+        # have taken): crossing zero backwards is the shorter trip.
+        self.assertAlmostEqual(-20.0, delta_deg, places=3)
+        self.assertAlmostEqual(350.0, chute.current_angle, places=3)
+
+    def test_endstop_mode_keeps_the_original_direct_path(self) -> None:
+        chute, stepper = self._chute(encoder=False)
+        stepper.position = 10.0 * GEAR_RATIO
+        chute.moveToAngle(350.0)
+        delta_deg = stepper.move_degrees_calls[-1] / GEAR_RATIO
+        # Unchanged behavior: the chute can't cross zero, so it must still
+        # take the long way around (+340°), exactly as before this change.
+        self.assertAlmostEqual(340.0, delta_deg, places=3)
+
+    def test_encoder_mode_shortest_path_also_works_the_other_direction(self) -> None:
+        chute, stepper = self._chute(encoder=True)
+        stepper.position = 350.0 * GEAR_RATIO  # current_angle == 350°
+        chute.moveToAngle(10.0)
+        delta_deg = stepper.move_degrees_calls[-1] / GEAR_RATIO
+        self.assertAlmostEqual(20.0, delta_deg, places=3)
+        self.assertAlmostEqual(10.0, chute.current_angle, places=3)
+
+
+class ChuteReachabilityTests(unittest.TestCase):
+    def _chute(self, *, encoder: bool) -> Chute:
+        kwargs = dict(
+            first_section_offset_deg=355.0,
+            section_width_deg=2.0,
+            num_sections=1,
+        )
+        if encoder:
+            return Chute(
+                _fake_gc(), _FakeStepper(), None, _empty_layout(),
+                chute_encoder=_FakeChuteEncoder(), **kwargs,
+            )
+        return Chute(_fake_gc(), _FakeStepper(), object(), _empty_layout(), **kwargs)
+
+    def test_endstop_mode_has_a_dead_wedge_past_350(self) -> None:
+        chute = self._chute(encoder=False)
+        self.assertIsNone(chute.angleForVirtualBin(0, 0, 1))
+
+    def test_encoder_mode_has_no_dead_wedge(self) -> None:
+        chute = self._chute(encoder=True)
+        angle = chute.angleForVirtualBin(0, 0, 1)
+        self.assertIsNotNone(angle)
+        self.assertAlmostEqual(356.0, angle, places=3)
+
+
+class ChuteEncoderPositionCheckDriftTests(unittest.TestCase):
+    def test_zero_drift_survives_a_full_revolution(self) -> None:
+        stepper = _FakeStepper()
+        encoder = _FakeChuteEncoder(count=0, count_at_index=0, synced=True)
+        chute = Chute(
+            _fake_gc(), stepper, None, _empty_layout(),
+            chute_encoder=encoder,
+            first_section_offset_deg=0.0,
+            section_width_deg=0.0,
+        )
+        self.assertTrue(chute.home())  # sets stepper.position = 0, zero_count = 0
+
+        # Simulate one full, drift-free revolution: both the stepper's own
+        # open-loop count and the encoder's running count advance by exactly
+        # one revolution's worth. Before the fix this surfaces, comparing
+        # against the 360-normalized current_angle (now ~0 again) instead
+        # of this raw accumulation would have reported ~360° of bogus drift.
+        stepper.position += 360.0 * GEAR_RATIO
+        encoder.set_count(encoder.get_count() + chute.encoder_counts_per_revolution)
+
+        check = checkPositionEncoder(chute)
+        self.assertTrue(check.ok)
+        self.assertAlmostEqual(0.0, check.drift_deg, places=3)
 
 
 class ChuteSettingsPersistenceTests(unittest.TestCase):

@@ -144,7 +144,14 @@ def checkPositionEncoder(chute: "Chute") -> PositionCheck:
 
     degrees_per_count = 360.0 / chute.encoder_counts_per_revolution
     encoder_deg_since_zero = (chute.chute_encoder.get_count() - chute._encoder_zero_count) * degrees_per_count
-    drift_deg = chute.current_angle - encoder_deg_since_zero
+    # Raw, unbounded stepper degrees here, NOT the 360-normalized
+    # current_angle: the encoder's own count never wraps per revolution
+    # either (see ChuteEncoder.cpp), so once the chute can complete full
+    # revolutions (encoder mode allows crossing 0/360, see
+    # Chute._deltaToTarget()), comparing against a wrapped angle would
+    # show bogus multiples-of-360° "drift" with zero real drift.
+    stepper_deg_since_zero = chute.stepper.position_degrees / GEAR_RATIO
+    drift_deg = stepper_deg_since_zero - encoder_deg_since_zero
     drift_steps = chute.stepper.microsteps_for_degrees(drift_deg * GEAR_RATIO)
     duration = round(time.monotonic() - started, 2)
     return PositionCheck(

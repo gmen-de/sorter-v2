@@ -367,7 +367,7 @@ class Positioning(BaseState):
         return None
 
     def _startPositionCheck(self) -> None:
-        self.logger.info("Positioning: checking the chute's position against its home switch first")
+        self.logger.info("Positioning: checking the chute's position first")
         self._phase = "checking"
         self._check_done.clear()
 

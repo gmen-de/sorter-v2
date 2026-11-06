@@ -131,7 +131,10 @@ def _chute_payload(settings: ChuteSettings) -> Dict[str, Any]:
         "home_pin_channel": settings.home_pin_channel,
         "chute_position_sensor": settings.chute_position_sensor,
         "encoder_counts_per_revolution": settings.encoder_counts_per_revolution,
-        "max_angle_deg": CHUTE_MAX_ANGLE,
+        # Encoder-mode boards have no dead wedge (see Chute.angleForVirtualBin) —
+        # the full circle is reachable, so the UI's max shouldn't be capped
+        # at the endstop-only mechanical limit.
+        "max_angle_deg": 360 if settings.chute_position_sensor == "encoder" else CHUTE_MAX_ANGLE,
     }
 
 
@@ -375,7 +378,11 @@ def _chute_reachability(
     num_sections: int, section_width_deg: float, first_section_offset_deg: float
 ) -> Dict[str, Any]:
     # For the active (or default) layout, report whether every bin's center
-    # angle lands inside the chute's reachable arc [0, CHUTE_MAX_ANGLE].
+    # angle lands inside the chute's reachable arc [0, CHUTE_MAX_ANGLE] — in
+    # endstop mode only. Encoder-mode boards have no dead wedge at all (no
+    # mechanical switch left to avoid), matching Chute.angleForVirtualBin.
+    chute = _live_chute()
+    sensor_mode = getattr(chute, "chute_position_sensor", "endstop")
     layout = getBinLayout()
     unreachable: List[Dict[str, Any]] = []
     total = 0
@@ -392,7 +399,7 @@ def _chute_reachability(
                     section_width_deg,
                     first_section_offset_deg,
                 )
-                if angle < 0 or angle > CHUTE_MAX_ANGLE:
+                if sensor_mode != "encoder" and (angle < 0 or angle > CHUTE_MAX_ANGLE):
                     unreachable.append(
                         {
                             "layer_index": layer_index,

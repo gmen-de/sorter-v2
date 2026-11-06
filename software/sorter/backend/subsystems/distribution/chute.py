@@ -235,8 +235,15 @@ class Chute:
 
     @property
     def current_angle(self) -> float:
-        stepper_angle = self.stepper.position_degrees
-        return stepper_angle / GEAR_RATIO
+        # Normalized to [0, 360): once encoder mode allows a move to wrap
+        # past 0/360 (see _deltaToTarget()), the stepper's own raw open-loop
+        # degrees can go negative or past 360, and this public angle must
+        # still read as the sane physical value. Python's `%` on a positive
+        # divisor already returns [0, 360) regardless of the dividend's
+        # sign, so this needs no extra sign-handling. In endstop mode this
+        # is a no-op: every move there is already clamped into [0, 360], so
+        # the raw and normalized values always agreed anyway.
+        return (self.stepper.position_degrees / GEAR_RATIO) % 360.0
 
     def _binsInSection(self, layer_index: int, section_index: int) -> int:
         try:
@@ -271,14 +278,18 @@ class Chute:
         )
         if unclamped:
             return angle
-        # The chute travels [0, CHUTE_MAX_ANGLE] and can never cross the home
-        # stop, so wrap the bin onto the circle: it is reachable iff its wrapped
-        # position lands inside the travel window. The arc (CHUTE_MAX_ANGLE, 360)
-        # just before home is the only dead wedge. Wrapping is what lets a
-        # section that home cut through still serve the bins sitting just
-        # clockwise of home — reached the long way round, never across the stop.
         norm = angle % 360.0
-        if norm > CHUTE_MAX_ANGLE:
+        if self.chute_position_sensor == "endstop" and norm > CHUTE_MAX_ANGLE:
+            # The chute travels [0, CHUTE_MAX_ANGLE] and can never cross the
+            # home stop (the switch's own hammer is the reason), so wrap the
+            # bin onto the circle: it is reachable iff its wrapped position
+            # lands inside the travel window. The arc (CHUTE_MAX_ANGLE, 360)
+            # just before home is the only dead wedge. Wrapping is what lets
+            # a section that home cut through still serve the bins sitting
+            # just clockwise of home — reached the long way round, never
+            # across the stop. In encoder mode there is no such obstruction
+            # (that's the whole point of the slip-ring/encoder swap), so
+            # every bin is reachable there — no dead wedge at all.
             return None
         return norm
 
@@ -293,14 +304,39 @@ class Chute:
         # jog's, a sweep's), so every chute move sets its own.
         self.stepper.set_speed_limits(MIN_SPEED_MICROSTEPS_PER_SEC, speed)
 
+    def _deltaToTarget(self, target: float) -> tuple[float, float]:
+        """The (delta_stepper_deg, clamped_target_deg) to reach `target`
+        chute-degrees from here.
+
+        Endstop mode: exactly the chute's original behavior — the chute
+        physically cannot cross 0/360 (the switch is in the way), so the
+        target is clamped into [0, 360] and the delta is the direct,
+        possibly-long-way distance.
+
+        Encoder mode: the chute can now turn freely either way (that's the
+        whole point of the slip-ring/encoder swap), so this picks whichever
+        direction is the SHORTER way around the circle — less travel, less
+        time, not just "no limit". `current` is already 360-normalized
+        (see current_angle); wrapping the raw difference into (-180, 180]
+        gives the shortest signed delta in the same sign convention the
+        direct-delta formula already used (positive target - current =
+        positive delta), so there's no new direction ambiguity here beyond
+        what endstop mode already has.
+        """
+        current = self.current_angle
+        if self.chute_position_sensor == "encoder":
+            target = target % 360.0
+            delta_deg = ((target - current + 180.0) % 360.0) - 180.0
+        else:
+            target = max(0.0, min(360.0, target))
+            delta_deg = target - current
+        return delta_deg * GEAR_RATIO, target
+
     def moveToAngle(self, target: float, max_speed: int | None = None) -> int | None:
         """Start a move at the operating speed, or at `max_speed` when given; the
         estimated duration in ms, or None if the board refused it."""
-        target = max(0.0, min(360.0, target))
+        delta_stepper_angle, target = self._deltaToTarget(target)
         current = self.current_angle
-        target_stepper_angle = target * GEAR_RATIO
-        current_stepper_angle = current * GEAR_RATIO
-        delta_stepper_angle = target_stepper_angle - current_stepper_angle
         speed = int(max_speed or self.operating_speed_microsteps_per_second)
         estimated_ms = self.stepper.estimateMoveDegreesMs(delta_stepper_angle, max_speed=speed)
 
@@ -336,11 +372,8 @@ class Chute:
 
     def moveToAngleBlocking(self, target: float, timeout_buffer_ms: int = 0) -> int | None:
         """Move and wait; the estimated duration in ms, or None if it was refused or did not finish."""
-        target = max(0.0, min(360.0, target))
+        delta_stepper_angle, target = self._deltaToTarget(target)
         current = self.current_angle
-        target_stepper_angle = target * GEAR_RATIO
-        current_stepper_angle = current * GEAR_RATIO
-        delta_stepper_angle = target_stepper_angle - current_stepper_angle
         speed = int(self.operating_speed_microsteps_per_second)
         estimated_ms = self.stepper.estimateMoveDegreesMs(delta_stepper_angle, max_speed=speed)
         timeout_ms = max(1, estimated_ms + timeout_buffer_ms)
@@ -403,16 +436,20 @@ class Chute:
         """
         self.logger.info("Chute: homing via magnet-ring encoder")
         assert self.chute_encoder is not None
-        pos_before = self.current_angle
+        # Raw, unbounded degrees for this log only (not the 360-normalized
+        # current_angle) -- during a long homing rotation a wrapped value
+        # would make "moved so far" look like it went backwards.
+        pos_before = self.stepper.position_degrees / GEAR_RATIO
         self.chute_encoder.clear_index_synced()
         self.stepper.move_at_speed(HOME_SPEED_MICROSTEPS_PER_SEC)
         start = time.monotonic()
         while not self.chute_encoder.is_index_synced():
             if (time.monotonic() - start) * 1000 > HOME_TIMEOUT_MS:
                 self.stepper.move_at_speed(0)
+                moved = self.stepper.position_degrees / GEAR_RATIO - pos_before
                 self.logger.error(
                     f"Chute: encoder homing timed out after {HOME_TIMEOUT_MS}ms without an "
-                    f"index-sync event (moved={self.current_angle - pos_before:.2f}° so far)."
+                    f"index-sync event (moved={moved:.2f}° so far)."
                 )
                 return False
             time.sleep(0.01)
