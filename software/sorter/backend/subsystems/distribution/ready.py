@@ -3,6 +3,7 @@ import time
 from states.base_state import BaseState
 from subsystems.shared_variables import SharedVariables
 from .states import DistributionState
+from defs.known_object import PieceStage
 from irl.config import IRLInterface
 from global_config import GlobalConfig
 
@@ -50,6 +51,22 @@ class Ready(BaseState):
         piece_advanced = False
         if transport is not None and self._positioned_uuid is not None:
             current = transport.getPieceForDistributionPositioning()
+            if (
+                current is not None
+                and current.uuid == self._positioned_uuid
+                and current.stage != PieceStage.distributing
+            ):
+                # Classification withdrew the piece and placed the same record
+                # again within one of its steps (a head revised to a double
+                # feed), so the slot never looked empty here. It is no longer
+                # 'distributing': it waits for a fresh aim, and the bin chosen
+                # for it may now be wrong. Holding READY would wait forever for
+                # a drop that classification will not make.
+                self.logger.warning(
+                    f"Ready: positioned piece {self._positioned_uuid[:8]} was placed again "
+                    f"for a new aim -> IDLE"
+                )
+                return DistributionState.IDLE
             if current is None or current.uuid != self._positioned_uuid:
                 if not self._positionedPieceDropped(transport):
                     # It left the positioning slot but never reached the drop

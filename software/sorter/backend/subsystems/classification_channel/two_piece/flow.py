@@ -1136,6 +1136,10 @@ class TwoPieceClassificationChannel(Rev01BaseState):
                 )
                 return None
             self._unplace(tp)
+            self.logger.warning(
+                f"{LOG_TAG} track={tp.track_id} revised to a double feed: withdrew it from "
+                f"distribution to aim again for misc"
+            )
         if group is None:
             self._multi_drop_seq += 1
             group = self._multi_drop_seq
