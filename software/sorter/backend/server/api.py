@@ -148,6 +148,7 @@ from server.routers.tuning import router as tuning_router
 from server.routers.telemetry import router as telemetry_router
 from server.routers.tailscale import keep_installed as keep_tailscale_installed, router as tailscale_router
 from server.routers.wifi import router as wifi_router
+from server.routers.bluetooth import router as bluetooth_router
 from server.routers.firmware import router as firmware_router
 from server.routers.versions import router as versions_router
 from server.routers.status_ping import router as status_ping_router
@@ -188,6 +189,7 @@ app.include_router(tuning_router)
 app.include_router(telemetry_router)
 app.include_router(tailscale_router)
 app.include_router(wifi_router)
+app.include_router(bluetooth_router)
 app.include_router(firmware_router)
 app.include_router(versions_router)
 app.include_router(status_ping_router)

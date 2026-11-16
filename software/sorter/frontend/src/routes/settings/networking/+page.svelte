@@ -4,6 +4,7 @@
 	import ConnectionSection from '$lib/components/settings/ConnectionSection.svelte';
 	import TailscaleSection from '$lib/components/settings/TailscaleSection.svelte';
 	import WifiSection from '$lib/components/settings/WifiSection.svelte';
+	import BluetoothSection from '$lib/components/settings/BluetoothSection.svelte';
 </script>
 
 <svelte:head><title>Sorter - Networking</title></svelte:head>
@@ -18,4 +19,8 @@
 
 <Panel title="Tailscale" description="The machine's Tailscale connection: join a network or switch to another.">
 	<TailscaleSection />
+</Panel>
+
+<Panel title="Bluetooth" description="Pair the SC15-Bridge ESP32 on the chute, so the backend can talk to the bus servos.">
+	<BluetoothSection />
 </Panel>
