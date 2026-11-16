@@ -17,7 +17,7 @@ Controls flap servo angles and hardware backend selection.
 | `open_angle` | int (0–180) | `10` | Angle in degrees for the open (drop) position. |
 | `closed_angle` | int (0–180) | `83` | Angle in degrees for the closed (hold) position. |
 | `backend` | `"pca9685"` \| `"waveshare"` | `"pca9685"` | Servo driver to use. `"pca9685"` uses the onboard I²C driver; `"waveshare"` uses the SC bus over USB. |
-| `port` | string | auto-detected | Serial port for the Waveshare SC bus. Omit to auto-detect. Only used when `backend = "waveshare"`. |
+| `port` | string | auto-detected | Serial port for the Waveshare SC bus. Omit to auto-detect. `bt:<address>` or `btserial:<device>` reach the bus through the Bluetooth bridge instead. Only used when `backend = "waveshare"`. |
 | `open_speed` | int (1–2000, °/s) | firmware default (1500) | PCA9685 layer servos: speed when a door opens. |
 | `close_speed` | int (1–2000, °/s) | firmware default (1500) | PCA9685 layer servos: speed when a door closes. |
 | `homing_speed` | int (1–2000, °/s) | firmware default (1500) | PCA9685 layer servos: the standard speed, used at start-up, for homing and for jogging. |

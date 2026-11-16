@@ -59,6 +59,23 @@ def _checksum(data: bytes) -> int:
     return (~sum(data)) & 0xFF
 
 
+def decode_state(data: bytes, taken_at: float) -> dict:
+    """Decode the 8 bytes from the present-position register on: position,
+    speed and load as big-endian words, then voltage (0.1 V) and temperature."""
+    position = ((data[0] << 8) | data[1]) & 0x03FF
+    speed = (data[2] << 8) | data[3]
+    load_word = (data[4] << 8) | data[5]
+    load = -(load_word & 0x3FF) if load_word & 0x400 else load_word & 0x3FF
+    return {
+        "position": position,
+        "speed": speed,
+        "load": load,
+        "voltage": data[6],
+        "temperature": data[7],
+        "t": taken_at,
+    }
+
+
 class ScServoBus:
     """Low-level half-duplex serial bus for SC servos."""
 
@@ -104,19 +121,27 @@ class ScServoBus:
 
         return b"\xFF\xFF" + meta + tail
 
+    def _exchange(self, pkt: bytes) -> bytes | None:
+        """Put one instruction packet on the bus and return the raw status
+        packet (echo already skipped), or None when nothing came back.
+        Caller holds ``self._lock``. A subclass with another transport only
+        replaces this."""
+        self._serial.reset_input_buffer()
+        self._serial.write(pkt)
+        self._serial.flush()
+
+        packet = self._read_packet()
+        if packet == pkt:
+            packet = self._read_packet()
+        return packet
+
     def _send(self, servo_id: int, instruction: int, params: bytes = b"") -> bytes | None:
         with self._lock:
             length = len(params) + 2
             pkt = bytes([0xFF, 0xFF, servo_id, length, instruction]) + params
             pkt += bytes([_checksum(pkt[2:])])
 
-            self._serial.reset_input_buffer()
-            self._serial.write(pkt)
-            self._serial.flush()
-
-            packet = self._read_packet()
-            if packet == pkt:
-                packet = self._read_packet()
+            packet = self._exchange(pkt)
             if packet is None or len(packet) < 6:
                 return None
 
@@ -204,6 +229,29 @@ class ScServoBus:
         if data is None:
             return False
         return data[0] != 0
+
+    def read_state(self, servo_id: int) -> dict | None:
+        """Position, speed, load, voltage and temperature in one bus read.
+
+        ``t`` is the time (``time.monotonic()``) the sample was taken."""
+        data = self.read_bytes(servo_id, _REG_PRESENT_POSITION_L, 8)
+        if data is None:
+            return None
+        return decode_state(data, time.monotonic())
+
+    def latest(self, servo_id: int, max_age: float = 0.25) -> dict | None:
+        """The newest sample a bus keeps by itself, no younger than ``max_age``
+        seconds. A direct serial bus keeps none; the Bluetooth bridge streams
+        them."""
+        return None
+
+    def sample(self, servo_id: int, max_age: float = 0.0) -> dict | None:
+        """A streamed sample when one is fresh enough, else a read."""
+        if max_age > 0:
+            cached = self.latest(servo_id, max_age)
+            if cached is not None:
+                return cached
+        return self.read_state(servo_id)
 
     def read_angle_limits(self, servo_id: int) -> tuple[int, int] | None:
         data = self.read_bytes(servo_id, _REG_MIN_ANGLE_L, 4)
@@ -298,10 +346,99 @@ class ScServoBus:
 
 _CAL_STEP_SIZE = 30
 _CAL_STEP_TIME_MS = 500
-_CAL_SETTLE_MS = 600
-_CAL_LOAD_THRESHOLD = 300
-_CAL_STALL_CHECKS = 3
 _CAL_MARGIN = 5
+
+# ---------------------------------------------------------------------------
+# Motion feedback
+# ---------------------------------------------------------------------------
+
+# A move is done when the measured position is within _ARRIVE_TOL units of the
+# target on _ARRIVE_CONFIRM samples in a row; it is blocked when the position
+# has not moved more than _STALL_MOVE units for _STALL_S seconds short of the
+# target; it timed out when neither happened before the deadline.
+_ARRIVE_TOL = 6
+_ARRIVE_CONFIRM = 2
+_STALL_S = 0.25
+_STALL_MOVE = 2
+_MIN_MOVE_S = 0.2
+_MOVE_GRACE_S = 1.0
+_SAMPLE_MAX_AGE_S = 0.2
+_DEFAULT_MOVE_MS = 300
+_MOVE_MS_RANGE = (50, 5000)
+_NO_FEEDBACK_LIMIT = 5
+
+
+class MotionWatch:
+    """Decides from position samples whether a move has arrived, is blocked
+    or has timed out. Feed it samples with ``update``; it returns None while
+    the move is still going, else ``"ok"``, ``"blocked"`` or ``"timeout"``.
+
+    A sample is only counted once (by its ``t``), so polling faster than the
+    samples arrive does not make a slow servo look stalled."""
+
+    def __init__(self, target: int, started: float, deadline: float):
+        self.target = target
+        self.started = started
+        self.deadline = deadline
+        self.position: int | None = None
+        self.load = 0
+        self._last_t: float | None = None
+        self._arrived = 0
+        self._ref_pos: int | None = None
+        self._ref_t = 0.0
+
+    def update(self, state: dict | None, now: float) -> str | None:
+        if state is not None and state["t"] != self._last_t:
+            self._last_t = state["t"]
+            pos = state["position"]
+            self.position = pos
+            self.load = state["load"]
+            if abs(pos - self.target) <= _ARRIVE_TOL:
+                self._arrived += 1
+                if self._arrived >= _ARRIVE_CONFIRM:
+                    return "ok"
+            else:
+                self._arrived = 0
+                if self._ref_pos is None or abs(pos - self._ref_pos) > _STALL_MOVE:
+                    self._ref_pos = pos
+                    self._ref_t = state["t"]
+                elif (
+                    state["t"] - self._ref_t >= _STALL_S
+                    and state["t"] - self.started >= _MIN_MOVE_S
+                ):
+                    return "blocked"
+        if now >= self.deadline:
+            return "timeout"
+        return None
+
+
+def wait_settled(
+    bus: "ScServoBus",
+    servo_id: int,
+    target: int,
+    timeout_s: float,
+    poll_s: float = 0.02,
+    max_age: float = 0.0,
+) -> tuple[str, int | None, int]:
+    """Block until the servo has reached ``target``, is blocked short of it, or
+    ``timeout_s`` is over. Returns (result, last position, last load); result
+    is ``"ok"``, ``"blocked"``, ``"timeout"`` or ``"no_feedback"`` when the
+    servo does not answer."""
+    started = time.monotonic()
+    watch = MotionWatch(target, started, started + timeout_s)
+    misses = 0
+    while True:
+        state = bus.sample(servo_id, max_age)
+        if state is None:
+            misses += 1
+            if misses >= _NO_FEEDBACK_LIMIT:
+                return "no_feedback", watch.position, watch.load
+        else:
+            misses = 0
+        result = watch.update(state, time.monotonic())
+        if result is not None:
+            return result, watch.position, watch.load
+        time.sleep(poll_s)
 
 
 def calibrate_servo(bus: ScServoBus, servo_id: int) -> tuple[int, int]:
@@ -323,11 +460,10 @@ def calibrate_servo(bus: ScServoBus, servo_id: int) -> tuple[int, int]:
         raise RuntimeError(f"Cannot read position of servo {servo_id}")
 
     def find_limit(start_pos: int, direction: int) -> int:
-        """Step in `direction` (-1 for min, +1 for max) until stall."""
+        """Step in `direction` (-1 for min, +1 for max) until the measured
+        position stops short of the step's target."""
         best = start_pos
         target = start_pos
-        last_pos = None
-        stall_count = 0
 
         while True:
             next_target = target + direction * _CAL_STEP_SIZE
@@ -338,36 +474,17 @@ def calibrate_servo(bus: ScServoBus, servo_id: int) -> tuple[int, int]:
             target = next_target
 
             bus.move_to(servo_id, target, _CAL_STEP_TIME_MS)
-            time.sleep(_CAL_SETTLE_MS / 1000.0)
-
-            # Poll for stall
-            for _ in range(5):
-                time.sleep(0.1)
-                pos = bus.read_position(servo_id)
-                load = bus.read_load(servo_id)
-                if pos is None or load is None:
-                    continue
-
-                if (direction < 0 and pos < best) or (direction > 0 and pos > best):
-                    best = pos
-
-                near_target = abs(pos - target) < 10
-                if near_target:
-                    break  # reached target, issue next step
-
-                if last_pos is not None and abs(pos - last_pos) < 2:
-                    stall_count += 1
-                else:
-                    stall_count = 0
-                last_pos = pos
-
-                if stall_count >= _CAL_STALL_CHECKS or (abs(load) > _CAL_LOAD_THRESHOLD and stall_count >= 2):
-                    logger.info(f"  Servo {servo_id}: limit found at {best} (stall, load={load})")
-                    return best
-            else:
-                last_pos = pos
-
-        return best  # unreachable but keeps linter happy
+            result, pos, load = wait_settled(
+                bus, servo_id, target, timeout_s=_CAL_STEP_TIME_MS / 1000.0 + _MOVE_GRACE_S
+            )
+            if pos is not None and ((direction < 0 and pos < best) or (direction > 0 and pos > best)):
+                best = pos
+            if result == "ok":
+                continue  # reached the step's target, issue the next step
+            if result == "no_feedback":
+                raise RuntimeError(f"Servo {servo_id} stopped answering during calibration")
+            logger.info(f"  Servo {servo_id}: limit found at {best} ({result}, load={load})")
+            return best
 
     cal_min = find_limit(current, -1)
     logger.info(f"  Servo {servo_id}: min = {cal_min}")
@@ -392,7 +509,7 @@ def calibrate_servo(bus: ScServoBus, servo_id: int) -> tuple[int, int]:
     # Move to center
     center = (safe_min + safe_max) // 2
     bus.move_to(servo_id, center, 500)
-    time.sleep(0.5)
+    wait_settled(bus, servo_id, center, timeout_s=0.5 + _MOVE_GRACE_S)
     bus.set_torque(servo_id, False)
 
     return safe_min, safe_max
@@ -425,8 +542,16 @@ class WaveshareServoMotor:
         self._max_limit: int = 1023
         self._open_position: int = 0
         self._closed_position: int = 1023
-        self._move_started_at: float = 0.0
-        self._move_duration: float = 0.0
+        # Motion is judged from measured positions, not from elapsed time.
+        self._motion_lock = threading.RLock()
+        self._watch: MotionWatch | None = None
+        self._release_after = False
+        self._move_result = "idle"
+        self._measured_position: int | None = None
+        self._open_speed: int | None = None
+        self._close_speed: int | None = None
+        self._homing_speed: int | None = None
+        self._speed_dps: int | None = None
 
     def initialize(self) -> None:
         """Read or auto-calibrate limits and apply good PID settings."""
@@ -497,39 +622,72 @@ class WaveshareServoMotor:
         if not self._enabled:
             self.enabled = True
         position = self._angle_to_position(angle)
-        self._move_duration = 0.3
-        self._move_started_at = time.monotonic()
-        self._current_position = position
-        return self._bus.move_to(self._servo_id, position, 300)
+        return self._start_move(position, release=False, speed_dps=self._speed_dps)
 
     def move_to_and_release(self, angle: int) -> bool:
-        """Move to angle then disable torque."""
-        result = self.move_to(angle)
-        self._enabled = False  # will release after move
-        return result
+        """Move to angle, then disable torque once the servo has arrived."""
+        if not self._enabled:
+            self.enabled = True
+        position = self._angle_to_position(angle)
+        accepted = self._start_move(position, release=True, speed_dps=self._speed_dps)
+        self._enabled = False  # released when the move ends
+        return accepted
 
     @property
     def position(self) -> int:
         pos = self._bus.read_position(self._servo_id)
+        if pos is not None:
+            self._measured_position = pos
         return pos if pos is not None else self._current_position
 
     def stop(self):
+        with self._motion_lock:
+            self._watch = None
+            self._release_after = False
+            self._move_result = "stopped"
         self._bus.set_torque(self._servo_id, False)
         self._enabled = False
 
     @property
     def stopped(self) -> bool:
-        # Use time-based estimate since polling is_moving is slow on the bus
-        if self._move_started_at == 0:
+        """True when no move is under way: the servo reached its target, is
+        blocked short of it, or the move ran out of time (see ``move_result``).
+        Each call looks at the newest measured position; it never sleeps."""
+        with self._motion_lock:
+            watch = self._watch
+            if watch is None:
+                return True
+            try:
+                state = self._bus.sample(self._servo_id, _SAMPLE_MAX_AGE_S)
+            except Exception as exc:
+                # An unreachable bus cannot confirm the move; the deadline
+                # still ends it.
+                logger.debug(f"Servo {self._servo_id}: no position sample: {exc}")
+                state = None
+            if state is not None:
+                self._measured_position = state["position"]
+            result = watch.update(state, time.monotonic())
+            if result is None:
+                return False
+            self._finish_move(result, watch)
             return True
-        elapsed = time.monotonic() - self._move_started_at
-        if elapsed >= self._move_duration + 0.1:
-            # Auto-release torque if move_to_and_release was used
-            if not self._enabled:
-                self._bus.set_torque(self._servo_id, False)
-            self._move_started_at = 0
-            return True
-        return False
+
+    @property
+    def move_result(self) -> str:
+        """How the last move ended: ``"ok"``, ``"blocked"``, ``"timeout"``,
+        ``"rejected"``, ``"stopped"``, ``"moving"`` while under way, or
+        ``"idle"`` before the first move."""
+        return self._move_result
+
+    def wait_stopped(self, timeout_s: float = 2.0, poll_s: float = 0.02) -> bool:
+        """Block until the current move has ended; False if it still runs
+        after ``timeout_s``."""
+        deadline = time.monotonic() + max(0.0, timeout_s)
+        while not self.stopped:
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(poll_s)
+        return True
 
     @property
     def available(self) -> bool:
@@ -538,21 +696,15 @@ class WaveshareServoMotor:
     def open(self, open_angle: int | None = None) -> bool:
         if not self._enabled:
             self.enabled = True
-        self._move_duration = 0.3
-        self._move_started_at = time.monotonic()
-        self._current_position = self._open_position
-        accepted = bool(self._bus.move_to(self._servo_id, self._open_position, 300))
-        self._enabled = False  # release after move
+        accepted = self._start_move(self._open_position, release=True, speed_dps=self._open_speed)
+        self._enabled = False  # released when the move ends
         return accepted
 
     def close(self, closed_angle: int | None = None) -> bool:
         if not self._enabled:
             self.enabled = True
-        self._move_duration = 0.3
-        self._move_started_at = time.monotonic()
-        self._current_position = self._closed_position
-        accepted = bool(self._bus.move_to(self._servo_id, self._closed_position, 300))
-        self._enabled = False  # release after move
+        accepted = self._start_move(self._closed_position, release=True, speed_dps=self._close_speed)
+        self._enabled = False  # released when the move ends
         return accepted
 
     def toggle(self) -> None:
@@ -562,13 +714,33 @@ class WaveshareServoMotor:
             self.open()
 
     def isOpen(self) -> bool:
-        return abs(self._current_position - self._open_position) < abs(self._current_position - self._closed_position)
+        # The measured position when there is one, else the last commanded.
+        position = self._measured_position if self._measured_position is not None else self._current_position
+        return abs(position - self._open_position) < abs(position - self._closed_position)
 
     def isClosed(self) -> bool:
         return not self.isOpen()
 
+    def set_motion_speeds(
+        self, open_speed: int | None, close_speed: int | None, homing_speed: int | None
+    ) -> None:
+        """Speeds in °/s for opening, closing and everything else; None keeps
+        the default move time."""
+        self._open_speed = open_speed
+        self._close_speed = close_speed
+        self._homing_speed = homing_speed
+
+    def apply_open_speed(self) -> None:
+        pass  # open() always uses the opening speed
+
+    def apply_close_speed(self) -> None:
+        pass  # close() always uses the closing speed
+
+    def apply_homing_speed(self) -> None:
+        self._speed_dps = self._homing_speed
+
     def set_speed_limits(self, min_speed: int, max_speed: int) -> None:
-        pass  # SC servos use time-based moves, speed is implicit
+        pass  # SC servos take a move time, not a speed; see set_motion_speeds
 
     def set_acceleration(self, acceleration: int) -> None:
         pass  # not applicable for SC servos
@@ -604,9 +776,52 @@ class WaveshareServoMotor:
             "max_limit": self._max_limit,
             "is_open": abs(position - self._open_position) < abs(position - self._closed_position),
             "invert": self._invert,
+            "move_result": self._move_result,
         }
 
     # -- internal -----------------------------------------------------------
+
+    def _move_time_ms(self, target: int, speed_dps: int | None) -> int:
+        """The servo's move time: from the configured speed and the distance
+        (the calibrated range counts as 180°), else the default."""
+        if not speed_dps:
+            return _DEFAULT_MOVE_MS
+        span = max(1, self._max_limit - self._min_limit)
+        degrees = abs(target - self._current_position) / span * 180.0
+        time_ms = int(round(degrees / speed_dps * 1000.0))
+        return max(_MOVE_MS_RANGE[0], min(_MOVE_MS_RANGE[1], time_ms))
+
+    def _start_move(self, position: int, release: bool, speed_dps: int | None) -> bool:
+        with self._motion_lock:
+            time_ms = self._move_time_ms(position, speed_dps)
+            now = time.monotonic()
+            self._watch = MotionWatch(position, now, now + time_ms / 1000.0 + _MOVE_GRACE_S)
+            self._release_after = release
+            self._move_result = "moving"
+            self._current_position = position
+            accepted = bool(self._bus.move_to(self._servo_id, position, time_ms))
+            if not accepted:
+                self._watch = None
+                self._release_after = False
+                self._move_result = "rejected"
+            return accepted
+
+    def _finish_move(self, result: str, watch: MotionWatch) -> None:
+        """End the move (lock held): record how it went and, for a move that
+        was to release, let go of the servo."""
+        self._watch = None
+        self._move_result = result
+        if result != "ok":
+            logger.warning(
+                f"Servo {self._servo_id}: move to {watch.target} ended '{result}' at "
+                f"{watch.position} (load {watch.load})"
+            )
+        if self._release_after:
+            self._release_after = False
+            try:
+                self._bus.set_torque(self._servo_id, False)
+            except Exception as exc:
+                logger.warning(f"Servo {self._servo_id}: could not release torque: {exc}")
 
     def _angle_to_position(self, angle: int) -> int:
         """Map 0-180 degrees to calibrated min-max range."""

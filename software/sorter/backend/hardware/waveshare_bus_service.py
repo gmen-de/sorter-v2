@@ -5,6 +5,7 @@ import threading
 import time
 from typing import Any, Callable, TypeVar
 
+from hardware.bt_servo_bus import BtScServoBus, is_bridge_port
 from hardware.waveshare_servo import ScServoBus, calibrate_servo as calibrate_servo_impl
 
 T = TypeVar("T")
@@ -94,6 +95,14 @@ class WaveshareBusService:
     def read_load(self, servo_id: int) -> int | None:
         return self._execute(lambda bus: bus.read_load(servo_id))
 
+    def read_state(self, servo_id: int) -> dict[str, Any] | None:
+        return self._execute(lambda bus: bus.read_state(servo_id))
+
+    def sample(self, servo_id: int, max_age: float = 0.0) -> dict[str, Any] | None:
+        """A fresh-enough streamed sample if the bus keeps one (Bluetooth
+        bridge), else a read."""
+        return self._execute(lambda bus: bus.sample(servo_id, max_age))
+
     def set_id(self, old_id: int, new_id: int) -> bool:
         return self._execute(lambda bus: bus.set_id(old_id, new_id))
 
@@ -135,7 +144,10 @@ class WaveshareBusService:
 
     def _ensure_open_locked(self) -> ScServoBus:
         if self._bus is None:
-            self._bus = ScServoBus(self._port, baudrate=self._baudrate, timeout=self._timeout)
+            if is_bridge_port(self._port):
+                self._bus = BtScServoBus(self._port, baudrate=self._baudrate, timeout=self._timeout)
+            else:
+                self._bus = ScServoBus(self._port, baudrate=self._baudrate, timeout=self._timeout)
         return self._bus
 
     def _close_locked(self) -> None:

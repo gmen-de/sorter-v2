@@ -20,6 +20,11 @@
 # For Waveshare SC bus servos wired directly over USB-TTL (no ESP32/BLE board):
 # backend = "waveshare"
 # port = "/dev/cu.usbmodem5A7C1215731"  # optional, auto-detected if omitted
+# For servos on a rotating part, reached through the Bluetooth bridge (see
+# firmware/sc15_bt_bridge): the paired bridge's address, or the serial device
+# `rfcomm bind` made for it.
+# port = "bt:AA:BB:CC:DD:EE:FF"
+# port = "btserial:/dev/rfcomm0"
 #
 # [[servo.channels]]
 # id = 1
