@@ -147,7 +147,7 @@ export const chuteNavItem: SettingsNavItem = {
 	icon: Wrench,
 	children: [
 		{ href: '/settings/chute-aiming', label: 'Chute aiming' },
-		{ href: '/settings/chute-diagnostics', label: 'Chute diagnostics' },
+		{ href: '/settings/octopus-diagnostic', label: 'Octopus diagnostic' },
 		{ href: '/settings/chute/stallguard', label: 'StallGuard' }
 	]
 };
