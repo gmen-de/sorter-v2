@@ -61,10 +61,15 @@ What the bins were designed for: cut flat, folded and glued. Cut them with the [
   <li>Pick your bin from the <strong>built-in bins</strong> list. You only need a CAD file if you have modified one, and then you drag your own <code>.step</code> in instead.</li>
   <li>Set <strong>thickness</strong> to your stock. 1/8 inch cardboard is 3.175 mm, which is the default.</li>
   <li>Leave <strong>kerf compensation</strong> on, so the finger joints come out the size they were drawn.</li>
-  <li>Export <strong>SVG or DXF</strong> to hand to somebody else's laser, or the LightBurn file if you are driving your own.</li>
+  <li>Export <strong>SVG</strong> to hand to somebody else's laser, or the LightBurn file if you are driving your own. Avoid the DXF for now: it carries no layer colours, so LightBurn merges the cut and score lines into one layer.</li>
   <li>Cut in colour order, <strong>green first, then blue, then red</strong>, with the green side face up. Green is the fold score and only goes through the first outside wall of the corrugation, so it has to be cut while the sheet is still whole. Blue perforations and red outlines are both full through cuts.</li>
   <li>Fold the bin up and glue the corners.</li>
 </ol>
+
+<div class="callout callout-warning">
+  <span class="callout-icon" aria-hidden="true">⚠</span>
+  <p>The built-in <strong>Bin (third, right-back)</strong> is wrong: it has no front wall, so it gives you three panels instead of four. Do not cut it. Export <strong>Bin (third, left)</strong> instead and mirror the pattern before cutting: the right bin is the left one flipped. Or print that bin, or cut it by hand from the template below. Until the generator is fixed (<a href="https://github.com/basicallysource/sorter-v2/issues/1137">#1137</a>).</p>
+</div>
 
 <div class="callout callout-warning">
   <span class="callout-icon" aria-hidden="true">⚠</span>

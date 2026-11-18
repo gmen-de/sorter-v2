@@ -37,11 +37,19 @@ in [`agent-docs/`](agent-docs/):
   page and the request-timing middleware behind it: each route's latency over
   the last hour in fixed memory, the slow-request log line, and the job queue,
   workers, database and disk figures beside it.
+- [`agent-docs/load-shedding.md`](agent-docs/load-shedding.md) — sorters'
+  file uploads answered 429 while the web process is overloaded: which
+  routes, what trips it, what a sorter does with it, and the log lines and
+  operator alert it sends.
 - [`agent-docs/labeling-queue.md`](agent-docs/labeling-queue.md) — the review
   queues of Piece samples and Channel samples: one queue module and one machine
   filter for both, the labeling queue and its worker, sort segments and cursor
   paging, the per-piece results kept instead of recomputed, and the rule that
   no request scans the fleet.
+- [`agent-docs/stats.md`](agent-docs/stats.md) — the stats the worker keeps
+  current (pieces per machine-day, crop deltas, triggers that mark what
+  changed): why a pass reads only what changed, how its numbers equal the old
+  full scans, and how to add a stat.
 - [`agent-docs/query-plans.md`](agent-docs/query-plans.md) — how that rule is
   enforced: a production-sized seeded database and a test that EXPLAINs every
   list and count the API serves, and what to do when it fails.
