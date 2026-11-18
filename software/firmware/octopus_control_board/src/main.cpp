@@ -1142,8 +1142,12 @@ const MasterCommandTable command_tables = {
 // core to dedicate to real-time motion on this chip).
 // ---------------------------------------------------------------------------
 
-HardwareTimer* stepgen_timer = new HardwareTimer(TIM2);
-HardwareTimer* motion_timer = new HardwareTimer(TIM3);
+// Must be basic timers with no pin outputs: the LED outputs PA2/PA3/PB10 are
+// TIM2 PWM pins, and STM32duino's analogWrite() re-programs that pin's timer
+// to the PWM frequency (1kHz) while pinMode() on a PWM'd pin deletes the
+// timer object outright - the step ISR then ran 10x slow or not at all.
+HardwareTimer* stepgen_timer = new HardwareTimer(TIM6);
+HardwareTimer* motion_timer = new HardwareTimer(TIM7);
 
 void stepgen_isr() {
     for (int i = 0; i < STEPPER_COUNT; i++) steppers[i].stepgen_tick();
@@ -1199,19 +1203,10 @@ void setup() {
 
     stepgen_timer->setOverflow(STEP_TICK_RATE_HZ, HERTZ_FORMAT);
     stepgen_timer->attachInterrupt(stepgen_isr);
-    // Highest NVIC priority (0,0): real step timing must never wait behind
-    // USB-CDC traffic. Neither this nor USB had an explicit priority before
-    // (both ran on the framework's defaults) - bench-observed 2026-11-18
-    // as the chute moving measurably slower (same speed/accel, same TMC
-    // registers, confirmed byte-for-byte) when driven over a busier/
-    // noisier USB link (Orange Pi) than a quiet direct one (a PC), which a
-    // starved stepgen tick explains and a coincidence doesn't.
-    stepgen_timer->setInterruptPriority(0, 0);
     stepgen_timer->resume();
 
     motion_timer->setOverflow(STEP_MOTION_UPDATE_RATE_HZ, HERTZ_FORMAT);
     motion_timer->attachInterrupt(motion_update_isr);
-    motion_timer->setInterruptPriority(0, 0);
     motion_timer->resume();
 
     // SAFETY (2026-11-17): the chute used to auto-home unconditionally right
