@@ -65,6 +65,10 @@ class InterfaceCommandCode(BaseCommandCode):
     CHUTE_ENCODER_IS_INDEX_SYNCED = 0x52
     CHUTE_ENCODER_GET_COUNT_AT_INDEX = 0x53
     CHUTE_ENCODER_CLEAR_INDEX_SYNCED = 0x54
+    CHUTE_ENCODER_GET_RAW_STATE = 0x55  # payload: uint8, (sensor_a << 1) | sensor_b
+    CHUTE_ENCODER_MOVE_TO_COUNT = 0x56  # payload: int32 target count; closed-loop, shortest-path (<=180 deg)
+    CHUTE_ENCODER_MOVE_TO_STEP_POS = 0x57  # payload: int32 target usteps (stepper's own position); open-loop, shortest-path
+    CHUTE_ENCODER_START_HOMING = 0x58  # no payload; re-homes the chute only (unlike INIT, leaves every other stepper/output alone)
 
 
 class DigitalInputPin:
@@ -86,12 +90,17 @@ class DigitalInputPin:
 class ChuteEncoder:
     """The chute's magnet-ring Hall encoder (Octopus board only). Replaces a
     mechanical home switch: a signed running quadrature count plus an
-    "index-synced" flag that latches once the ring's one index gap (one
-    missing magnet out of 72 nominal positions) has been seen, together with
-    the count value captured at that moment. See
-    software/firmware/octopus_control_board/ChuteEncoder.h for the firmware
-    side and its "not yet bench-calibrated" caveat — the same caveat applies
-    here: nothing below has been exercised against real hardware.
+    "index-synced" flag that latches once the ring's one index gap has been
+    seen, together with the count value captured at that moment.
+
+    Bench-calibrated 2026-11-15/16 (see
+    software/firmware/octopus_control_board/src/main.cpp): 45 magnets (not
+    the 44 originally assumed), 180 counts/rev, 7680 usteps/rev (laser-
+    measured). The firmware homes the chute autonomously at boot and
+    re-homes on start_homing() without touching any other stepper/output
+    (unlike the generic INIT command) - it also applies its own
+    mechanically-calibrated zero offset, so a target here is always relative
+    to the firmware's own, already-corrected zero, not a raw index position.
 
     There is exactly one of these per board; channel is always 0.
     """
@@ -119,6 +128,54 @@ class ChuteEncoder:
 
     def clear_index_synced(self) -> None:
         self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_CLEAR_INDEX_SYNCED, self._channel, b"")
+
+    def get_raw_state(self) -> tuple[bool, bool]:
+        """Instantaneous (sensor_a, sensor_b) levels - bench diagnostics only,
+        not used by any production code path."""
+        res = self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_GET_RAW_STATE, self._channel, b"")
+        raw = res.payload[0]
+        return bool(raw & 0b10), bool(raw & 0b01)
+
+    def move_to_count(self, target_count: int) -> None:
+        """Closed-loop move to an absolute encoder count, shortest path
+        (never more than half a revolution), verified/corrected against the
+        encoder's own reading afterward. Resolution is the encoder's own
+        ~2 deg (1-count) step; see move_to_step_pos() for finer positioning."""
+        payload = struct.pack("<i", target_count)
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_MOVE_TO_COUNT, self._channel, payload)
+
+    def move_to_step_pos(self, target_usteps: int) -> None:
+        """Open-loop move to an absolute position in the stepper's own
+        microstep counter (StepperMotor.position), shortest path. Bench-
+        confirmed far more precise than the encoder's own count resolution
+        (1.5 deg/32-ustep grid vs. the encoder's ~2 deg), so this is the
+        preferred path for ordinary moves once homed - the encoder stays
+        for homing and periodic drift/step-loss checks, not per-move
+        correction. `target_usteps` must be in the SAME frame as
+        StepperMotor.position (i.e. physical microsteps, already homed to
+        the firmware's zero), not chute-relative degrees directly."""
+        payload = struct.pack("<i", target_usteps)
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_MOVE_TO_STEP_POS, self._channel, payload)
+
+    def start_homing(self) -> None:
+        """Re-home the chute only: clears the index-sync flag and drives to
+        the index gap + the firmware's calibrated offset, then zeroes the
+        stepper's own position there - exactly what already runs
+        autonomously at boot. Unlike sending the base INIT command, this
+        touches nothing else (no other stepper's current, no digital
+        outputs) - call this instead of INIT for an on-demand re-home."""
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_START_HOMING, self._channel, b"")
+
+    def get_homing_status(self) -> dict:
+        """Fresh (not cached) status of the firmware's own autonomous chute
+        homing - the same state machine start_homing() kicks off (and that
+        already runs once, unprompted, at boot)."""
+        obs = self._dev.get_observability_info(force_refresh=True)
+        return {
+            "homed": bool(obs.get("chute_homed")),
+            "active": bool(obs.get("chute_homing_active")),
+            "failed": bool(obs.get("chute_homing_failed")),
+        }
 
 
 # Duty is a uint16 on the wire. The firmware wraps its PWM counter at 65534 so

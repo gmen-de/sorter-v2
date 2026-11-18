@@ -41,10 +41,8 @@ from irl.config import (
 )
 from vision import VisionManager
 from process_guard import acquire_backend_process_guard, ProcessGuardError
-from hardware.bus import MCUBusError
+from hardware.bus import MCUBusError, startEsp32SafetyWatch
 from hardware.fault import HardwareFault
-from hardware.waveshare_bus_service import close_all_waveshare_bus_services
-from server.waveshare_inventory import get_waveshare_inventory_manager
 import uvicorn
 import functools
 import threading
@@ -459,6 +457,10 @@ def main() -> None:
     gc.lifetime_stats = LifetimeStatsTracker()
     setGlobalConfig(gc)
     setCommandQueue(server_to_main_queue)
+    # Safety watch (2026-11-17): starts before any hardware init, runs for
+    # the rest of this process's life regardless of what hardware does —
+    # see hardware/bus.py's own note on the incident this guards against.
+    startEsp32SafetyWatch()
     startup_total_start = time.time()
 
     irl_config = mkIRLConfig()
@@ -601,9 +603,6 @@ def main() -> None:
     # has one). See server/default_model.py.
     from server import default_model
     default_model.start(gc.logger)
-    waveshare_inventory = get_waveshare_inventory_manager()
-    waveshare_inventory.start()
-    waveshare_inventory.refresh()
 
     startup_total_ms = (time.time() - startup_total_start) * 1000
     gc.logger.info(f"standby startup complete in {startup_total_ms:.0f}ms")
@@ -657,15 +656,6 @@ def main() -> None:
             irl.shutdown()
         except Exception as exc:
             gc.logger.warning(f"Failed to shut down hardware interfaces cleanly: {exc}")
-
-        try:
-            close_all_waveshare_bus_services()
-        except Exception as exc:
-            gc.logger.warning(f"Failed to close Waveshare bus services cleanly: {exc}")
-        try:
-            get_waveshare_inventory_manager().trigger_refresh()
-        except Exception:
-            pass
 
         standby_irl = _mkIRLInterfaceStandby(irl_config, gc)
         _replace_irl(standby_irl)
@@ -768,10 +758,6 @@ def main() -> None:
             controller = next_controller
         setController(next_controller)
         next_controller.start()
-        try:
-            get_waveshare_inventory_manager().trigger_refresh()
-        except Exception:
-            pass
 
         shared_state.setHardwareStatus(clear_homing_step=True)
         gc.logger.info("Safe hardware recovery complete; runtime is paused.")

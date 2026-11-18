@@ -56,11 +56,46 @@ jobs:
           cp build-feeder-skr/sorter_interface_firmware.uf2          feeder-skr-${VER}.uf2
           cp build-distribution-skr/sorter_interface_firmware.uf2    distribution-skr-${VER}.uf2
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PlatformIO and esptool
+        run: pip install platformio esptool
+
+      - name: Build octopus (BTT Octopus, DFU-flashed — see its README)
+        working-directory: software/firmware/octopus_control_board
+        run: pio run -e octopus
+
+      - name: Rename octopus artifact
+        run: |
+          VER=${GITHUB_REF_NAME#firmware/}
+          cp software/firmware/octopus_control_board/.pio/build/octopus/firmware.bin \
+             software/firmware/octopus_control_board/octopus-distribution-${VER}.bin
+
+      - name: Build esp32-ble-servo-bridge
+        working-directory: software/firmware/esp32_ble_servo_bridge
+        run: pio run -e esp32dev
+
+      - name: Merge esp32 image into one flashable file
+        run: |
+          VER=${GITHUB_REF_NAME#firmware/}
+          BUILD=software/firmware/esp32_ble_servo_bridge/.pio/build/esp32dev
+          BOOT_APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          python -m esptool --chip esp32 merge_bin \
+            -o software/firmware/esp32_ble_servo_bridge/esp32-ble-servo-bridge-${VER}.bin \
+            --flash_mode dio --flash_freq 40m --flash_size 4MB \
+            0x1000 "$BUILD/bootloader.bin" \
+            0x8000 "$BUILD/partitions.bin" \
+            0xe000 "$BOOT_APP0" \
+            0x10000 "$BUILD/firmware.bin"
+
       - name: Build firmware-only release notes
         run: |
           CURRENT="$GITHUB_REF_NAME"
           PREV=$(git tag -l 'firmware/v*' | sort -V | awk -v cur="$CURRENT" '$0==cur{print prev} {prev=$0}')
-          FW_DIR=software/firmware/sorter_interface_firmware
+          FW_DIRS="software/firmware/sorter_interface_firmware software/firmware/octopus_control_board software/firmware/esp32_ble_servo_bridge"
           if [ -n "$PREV" ]; then
             echo "## Firmware changes since ${PREV#firmware/}" > RELEASE_NOTES.md
             RANGE="${PREV}..HEAD"
@@ -69,7 +104,7 @@ jobs:
             RANGE="HEAD"
           fi
           echo "" >> RELEASE_NOTES.md
-          CHANGES=$(git log --full-history --no-merges --pretty=format:'- %s (%h)' "$RANGE" -- "$FW_DIR")
+          CHANGES=$(git log --full-history --no-merges --pretty=format:'- %s (%h)' "$RANGE" -- $FW_DIRS)
           if [ -n "$CHANGES" ]; then
             echo "$CHANGES" >> RELEASE_NOTES.md
           else
@@ -92,6 +127,12 @@ jobs:
           - `feeder-skr` → the board controlling the feeder stages
           - `distribution-skr` → the board controlling the chute and bin tower
 
+          **BTT Octopus** — flashed via DFU, not drag-and-drop (BOOT0 jumper + reset; see the firmware's own README):
+          - `octopus-distribution` → the distribution board, running the "octopus by g-men" firmware variant
+
+          **ESP32 BLE servo bridge** — flashed over USB-serial with esptool (from the sorter's Settings UI, or by hand):
+          - `esp32-ble-servo-bridge` → the Waveshare "Servo Driver with ESP32" board running the BLE gate bridge firmware
+
           | File | Board | Role |
           |------|-------|------|
           | `basically-v1-1-feeder-*.uf2` | basically v1-1 | Feeder MB |
@@ -99,6 +140,8 @@ jobs:
           | `basically-v1-2-distribution-*.uf2` | basically v1-2 | Distribution MB (all-in-one) |
           | `feeder-skr-*.uf2` | SKR Pico | Feeder MB |
           | `distribution-skr-*.uf2` | SKR Pico | Distribution MB |
+          | `octopus-distribution-*.bin` | BTT Octopus | Distribution MB (DFU flash) |
+          | `esp32-ble-servo-bridge-*.bin` | Waveshare ESP32 servo driver | BLE gate bridge (esptool flash) |
           EOF
 
       - name: Create GitHub Release
@@ -113,3 +156,5 @@ jobs:
             software/firmware/sorter_interface_firmware/basically-v1-2-distribution-*.uf2
             software/firmware/sorter_interface_firmware/feeder-skr-*.uf2
             software/firmware/sorter_interface_firmware/distribution-skr-*.uf2
+            software/firmware/octopus_control_board/octopus-distribution-*.bin
+            software/firmware/esp32_ble_servo_bridge/esp32-ble-servo-bridge-*.bin

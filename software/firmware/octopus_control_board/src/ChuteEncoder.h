@@ -65,8 +65,43 @@ public:
     int32_t getCountAtIndex() { return _count_at_index.load(); }
     void clearIndexSynced() { _index_synced.store(false); }
 
+    // Drops the running interval average and the index lockout counter, and
+    // re-stamps the last-edge clock to right now. Call before starting a
+    // fresh homing seek: the average is left over from whatever motion
+    // (speed, direction, closed-loop correction bursts) happened before it,
+    // and comparing the homing speed's own transition intervals against a
+    // stale average from a different speed can trip the outlier detector on
+    // an ordinary magnet gap, homing to the wrong physical position
+    // (bench-confirmed 2026-11-15).
+    //
+    // The last-edge re-stamp (bench-confirmed 2026-11-18) fixes a second,
+    // separate bug: without it, the very first transition after an idle
+    // period computes its interval against whenever the ring last moved —
+    // seconds or minutes ago, not microseconds — and since the average
+    // bootstraps from exactly that first interval (avg starts at 0, so the
+    // outlier check that guards against this is skipped once), the index
+    // gap's real ~1.8x-normal interval looks tiny next to that falsely huge
+    // baseline and never again reads as an outlier. Homing right after a
+    // fresh boot "worked" by accident — boot-to-home was short enough that
+    // the stale timestamp from power-on happened to still be close to now.
+    void resetIntervalTracking();
+
+    // Raw instantaneous level of both sensors, packed as (sensor_a << 1) |
+    // sensor_b - for bench diagnostics (watching each Hall sensor toggle
+    // individually), not used by the quadrature decode itself (which keeps
+    // its own copy in _last_state, updated only from the ISR).
+    uint8_t getRawState() { return _last_state.load(); }
+
 private:
-    void handleEdge();
+    // from_sensor_a: which physical sensor's pin actually changed. The two
+    // sensors see the same physical index gap a few transitions apart (their
+    // fixed mechanical offset) - latching the index event off of whichever one
+    // happens to report it first makes the zero point depend on direction of
+    // travel (bench-confirmed 2026-11-14: approaching from the two directions
+    // landed at visibly different physical positions). Always latching off
+    // the same sensor (A) fixes the reference to one physical point
+    // regardless of direction.
+    void handleEdge(bool from_sensor_a);
     static void isrA();
     static void isrB();
 
@@ -81,6 +116,11 @@ private:
     std::atomic<uint32_t> _avg_interval_us{0};
     std::atomic<bool> _index_synced{false};
     std::atomic<int32_t> _count_at_index{0};
+    // Both sensors detect the same physical index gap a few transitions
+    // apart (their fixed mechanical offset) - this blocks the second
+    // detection from being latched as its own, separate index event. ISR-
+    // only, never read from the host, so no atomic needed.
+    uint32_t _transitions_since_index = 0;
 
     static ChuteEncoder* _instance;
 };

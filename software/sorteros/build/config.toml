@@ -1,16 +1,20 @@
 # SorterOS build config
 
 [base]
-# Orange Pi 5 Ubuntu Jammy server image — kernel 6.1.99
-# Orange Pi's official download (Google Drive). Put the .img in cache/ or
-# point SORTEROS_BASE_IMG at it; the build checks this sha256.
-url = "https://drive.google.com/file/d/1A-XwhSnRb_TaDfDxF6tNzfNyvHy8tn7w/view"
-filename = "Orangepi5_1.2.2_ubuntu_jammy_server_linux6.1.99.img"
-sha256 = "ae53507811323a4c6ac4db71df98e043fc64de07657440f14b079a0994e8810a"
+# Orange Pi 5 Pro Ubuntu Jammy server image — kernel 6.1.43 (vendor/legacy
+# branch, has the rknpu NPU driver our vision stack needs). Board-specific
+# (fdtfile=rockchip/rk3588s-orangepi-5-pro.dtb) — unlike the older base used
+# through v4.x, which was the plain Orange Pi 5's image (no "pro" DTB).
+# Two partitions: p1 FAT32 boot, p2 ext4 root (see build.py's mount phase).
+# Orange Pi's official download. Put the .img in cache/ or point
+# SORTEROS_BASE_IMG at it; the build checks this sha256.
+url = ""  # TODO: fill in the orangepi.org download page URL
+filename = "Orangepi5pro_1.0.6_ubuntu_jammy_server_linux6.1.43.img"
+sha256 = "71a9f22c631f7707bfe9bd09718ccb8b22291dc4cac7f076ba597cddc7baf234"
 
 [output]
 dir = "out"
-version = "4.1.2"
+version = "5.0.1"
 name = "sorteros-v{version}-{date}.img"
 
 [chroot]

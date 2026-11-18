@@ -52,13 +52,25 @@ class Page(unittest.TestCase):
         self.assertEqual(len(words), len(set(words)))
 
     def test_waiting_for_the_internet(self):
-        machine(done=BEFORE_UI[:3], clone_repo=("waiting", fb.WAITING_FOR_INTERNET),
+        machine(done=BEFORE_UI[:4], clone_repo=("waiting", fb.WAITING_FOR_INTERNET),
                 write_env=("waiting", "repo not cloned yet"))
         p = fb._progress()
         self.assertEqual(p["phase"], "waiting")
         self.assertEqual(row(p, "Downloading the Sorter software")["state"], "waiting")
         # a stage waiting on an earlier one is not a failure
         self.assertEqual(row(p, "Configuring")["state"], "pending")
+
+    def test_choosing_the_storage_target(self):
+        machine(choose_storage_target=("waiting", fb.WAITING_FOR_STORAGE_CHOICE))
+        p = fb._progress()
+        self.assertEqual(p["phase"], "choosing")
+        choosing_row = row(p, "Choosing where to install")
+        self.assertEqual(choosing_row["state"], "waiting")
+        page = fb._render_status_page().decode()
+        self.assertIn('data-firstboot="choosing"', page)
+        self.assertIn('action="/choose-storage"', page)
+        # not a failure: no "yet"/error styling for a stage simply waiting on the user
+        self.assertNotIn("Failed, trying again", page)
 
     def test_a_failure_shows_and_is_retried(self):
         machine(done=BEFORE_UI[:6], uv_sync=("waiting", "/usr/local/bin/uv exited 2"),
@@ -100,7 +112,7 @@ class Page(unittest.TestCase):
         status = json.loads(fb._status_json())
         self.assertEqual(status["phase"], "installing")
         self.assertEqual([s["name"] for s in status["stages"]], [s.name for s in fb.STAGES])
-        self.assertEqual(status["stages"][0], {"name": "ssh-host-keys", "state": "done", "info": ""})
+        self.assertEqual(status["stages"][0], {"name": fb.STAGES[0].name, "state": "done", "info": ""})
 
     def test_names_are_escaped(self):
         machine(done=BEFORE_UI[:6], uv_sync=("waiting", "<b>boom</b>"))

@@ -40,7 +40,7 @@ import struct
 import time
 from zlib import crc32
 from dataclasses import dataclass
-from threading import Lock
+from threading import Event, Lock, Thread
 
 # Set SORTER_PROFILE_BUS=1 to log how long each bus round-trip blocks the
 # caller. Every send_command takes the bus lock, writes, then blocks on
@@ -91,6 +91,94 @@ class MCUBusError(Exception):
     pass
 
 
+# --- ESP32 safety interlock (2026-11-17) ----------------------------------
+# If the ESP32 BLE gate bridge shows up on USB (to flash it, or just plug it
+# in for any reason), every stepper gets locked out for the rest of this
+# process's life — "come what may", restart to clear it, nothing short of
+# that. Why: flashing the ESP32 can also reset the Octopus control board on
+# the same bench, and that reset used to auto-home the chute's NEMA23
+# stepper immediately, with a real risk of the stepper's own rotation
+# tearing the ESP32's USB cable out mid-flash. The firmware no longer
+# auto-homes unsupervised (see octopus_control_board/src/main.cpp's own
+# note on this incident) — this is a second, independent layer on the host
+# side, which has no way to know *why* an ESP32 appeared, so it treats any
+# physical access to it as reason enough to freeze every stepper until a
+# human has restarted the backend and can vouch the bench is safe again.
+_ESP32_USB_IDS = {
+    (0x10C4, 0xEA60),  # Silicon Labs CP210x — the common ESP32 DevKit UART bridge
+    (0x1A86, 0x7523),  # QinHeng CH340/CH341 — common on ESP32 clone boards
+    (0x303A, 0x1001),  # Espressif's own USB-Serial/JTAG (S2/S3/C3 native USB)
+}
+_ESP32_WATCH_INTERVAL_S = 3.0
+
+# Keep in sync with hardware/sorter_interface.py's InterfaceCommandCode —
+# duplicated here (as bare ints, not an import) because that module imports
+# from this one, not the other way around. Every command that can spin a
+# stepper: generic moves/homing plus the chute's own closed-loop moves.
+_MOTION_COMMAND_CODES = {
+    0x10,  # STEPPER_MOVE_STEPS
+    0x11,  # STEPPER_MOVE_AT_SPEED
+    0x17,  # STEPPER_HOME
+    0x56,  # CHUTE_ENCODER_MOVE_TO_COUNT
+    0x57,  # CHUTE_ENCODER_MOVE_TO_STEP_POS
+}
+
+_steppers_locked = Event()
+_steppers_locked_reason = ""
+
+
+def steppersLocked() -> bool:
+    return _steppers_locked.is_set()
+
+
+def steppersLockedReason() -> str:
+    return _steppers_locked_reason
+
+
+def lockSteppersForSafety(reason: str) -> None:
+    """One-way latch. Never call anything that clears it — restarting this
+    process is the only way back, by design."""
+    global _steppers_locked_reason
+    if not _steppers_locked.is_set():
+        _steppers_locked_reason = reason
+        _steppers_locked.set()
+        logging.error(f"Steppers locked until restart: {reason}")
+
+
+def _esp32Present() -> bool:
+    import serial.tools.list_ports
+
+    return any((port.vid, port.pid) in _ESP32_USB_IDS for port in serial.tools.list_ports.comports())
+
+
+def _watchForEsp32() -> None:
+    while not _steppers_locked.is_set():
+        if _esp32Present():
+            lockSteppersForSafety(
+                "an ESP32 (BLE gate bridge) is connected over USB — flashing or resetting it "
+                "can also reset the Octopus board, which must not home/move unsupervised"
+            )
+            return
+        time.sleep(_ESP32_WATCH_INTERVAL_S)
+
+
+_esp32_watch_thread: Thread | None = None
+_esp32_watch_start_lock = Lock()
+
+
+def startEsp32SafetyWatch() -> None:
+    """Idempotent — safe to call from more than one startup path."""
+    global _esp32_watch_thread
+    with _esp32_watch_start_lock:
+        if _esp32_watch_thread is not None and _esp32_watch_thread.is_alive():
+            return
+        if _esp32Present():
+            lockSteppersForSafety("an ESP32 (BLE gate bridge) was already connected over USB at startup")
+            return
+        _esp32_watch_thread = Thread(target=_watchForEsp32, name="esp32-safety-watch", daemon=True)
+        _esp32_watch_thread.start()
+
+
 PORT_BUSY_WAIT_S = 2.0
 
 
@@ -124,6 +212,25 @@ class MCUBus:
         self._serial = _openExclusive(port, baudrate=baudrate, timeout=timeout)
         self._lock = Lock()
         self._port = port
+        self._flush_stale_rx_queue()
+
+    def _flush_stale_rx_queue(self) -> None:
+        """Confirmed on real hardware (2026-11-17, Octopus/STM32 USB-CDC): the
+        very first command on a freshly opened connection can be corrupted by
+        up to ~192 bytes of leftover data the host never actually sent -
+        reproducible on every fresh open, not tied to an MCU reboot (so not
+        fixable on the firmware side alone). A couple of throwaway pings,
+        discarding whatever comes back, reliably clears it before any real
+        caller (discover_control_boards, scan_devices) sends its first
+        command. Cheap: each attempt is bounded by the connection's own read
+        timeout, and failures here are expected/normal, not errors."""
+        for _ in range(3):
+            try:
+                self._serial.reset_input_buffer()
+                self.send_command(0, BaseCommandCode.PING, 0, b"", retries=0)
+                return  # a clean reply means the queue is already flushed
+            except Exception:
+                continue
 
     @property
     def port(self) -> str:
@@ -199,6 +306,8 @@ class MCUBus:
             raise ValueError(f"Command must be 0-255, got {command}")
         if channel < 0 or channel > 255:
             raise ValueError(f"Channel must be 0-255, got {channel}")
+        if command in _MOTION_COMMAND_CODES and _steppers_locked.is_set():
+            raise MCUBusError(f"Steppers locked for safety: {_steppers_locked_reason}")
         # Construct message
         message = (
             struct.pack("<BBBB", address, command, channel, payload_length) + payload
@@ -325,21 +434,43 @@ class MCUBus:
                 break
         return buf
 
+    # Every control board family's USB identity this backend knows how to
+    # talk to: the RP2040 "basically" boards (Raspberry Pi Foundation's own
+    # Pico SDK CDC UART VID:PID) and the STM32F446 Octopus board (its own
+    # USBD_VID/USBD_PID, set in octopus_f446.json). Scanned by default so a
+    # machine with either board plugged in gets discovered without every
+    # enumerate_buses() call site needing to know which board it's looking
+    # for - board-family disambiguation already happens afterward, once a
+    # port is open, via get_observability_info()'s "hw" field.
+    KNOWN_BOARD_USB_IDS = [
+        (0x2E8A, 0x000A),  # Raspberry Pi Foundation, Pico SDK CDC UART
+        (0x0483, 0x5740),  # STMicroelectronics, Octopus control board
+    ]
+
     @classmethod
-    def enumerate_buses(cls, vid=0x2E8A, pid=0x000A) -> list[str]:
-        """Enumerate available serial ports that could be used for the MCU bus. Filtered by VID and PID
+    def enumerate_buses(cls, vid: int | None = None, pid: int | None = None) -> list[str]:
+        """Enumerate available serial ports that could be used for the MCU bus.
+
+        With no args, filtered by every known control board's USB VID:PID
+        (KNOWN_BOARD_USB_IDS). Pass vid/pid to narrow to one specific
+        identity instead.
 
         Args:
-            vid: The USB Vendor ID to filter by (default 0x2e8a, Raspberry Pi Foundation)
-            pid: The USB Product ID to filter by (default 0x000a, Pico SDK CDC UART)
+            vid: The USB Vendor ID to filter by, or None for every known board
+            pid: The USB Product ID to filter by, or None for every known board
 
         Returns:
             A list of serial port names (e.g. ["/dev/ttyUSB0", "/dev/ttyUSB1"])
         """
         import serial.tools.list_ports
 
+        if vid is not None or pid is not None:
+            wanted = [(vid, pid)]
+        else:
+            wanted = cls.KNOWN_BOARD_USB_IDS
+
         ports = serial.tools.list_ports.comports()
-        return [port.device for port in ports if port.vid == vid and port.pid == pid]
+        return [port.device for port in ports if (port.vid, port.pid) in wanted]
 
     def scan_devices(self, min_address=0, max_address=15) -> list[int]:
         """Scan the bus for devices by sending a ping command to each address in the specified range.

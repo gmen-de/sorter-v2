@@ -32,6 +32,7 @@ _STATE_KEY_TELEMETRY_INSTALL = "telemetry_install"
 _STATE_KEY_LEDS = "leds"
 _STATE_KEY_BASICALLY_SERVICES = "basically_services"
 _STATE_KEY_FEEDER_AUTOTUNE_BACKGROUND = "feeder_autotune_background"
+_STATE_KEY_NEXTCLOUD = "nextcloud"
 
 
 def create_tables(conn: sqlite3.Connection) -> None:
@@ -321,6 +322,63 @@ def set_hive_config(config: dict[str, Any]) -> None:
         if isinstance(token, str) and token:
             target["api_token"] = encrypt_str(token)
     _write_state(_STATE_KEY_HIVE, normalized)
+
+
+def get_nextcloud_config() -> dict[str, Any] | None:
+    # Where recognized pieces (image + part/color) get uploaded for later
+    # model training (see server/nextcloud_sync.py). Unlike a Hive target,
+    # Nextcloud has no "highest id you have" API to ask back, so this
+    # target's own last_synced_seq watermark lives here too (see
+    # set_nextcloud_watermark, which updates it without touching the rest).
+    value = _read_state(_STATE_KEY_NEXTCLOUD)
+    if not isinstance(value, dict):
+        return None
+
+    from secrets_crypto import decrypt_str, is_encrypted
+
+    config = dict(value)
+    password = config.get("app_password")
+    if isinstance(password, str) and password:
+        had_plaintext = not is_encrypted(password)
+        config["app_password"] = decrypt_str(password)
+        if had_plaintext:
+            set_nextcloud_config(config)
+    return config
+
+
+def set_nextcloud_config(config: dict[str, Any] | None) -> None:
+    from secrets_crypto import encrypt_str
+
+    if not config:
+        _write_state(_STATE_KEY_NEXTCLOUD, None)
+        return
+    normalized = dict(config)
+    password = normalized.get("app_password")
+    if isinstance(password, str) and password:
+        normalized["app_password"] = encrypt_str(password)
+    _write_state(_STATE_KEY_NEXTCLOUD, normalized)
+
+
+def set_nextcloud_watermark(last_synced_seq: int) -> None:
+    # Advances the sync cursor alone, without decrypting/re-encrypting
+    # app_password on every image (see get/set_nextcloud_config above).
+    with _connection() as conn:
+        value = read_entry(conn, _STATE_KEY_NEXTCLOUD)
+        if not isinstance(value, dict):
+            return
+        value["last_synced_seq"] = int(last_synced_seq)
+        write_entry(conn, _STATE_KEY_NEXTCLOUD, value)
+        conn.commit()
+
+
+def set_nextcloud_needs_reconnect(needs_reconnect: bool) -> None:
+    with _connection() as conn:
+        value = read_entry(conn, _STATE_KEY_NEXTCLOUD)
+        if not isinstance(value, dict):
+            return
+        value["needs_reconnect"] = bool(needs_reconnect)
+        write_entry(conn, _STATE_KEY_NEXTCLOUD, value)
+        conn.commit()
 
 
 def get_sorting_profile_sync_state() -> dict[str, Any] | None:

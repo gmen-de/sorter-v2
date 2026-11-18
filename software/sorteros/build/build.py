@@ -3,9 +3,11 @@ SorterOS image builder.
 
 Runs as root on Linux: natively on arm64, or on x86_64 with qemu-user-static
 registered for aarch64 so the chroot step can run arm64 binaries. Builds a
-bootable Orange Pi 5 .img from the vendor base image: the overlay, a minimal
-apt delta, and the filesystem/boot settings a headless appliance needs. No
-partition surgery, no FAT. Single ext4.
+bootable Orange Pi 5 Pro .img from the vendor base image: the overlay, a
+minimal apt delta, and the filesystem/boot settings a headless appliance
+needs. The vendor image has two partitions — p1 FAT32 (kernel, DTB,
+orangepiEnv.txt), p2 ext4 (root) — both mounted (p2 at the rootfs, p1 at its
+/boot) for every phase below; no partition surgery beyond growing p2.
 
 Phases (run with --phase <name> for a partial rerun):
   prep              — fetch base img if missing, copy to working file
@@ -108,12 +110,12 @@ def is_mounted(path: Path) -> bool:
 
 
 def _losetup_attach(img: Path) -> str:
-    """losetup --show -fP + wait for /dev/loopNp1 to appear.
+    """losetup --show -fP + wait for /dev/loopNp1 and /dev/loopNp2 to appear.
 
-    In bare-metal Linux + udev the partition device shows up immediately.
+    In bare-metal Linux + udev the partition devices show up immediately.
     In privileged Docker containers (e.g. OrbStack with /dev bind-mounted),
-    the host udev creates the node asynchronously — we have to wait briefly
-    or the next step races and sees no p1.
+    the host udev creates the nodes asynchronously — we have to wait briefly
+    or the next step races and sees no partitions.
     """
     loop = subprocess.check_output(
         ["losetup", "--show", "-fP", str(img)], text=True
@@ -122,7 +124,7 @@ def _losetup_attach(img: Path) -> str:
     subprocess.run(["udevadm", "settle", "--timeout=5"], check=False)
     # Fallback poll: some containers have no udev at all, partitions appear
     # when devtmpfs propagates from the host.
-    part = Path(f"{loop}p1")
+    part = Path(f"{loop}p2")
     for _ in range(50):
         if part.exists():
             break
@@ -135,6 +137,9 @@ def _losetup_attach(img: Path) -> str:
 def _teardown_mnt(ctx: BuildCtx) -> None:
     """Unmount everything under ctx.mnt and detach the loop device."""
     _bind_mounts_down(ctx)
+    boot_mnt = ctx.mnt / "boot"
+    if is_mounted(boot_mnt):
+        subprocess.run(["umount", str(boot_mnt)])
     if is_mounted(ctx.mnt):
         subprocess.run(["umount", str(ctx.mnt)])
     s = state_read(ctx)
@@ -190,12 +195,12 @@ def phase_prep(ctx: BuildCtx) -> None:
 # ─── grow ──────────────────────────────────────────────────────────────────
 
 def phase_grow(ctx: BuildCtx) -> None:
-    """Grow the image file and extend p1 + ext4 to use the new space.
+    """Grow the image file and extend p2 (ext4 root) to use the new space.
 
-    Not partition surgery in the v2 sense — the partition table layout
-    stays the same (single ext4 at p1), we just push the partition end
-    further out and resize the filesystem. No second partition, no FAT,
-    no bootloader region touched.
+    The partition table layout stays the same — p1 (FAT32 boot) is
+    untouched, p2 is the last partition, so we just push its end further
+    out and resize its filesystem. No new partition, no bootloader region
+    touched.
     """
     if not ctx.work_img.exists():
         sys.exit(f"{ctx.work_img} missing — run --phase prep first")
@@ -212,12 +217,12 @@ def phase_grow(ctx: BuildCtx) -> None:
     # Attach via losetup so partition tools see partitions.
     loop = _losetup_attach(ctx.work_img)
     try:
-        # Grow partition 1 to fill the new space.
-        run(["growpart", loop, "1"])
+        # Grow partition 2 (root) to fill the new space.
+        run(["growpart", loop, "2"])
         # Detach + reattach so the kernel rescans the (now larger) partition.
         run(["losetup", "-d", loop])
         loop = _losetup_attach(ctx.work_img)
-        part = f"{loop}p1"
+        part = f"{loop}p2"
         # e2fsck before resize2fs (refuses unclean fs)
         p = subprocess.run(["e2fsck", "-fy", part])
         if p.returncode not in (0, 1):
@@ -248,21 +253,31 @@ def phase_mount(ctx: BuildCtx) -> None:
     loop = _losetup_attach(ctx.work_img)
     state_write(ctx, loop=loop)
 
-    # The Orange Pi base image has one ext4 partition at p1. Verify.
-    part = f"{loop}p1"
-    if not Path(part).exists():
+    # The vendor image has p1 (FAT32 boot) and p2 (ext4 root). Verify both.
+    root_part = f"{loop}p2"
+    boot_part = f"{loop}p1"
+    if not Path(root_part).exists() or not Path(boot_part).exists():
         run(["losetup", "-d", loop])
-        sys.exit(f"expected {part} to exist; image layout is unexpected")
+        sys.exit(f"expected {boot_part} and {root_part} to exist; image layout is unexpected")
 
-    log(f"fsck {part}")
+    log(f"fsck {root_part}")
     # e2fsck -fy: force-check, answer yes to repairs. Returns 1 if it
     # repaired things, 2 if it needs reboot, 0 if clean. Treat 0/1 as OK.
-    p = subprocess.run(["e2fsck", "-fy", part])
+    p = subprocess.run(["e2fsck", "-fy", root_part])
     if p.returncode not in (0, 1):
         sys.exit(f"e2fsck exit {p.returncode} — image is unhealthy")
 
-    run(["mount", part, str(ctx.mnt)])
-    state_write(ctx, partition=part)
+    run(["mount", root_part, str(ctx.mnt)])
+    state_write(ctx, partition=root_part)
+
+    # Mount boot (p1) at the rootfs's own /boot, same as the running system
+    # does per fstab — orangepiEnv.txt and the kernel/DTB live there, and
+    # later phases (overlay's wifi-overlay patch, _harden_root_fs) write to
+    # ctx.mnt/boot expecting it to be the real boot partition.
+    boot_mnt = ctx.mnt / "boot"
+    boot_mnt.mkdir(parents=True, exist_ok=True)
+    run(["mount", boot_part, str(boot_mnt)])
+    state_write(ctx, boot_partition=boot_part)
 
 
 # ─── overlay ───────────────────────────────────────────────────────────────
@@ -564,6 +579,9 @@ def phase_finalize(ctx: BuildCtx) -> None:
     # we might be running --phase finalize after a hard crash).
     _bind_mounts_down(ctx)
 
+    boot_mnt = ctx.mnt / "boot"
+    if is_mounted(boot_mnt):
+        run(["umount", str(boot_mnt)])
     if is_mounted(ctx.mnt):
         run(["umount", str(ctx.mnt)])
 

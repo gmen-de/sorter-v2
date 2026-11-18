@@ -22,7 +22,7 @@ import queue
 import threading
 from typing import Any, Dict
 
-from bleak import BleakClient
+from bleak import BleakClient, BleakScanner
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,54 @@ _DEFAULT_TIMEOUT_S = 5.0
 _CONNECT_TIMEOUT_S = 15.0
 _LEARN_TIMEOUT_S = 90.0  # calibration steps outward until stall; can take a while
 _INVENTORY_TIMEOUT_S = 5.0  # how long to wait for the post-connect READY GATES push
+_SCAN_TIMEOUT_S = 5.0
+# Advertised name's fixed prefix — see esp32_ble_servo_bridge/src/main.cpp's
+# bleDeviceName(). Each board appends its own BT MAC's last two bytes (e.g.
+# "SORTER-SERVO-BLE_A7:38") to tell multiple bridges apart in a scan.
+_DEVICE_NAME = "SORTER-SERVO-BLE"
+
+
+def scan_devices(timeout: float = _SCAN_TIMEOUT_S) -> list[dict[str, Any]]:
+    """Discover nearby BLE devices for the pairing UI. Runs its own asyncio
+    loop on a background thread (bleak is async-only; everything else in this
+    module stays sync, same pattern as `WaveshareBleBridge`). Does not
+    disturb an already-connected bridge — scanning and an active GATT
+    connection are independent on BlueZ/most backends."""
+
+    result: dict[str, Any] = {}
+
+    def _run() -> None:
+        loop = asyncio.new_event_loop()
+        try:
+            result["devices"] = loop.run_until_complete(_async_scan(timeout))
+        except Exception as exc:  # noqa: BLE001 - surfaced to the caller below
+            result["error"] = exc
+        finally:
+            loop.close()
+
+    thread = threading.Thread(target=_run, name="waveshare-ble-scan", daemon=True)
+    thread.start()
+    thread.join(timeout=timeout + 10.0)
+    if "error" in result:
+        raise result["error"]
+    return result.get("devices", [])
+
+
+async def _async_scan(timeout: float) -> list[dict[str, Any]]:
+    found = await BleakScanner.discover(timeout=timeout, return_adv=True)
+    devices: list[dict[str, Any]] = []
+    for address, (device, adv) in found.items():
+        name = device.name or adv.local_name or ""
+        devices.append(
+            {
+                "address": address,
+                "name": name,
+                "rssi": adv.rssi,
+                "is_sorter_servo": name.startswith(_DEVICE_NAME),
+            }
+        )
+    devices.sort(key=lambda d: (not d["is_sorter_servo"], -(d["rssi"] if d["rssi"] is not None else -999)))
+    return devices
 
 
 def _parse_gates(line: str) -> list[int]:
@@ -259,6 +307,13 @@ class WaveshareBleBridge:
             return self.command("PING", timeout=timeout) == "PONG"
         except TimeoutError:
             return False
+
+    def get_demo_mode(self, *, timeout: float = 2.0) -> bool:
+        return self.command("DEMO", timeout=timeout) == "DEMO ON"
+
+    def set_demo_mode(self, enabled: bool, *, timeout: float = 2.0) -> bool:
+        response = self.command(f"DEMO {'ON' if enabled else 'OFF'}", timeout=timeout)
+        return response == "DEMO ON"
 
 
 class WaveshareBleBridgeRegistry:

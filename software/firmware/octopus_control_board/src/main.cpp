@@ -27,6 +27,7 @@
 #include <Arduino.h>
 #include <HardwareTimer.h>
 #include <array>
+#include <cmath>
 #include <utility>
 
 #include "ChuteEncoder.h"
@@ -51,7 +52,7 @@
 #define FIRMWARE_BUILD_TIME_UTC "unknown"
 #endif
 #ifndef FIRMWARE_VARIANT
-#define FIRMWARE_VARIANT "octopus"
+#define FIRMWARE_VARIANT "octopus by g-men"
 #endif
 
 char DEVICE_NAME[16] = INIT_DEVICE_NAME;
@@ -110,6 +111,221 @@ static void ensure_stepper_hw_enabled(int i) {
 }
 
 // ---------------------------------------------------------------------------
+// Chute auto-home: on every (re-)init, drive the chute to the magnet ring's
+// index gap on its own, with no host involvement needed - the host only ever
+// needs to send absolute-angle moves afterward. Mirrors
+// subsystems/distribution/chute.py's _homeEncoder() (same speed, same
+// "stop fully, then zero" two-phase sequence), just running autonomously on
+// the ISR-driven motion timers instead of a host-side poll loop.
+// ---------------------------------------------------------------------------
+
+static const int CHUTE_STEPPER_CHANNEL = 0; // STEPPER_NAMES[0] == "chute_stepper", see hwcfg_octopus.h
+static const int32_t CHUTE_AUTO_HOME_SPEED = -1000; // matches chute.py's HOME_SPEED_MICROSTEPS_PER_SEC
+static const uint8_t CHUTE_AUTO_HOME_IRUN = 16, CHUTE_AUTO_HOME_IHOLD = 4, CHUTE_AUTO_HOME_IHOLD_DELAY = 8;
+static const uint32_t CHUTE_AUTO_HOME_TIMEOUT_MS = 15000; // matches chute.py's HOME_TIMEOUT_MS
+// The encoder's index gap is only an electrical reference, not the
+// mechanically "correct" zero. Re-derived 2026-11-15 against the physical
+// 0 deg marker (yellow tape on the chute plate, true zero = that mark at
+// 12 o'clock, level with the motor) via webcam self-check after driving
+// the closed loop to the visually-confirmed-correct count - supersedes
+// the older ~9 deg/197-usteps figure, which was referenced to a different
+// physical mark (a drilled bolt hole) and never matched this tape mark.
+static const int32_t CHUTE_HOME_OFFSET_USTEPS = 215; // 198 + 17 usteps forward, fine-tuned against the UI's live position readout 2026-11-16
+
+static bool chute_auto_homing_active = false;  // still seeking the index gap
+static bool chute_auto_homing_stopping = false; // index seen, braking to a full stop
+static bool chute_auto_homing_correcting = false; // stopped at the gap, moving the fixed offset to the real zero
+static bool chute_auto_homed = false;
+static bool chute_auto_homing_failed = false;
+static uint32_t chute_auto_home_start_ms = 0;
+
+static void start_chute_auto_home() {
+    chute_auto_homed = false;
+    chute_auto_homing_failed = false;
+    chute_auto_homing_stopping = false;
+    chute_auto_homing_correcting = false;
+    chute_encoder.clearIndexSynced();
+    chute_encoder.resetIntervalTracking();
+    tmc_drivers[CHUTE_STEPPER_CHANNEL].setCurrent(CHUTE_AUTO_HOME_IRUN, CHUTE_AUTO_HOME_IHOLD, CHUTE_AUTO_HOME_IHOLD_DELAY);
+    ensure_stepper_hw_enabled(CHUTE_STEPPER_CHANNEL);
+    steppers[CHUTE_STEPPER_CHANNEL].moveAtSpeed(CHUTE_AUTO_HOME_SPEED);
+    chute_auto_home_start_ms = millis();
+    chute_auto_homing_active = true;
+}
+
+static void update_chute_auto_home() {
+    if (chute_auto_homing_correcting) {
+        if (steppers[CHUTE_STEPPER_CHANNEL].isStopped()) {
+            steppers[CHUTE_STEPPER_CHANNEL].setPosition(0);
+            chute_auto_homing_correcting = false;
+            chute_auto_homed = true;
+        }
+        return;
+    }
+    if (chute_auto_homing_stopping) {
+        if (steppers[CHUTE_STEPPER_CHANNEL].isStopped()) {
+            steppers[CHUTE_STEPPER_CHANNEL].moveSteps(CHUTE_HOME_OFFSET_USTEPS);
+            chute_auto_homing_stopping = false;
+            chute_auto_homing_correcting = true;
+        }
+        return;
+    }
+    if (!chute_auto_homing_active) return;
+
+    if (chute_encoder.isIndexSynced()) {
+        steppers[CHUTE_STEPPER_CHANNEL].moveAtSpeed(0); // starts braking; zeroed once isStopped()
+        chute_auto_homing_active = false;
+        chute_auto_homing_stopping = true;
+    } else if (millis() - chute_auto_home_start_ms > CHUTE_AUTO_HOME_TIMEOUT_MS) {
+        steppers[CHUTE_STEPPER_CHANNEL].moveAtSpeed(0);
+        chute_auto_homing_active = false;
+        chute_auto_homing_failed = true;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Chute closed-loop move: drives to a target magnet-ring encoder count
+// (not a raw microstep target) and verifies/corrects against the real
+// encoder reading afterward, so the final resting position does not depend
+// on gear backlash or lost steps - only on the encoder's own ~2 deg
+// (1-count) resolution. Always takes the shortest way round (<=180 deg);
+// the open-loop move runs at whatever speed/current the host already
+// configured (no artificial slowdown), with bounded small corrections
+// after it lands.
+// ---------------------------------------------------------------------------
+
+// Re-derived 2026-11-15/16 from a linear regression over 7 hand-positioned
+// reference points (0/30/90/150/210/270/330 deg, aligned to the fixed hex
+// arms) checked against the real encoder count: slope implies 179.4
+// counts/rev (residuals < 1 count), rounding cleanly to 180 - not the
+// 176 (44 magnets x 4) assumed from the original design doc. Likely 45
+// magnets, not 44; CHUTE_HOME_OFFSET_USTEPS is unaffected (it's defined
+// by the physical index-stop + a fixed microstep move, not by this
+// constant) but every move's target-count-from-degrees math depends on it.
+static const int32_t CHUTE_COUNTS_PER_REV = 180;
+static const int32_t CHUTE_USTEPS_PER_REV = 7878;   // bench-calibrated 2026-11-14 (5-revolution average)
+static const int CHUTE_MOVE_MAX_CORRECTIONS = 8;     // bounded retries before giving up
+
+static int32_t chute_move_target_count = 0;
+static int chute_move_corrections = 0;
+static bool chute_move_active = false;
+static bool chute_move_failed = false;
+static bool chute_move_settling = false;
+static uint32_t chute_move_settle_until_ms = 0;
+static const uint32_t CHUTE_MOVE_SETTLE_MS = 15; // let a borderline Hall edge finish switching before trusting the count
+
+// Signed count delta, wrapped into (-CHUTE_COUNTS_PER_REV/2, +CHUTE_COUNTS_PER_REV/2]
+// - the shortest way around the ring, so no move ever needs more than half a
+// revolution (<=180 deg).
+static int32_t chute_shortest_count_delta(int32_t raw_delta) {
+    int32_t m = raw_delta % CHUTE_COUNTS_PER_REV;
+    if (m < 0) m += CHUTE_COUNTS_PER_REV;
+    if (m > CHUTE_COUNTS_PER_REV / 2) m -= CHUTE_COUNTS_PER_REV;
+    return m;
+}
+
+static int32_t chute_usteps_for_count_delta(int32_t delta_counts) {
+    // Bench-confirmed 2026-11-14: positive microsteps correlate with a
+    // DEcreasing encoder count, not increasing - negate here, once, so
+    // every caller can keep thinking in plain "more counts = more usteps".
+    return -(int32_t)lround((double)delta_counts * CHUTE_USTEPS_PER_REV / (double)CHUTE_COUNTS_PER_REV);
+}
+
+static void start_chute_move_to_count(int32_t target_count) {
+    chute_move_target_count = target_count;
+    chute_move_corrections = 0;
+    chute_move_failed = false;
+    chute_move_settling = false;
+    ensure_stepper_hw_enabled(CHUTE_STEPPER_CHANNEL);
+
+    int32_t delta = chute_shortest_count_delta(target_count - chute_encoder.getCount());
+    int32_t usteps = chute_usteps_for_count_delta(delta);
+    if (usteps == 0) {
+        chute_move_active = false;
+        return;
+    }
+    steppers[CHUTE_STEPPER_CHANNEL].moveSteps(usteps);
+    chute_move_active = true;
+}
+
+static void update_chute_move() {
+    if (!chute_move_active) return;
+    if (!steppers[CHUTE_STEPPER_CHANNEL].isStopped()) {
+        chute_move_settling = false;
+        return;
+    }
+    if (!chute_move_settling) {
+        chute_move_settling = true;
+        chute_move_settle_until_ms = millis() + CHUTE_MOVE_SETTLE_MS;
+        return;
+    }
+    if (millis() < chute_move_settle_until_ms) return;
+    chute_move_settling = false;
+
+    int32_t delta = chute_shortest_count_delta(chute_move_target_count - chute_encoder.getCount());
+    if (delta == 0) {
+        chute_move_active = false;
+        return;
+    }
+    if (chute_move_corrections >= CHUTE_MOVE_MAX_CORRECTIONS) {
+        chute_move_active = false;
+        chute_move_failed = true;
+        return;
+    }
+    chute_move_corrections++;
+    int32_t usteps = chute_usteps_for_count_delta(delta);
+    if (usteps == 0) {
+        // Residual is sub-1-count: as close as the encoder can ever confirm.
+        chute_move_active = false;
+        return;
+    }
+    steppers[CHUTE_STEPPER_CHANNEL].moveSteps(usteps);
+    // stays active; re-checked once this new move stops
+}
+
+// ---------------------------------------------------------------------------
+// Chute step-based move: drives the stepper's own absolute position
+// (GET_POSITION/SET_POSITION) to a target microstep count, pure open-loop -
+// no encoder involved at all. Homing (Hall-sensor index + offset) already
+// zeroes this same position counter at the true physical zero, and the
+// motor's own step counting has turned out to be far more precise than the
+// 180-count/rev magnet-ring encoder's resolution (laser-measured
+// 2026-11-16: exactly 7680 usteps/rev, i.e. a clean 1.5 deg - 32 usteps -
+// grid). So for ordinary moves this is the more precise path; the encoder
+// stays available for homing and periodic drift/step-loss checks, matching
+// the sensor's original intended role rather than being the per-move
+// position source.
+// ---------------------------------------------------------------------------
+
+static const int32_t CHUTE_STEP_USTEPS_PER_REV = 7680; // laser-measured 2026-11-16
+
+static bool chute_step_move_active = false;
+
+static int32_t chute_shortest_usteps_delta(int32_t raw_delta) {
+    int32_t m = raw_delta % CHUTE_STEP_USTEPS_PER_REV;
+    if (m < 0) m += CHUTE_STEP_USTEPS_PER_REV;
+    if (m > CHUTE_STEP_USTEPS_PER_REV / 2) m -= CHUTE_STEP_USTEPS_PER_REV;
+    return m;
+}
+
+static void start_chute_move_to_step_position(int32_t target_position) {
+    ensure_stepper_hw_enabled(CHUTE_STEPPER_CHANNEL);
+    int32_t delta = chute_shortest_usteps_delta(target_position - steppers[CHUTE_STEPPER_CHANNEL].getPosition());
+    if (delta == 0) {
+        chute_step_move_active = false;
+        return;
+    }
+    steppers[CHUTE_STEPPER_CHANNEL].moveSteps(delta);
+    chute_step_move_active = true;
+}
+
+static void update_chute_step_move() {
+    if (!chute_step_move_active) return;
+    if (!steppers[CHUTE_STEPPER_CHANNEL].isStopped()) return;
+    chute_step_move_active = false;
+}
+
+// ---------------------------------------------------------------------------
 // Configuration/observability/version JSON (same shape the backend already
 // parses from the RP2040 boards — see sorter_interface.py's detect flow)
 // ---------------------------------------------------------------------------
@@ -155,8 +371,21 @@ int dump_observability(char* buf, size_t buf_size) {
     }
     snprintf(led_gpios_buf + led_len, sizeof(led_gpios_buf) - led_len, "]");
 
-    int n_bytes = snprintf(buf, buf_size, "{\"hw\":\"%s\",\"diag_pins\":%s,\"led_gpios\":%s}", HW_ID,
-                            diag_pins_len > 0 ? diag_pins_buf : "[]", led_gpios_buf);
+    // Field names kept short deliberately: MAX_PAYLOAD_SIZE is 246 bytes and
+    // this string was silently overflowing it (always falling back to "{}",
+    // see the n_bytes check below) once chute_step_move_active was added -
+    // bench-confirmed 2026-11-16, not a motion/ISR timing issue.
+    int n_bytes = snprintf(buf, buf_size,
+                            "{\"hw\":\"%s\",\"diag_pins\":%s,\"led_gpios\":%s,"
+                            "\"chute_homed\":%s,\"chute_homing_active\":%s,\"chute_homing_failed\":%s,"
+                            "\"chute_move_active\":%s,\"chute_move_failed\":%s,\"chute_step_active\":%s}",
+                            HW_ID, diag_pins_len > 0 ? diag_pins_buf : "[]", led_gpios_buf,
+                            chute_auto_homed ? "true" : "false",
+                            (chute_auto_homing_active || chute_auto_homing_stopping || chute_auto_homing_correcting) ? "true" : "false",
+                            chute_auto_homing_failed ? "true" : "false",
+                            chute_move_active ? "true" : "false",
+                            chute_move_failed ? "true" : "false",
+                            chute_step_move_active ? "true" : "false");
     if (n_bytes >= 0 && (size_t)n_bytes < buf_size) return n_bytes;
     if (buf_size >= 3) {
         buf[0] = '{'; buf[1] = '}'; buf[2] = '\0';
@@ -251,6 +480,11 @@ void initialize_hardware() {
     if (FAN0_OUTPUT_CHANNEL >= 0 && FAN0_OUTPUT_CHANNEL < DIGITAL_OUTPUT_COUNT) {
         digitalWrite(digital_output_pins[FAN0_OUTPUT_CHANNEL], HIGH);
     }
+    // Fans default to full speed at boot (2026-11-16, explicit ask) - still
+    // individually overridable afterward via DIGITAL_IO.WRITE/WRITE_PWM.
+    for (int i = 0; i < FAN_OUTPUT_COUNT; i++) {
+        analogWrite(digital_output_pins[FAN_OUTPUT_FIRST_CHANNEL + i], 65535);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -258,6 +492,14 @@ void initialize_hardware() {
 // ---------------------------------------------------------------------------
 
 void CMDH_init(const BusMessage* msg, BusMessage* resp) {
+    // Deliberately does NOT home the chute (2026-11-17, safety fix): this
+    // runs the instant the backend talks to the board at all, which is not
+    // the same thing as a deliberate "home now" — the chute must only ever
+    // spin on an explicit CHUTE_ENCODER.START_HOMING (which the backend
+    // already sends on its own schedule, see chute.py's home()) or lazily
+    // from a move request that no longer trusts its zero (see
+    // CMDH_chute_move_to_count/_step_position below). See setup()'s own
+    // comment for the incident this guards against.
     (void)msg;
     initialize_hardware();
     resp->payload_length = dump_configuration((char*)resp->payload, MAX_PAYLOAD_SIZE);
@@ -626,6 +868,60 @@ void CMDH_chute_encoder_clear_index_synced(const BusMessage* msg, BusMessage* re
     resp->payload_length = 0;
 }
 
+void CMDH_chute_encoder_get_raw_state(const BusMessage* msg, BusMessage* resp) {
+    (void)msg;
+    resp->payload[0] = chute_encoder.getRawState();
+    resp->payload_length = 1;
+}
+
+// SAFETY (2026-11-17): a move request while the chute does not trust its
+// zero (never homed since boot/reset, or a stall invalidated it — see
+// markUnhomed() on the Python side) must not blindly drive to a
+// numerically-computed-but-physically-meaningless position. Starts homing
+// instead and refuses this one move; the caller (chute.py) re-homes on its
+// own schedule and will not normally hit this except right after a reset
+// that hasn't been through CHUTE_ENCODER.START_HOMING yet.
+static bool refuseMoveIfNotHomed(BusMessage* resp, const char* name) {
+    if (chute_auto_homed) return false;
+    if (!chute_auto_homing_active && !chute_auto_homing_stopping && !chute_auto_homing_correcting) {
+        start_chute_auto_home();
+    }
+    resp->command |= 0x80;
+    resp->payload_length =
+        snprintf(reinterpret_cast<char*>(resp->payload), 246, "%s: not homed, homing started — retry shortly", name);
+    return true;
+}
+
+void CMDH_chute_move_to_count(const BusMessage* msg, BusMessage* resp) {
+    if (refuseMoveIfNotHomed(resp, "MOVE_TO_COUNT")) return;
+    int32_t target_count;
+    memcpy(&target_count, msg->payload, sizeof(target_count));
+    start_chute_move_to_count(target_count);
+    resp->payload[0] = 1;
+    resp->payload_length = 1;
+}
+
+void CMDH_chute_move_to_step_position(const BusMessage* msg, BusMessage* resp) {
+    if (refuseMoveIfNotHomed(resp, "MOVE_TO_STEP_POS")) return;
+    int32_t target_position;
+    memcpy(&target_position, msg->payload, sizeof(target_position));
+    start_chute_move_to_step_position(target_position);
+    resp->payload[0] = 1;
+    resp->payload_length = 1;
+}
+
+void CMDH_chute_start_homing(const BusMessage* msg, BusMessage* resp) {
+    // A re-home that touches only the chute stepper - unlike the generic
+    // INIT command, this does NOT call initialize_hardware() (which would
+    // zero every stepper's current, re-cycle all 5 TMC2209 drivers, and
+    // reset every LED/fan output to LOW - audible as a relay-like click
+    // from the drivers re-enabling). Bench-confirmed 2026-11-16: the debug
+    // UI's homing button was using INIT and clobbering unrelated state.
+    (void)msg;
+    start_chute_auto_home();
+    resp->payload_length = 0;
+}
+
 const struct CommandTable chuteEncoderCmdTable = {
     .prefix = "CHUTE_ENCODER",
     .commands = {{
@@ -634,6 +930,10 @@ const struct CommandTable chuteEncoderCmdTable = {
         {"IS_INDEX_SYNCED", "", "?", 0, VAL_chute_encoder_channel, CMDH_chute_encoder_is_index_synced},
         {"GET_COUNT_AT_INDEX", "", "i", 0, VAL_chute_encoder_channel, CMDH_chute_encoder_get_count_at_index},
         {"CLEAR_INDEX_SYNCED", "", "", 0, VAL_chute_encoder_channel, CMDH_chute_encoder_clear_index_synced},
+        {"GET_RAW_STATE", "", "B", 0, VAL_chute_encoder_channel, CMDH_chute_encoder_get_raw_state},
+        {"MOVE_TO_COUNT", "i", "?", 4, VAL_chute_encoder_channel, CMDH_chute_move_to_count},
+        {"MOVE_TO_STEP_POS", "i", "?", 4, VAL_chute_encoder_channel, CMDH_chute_move_to_step_position},
+        {"START_HOMING", "", "", 0, VAL_chute_encoder_channel, CMDH_chute_start_homing},
     }}};
 
 // Table 4 (SERVO) is intentionally absent (nullptr) — servos are out of
@@ -672,6 +972,28 @@ static BusMessageProcessor* msg_processor;
 
 void setup() {
     Serial.begin(576000); // Cosmetic for USB-CDC, matches the backend's configured baud
+
+    // Discard stale bytes from the USB-CDC RX queue before trusting it.
+    // Confirmed on real hardware (2026-11-17): right after a DFU "leave"
+    // (a software jump into the app, not a hardware reset — see README's
+    // flashing section), the very first host command gets corrupted by up
+    // to ~192 bytes (one full CDC_ReceiveQueue, 3 full-speed packets) of
+    // leftover data that was never actually sent by the host. The USB
+    // peripheral and its packet queues survive the DFU-to-app jump
+    // untouched, so this is PMA/queue state left over from the DFU
+    // session, not anything this firmware wrote. A FIXED window, not one
+    // that extends itself on every byte seen: a low-rate trickle of real
+    // noise (observed separately, far rarer, still unexplained) must never
+    // be able to keep re-arming this and block setup() forever.
+    {
+        uint32_t drain_until_ms = millis() + 150;
+        while (millis() < drain_until_ms) {
+            if (Serial.available()) {
+                Serial.read();
+            }
+        }
+    }
+
     initialize_hardware();
     chute_encoder.initialize();
 
@@ -683,11 +1005,27 @@ void setup() {
     motion_timer->attachInterrupt(motion_update_isr);
     motion_timer->resume();
 
+    // SAFETY (2026-11-17): the chute used to auto-home unconditionally right
+    // here, on every power-on or reset — including a bare DFU reflash, with
+    // no host involved at all. That is exactly backward when someone has
+    // physical hands near the machine for exactly that reason: flash the
+    // ESP32 BLE bridge, then this board, and its own reset would have spun
+    // the chute stepper immediately, with real risk of tearing out the
+    // ESP32's USB cable mid-rotation. The chute now only ever homes on an
+    // explicit CHUTE_ENCODER.START_HOMING command (chute.py's home(), sent
+    // deliberately once the backend is actually in control) or lazily from
+    // a move request that no longer trusts its zero — see
+    // CMDH_chute_move_to_count/_step_position. Boot and INIT leave it
+    // un-homed and motionless until one of those actually happens.
+
     static BusMessageProcessor processor(DEVICE_ADDRESS, command_tables, transmit);
     msg_processor = &processor;
 }
 
 void loop() {
+    update_chute_auto_home();
+    update_chute_move();
+    update_chute_step_move();
     while (Serial.available() > 0) {
         char c = (char)Serial.read();
         msg_processor->processIncomingData(c);

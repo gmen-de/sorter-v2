@@ -20,6 +20,16 @@ if TYPE_CHECKING:
 GEAR_RATIO = 120 / 25  # 25T motor gear -> 25T idle gear -> 120T chute gear
 CHUTE_MAX_ANGLE = 350
 
+# Bench-calibrated 2026-11-16 (laser-measured, Octopus firmware only - see
+# CHUTE_STEP_USTEPS_PER_REV in software/firmware/octopus_control_board/src/
+# main.cpp): one full physical chute revolution in the stepper's own
+# microstep counter. Encoder-mode moves target this directly (via
+# ChuteEncoder.move_to_step_pos()) instead of going through GEAR_RATIO and
+# the generic StepperMotor microsteps-per-revolution config, which was
+# never bench-verified to this precision and is still what endstop mode
+# uses unchanged below.
+CHUTE_ENCODER_USTEPS_PER_REV = 7680
+
 # Chute aiming geometry.
 #
 # The chute rotates within [0, 360) and hits a HARD STOP at either end — it
@@ -236,7 +246,7 @@ class Chute:
     @property
     def current_angle(self) -> float:
         # Normalized to [0, 360): once encoder mode allows a move to wrap
-        # past 0/360 (see _deltaToTarget()), the stepper's own raw open-loop
+        # past 0/360 (see _moveToAngleEncoder()), the stepper's own raw open-loop
         # degrees can go negative or past 360, and this public angle must
         # still read as the sane physical value. Python's `%` on a positive
         # divisor already returns [0, 360) regardless of the dividend's
@@ -306,35 +316,22 @@ class Chute:
 
     def _deltaToTarget(self, target: float) -> tuple[float, float]:
         """The (delta_stepper_deg, clamped_target_deg) to reach `target`
-        chute-degrees from here.
-
-        Endstop mode: exactly the chute's original behavior — the chute
-        physically cannot cross 0/360 (the switch is in the way), so the
-        target is clamped into [0, 360] and the delta is the direct,
-        possibly-long-way distance.
-
-        Encoder mode: the chute can now turn freely either way (that's the
-        whole point of the slip-ring/encoder swap), so this picks whichever
-        direction is the SHORTER way around the circle — less travel, less
-        time, not just "no limit". `current` is already 360-normalized
-        (see current_angle); wrapping the raw difference into (-180, 180]
-        gives the shortest signed delta in the same sign convention the
-        direct-delta formula already used (positive target - current =
-        positive delta), so there's no new direction ambiguity here beyond
-        what endstop mode already has.
-        """
+        chute-degrees from here. Endstop mode only - the chute physically
+        cannot cross 0/360 (the switch is in the way), so the target is
+        clamped into [0, 360] and the delta is the direct, possibly-long-way
+        distance. Encoder mode moves go through _moveToAngleEncoder()
+        instead, which targets the stepper's own microstep position
+        directly and lets the firmware pick the shortest way round."""
         current = self.current_angle
-        if self.chute_position_sensor == "encoder":
-            target = target % 360.0
-            delta_deg = ((target - current + 180.0) % 360.0) - 180.0
-        else:
-            target = max(0.0, min(360.0, target))
-            delta_deg = target - current
+        target = max(0.0, min(360.0, target))
+        delta_deg = target - current
         return delta_deg * GEAR_RATIO, target
 
     def moveToAngle(self, target: float, max_speed: int | None = None) -> int | None:
         """Start a move at the operating speed, or at `max_speed` when given; the
         estimated duration in ms, or None if the board refused it."""
+        if self.chute_position_sensor == "encoder":
+            return self._moveToAngleEncoder(target, max_speed=max_speed, blocking=False)
         delta_stepper_angle, target = self._deltaToTarget(target)
         current = self.current_angle
         speed = int(max_speed or self.operating_speed_microsteps_per_second)
@@ -352,6 +349,54 @@ class Chute:
         )
         if not self.stepper.move_degrees(delta_stepper_angle):
             return None
+        return estimated_ms
+
+    def _moveToAngleEncoder(
+        self, target: float, *, max_speed: int | None = None, blocking: bool,
+        timeout_buffer_ms: int = 0,
+    ) -> int | None:
+        """Encoder-mode move, shared by moveToAngle()/moveToAngleBlocking():
+        targets an absolute microstep position via
+        ChuteEncoder.move_to_step_pos() (open-loop, but bench-confirmed far
+        more precise than the encoder's own count resolution - see
+        CHUTE_ENCODER_USTEPS_PER_REV), instead of the generic
+        StepperMotor.move_degrees() path endstop mode still uses. The
+        firmware itself picks the shortest way round (never more than half
+        a revolution), so this never needs to compute a wrapped delta the
+        way endstop mode's _deltaToTarget() does.
+        """
+        assert self.chute_encoder is not None
+        current = self.current_angle
+        target_norm = target % 360.0
+        target_usteps = round(target_norm / 360.0 * CHUTE_ENCODER_USTEPS_PER_REV)
+        # For logging/duration-estimate purposes only - the firmware does
+        # its own shortest-path wrap independently of this.
+        delta_deg = ((target_norm - current + 180.0) % 360.0) - 180.0
+        speed = int(max_speed or self.operating_speed_microsteps_per_second)
+        estimated_ms = self.stepper.estimateMoveDegreesMs(delta_deg * GEAR_RATIO, max_speed=speed)
+        timeout_ms = max(1, estimated_ms + timeout_buffer_ms)
+
+        if self.gc.disable_chute:
+            self.logger.info(
+                f"Chute: [DISABLED] would move{'(blocking)' if blocking else ''} from {current:.1f}° to "
+                f"{target_norm:.1f}° (encoder step-pos, target_usteps={target_usteps}, est_ms={estimated_ms})"
+            )
+            return estimated_ms
+
+        self._setSpeed(speed)
+        self.logger.info(
+            f"Chute: moving{'(blocking)' if blocking else ''} from {current:.1f}° to {target_norm:.1f}° "
+            f"at {speed} µsteps/s (encoder step-pos, target_usteps={target_usteps}, est_ms={estimated_ms})"
+        )
+        self.chute_encoder.move_to_step_pos(target_usteps)
+        if not blocking:
+            return estimated_ms
+        start = time.monotonic()
+        while not self.stepper.stopped:
+            if (time.monotonic() - start) * 1000 > timeout_ms:
+                self.logger.error("Chute: encoder step-pos move(blocking) did not finish in time")
+                return None
+            time.sleep(0.01)
         return estimated_ms
 
     def isBinReachable(self, address: BinAddress) -> bool:
@@ -372,6 +417,8 @@ class Chute:
 
     def moveToAngleBlocking(self, target: float, timeout_buffer_ms: int = 0) -> int | None:
         """Move and wait; the estimated duration in ms, or None if it was refused or did not finish."""
+        if self.chute_position_sensor == "encoder":
+            return self._moveToAngleEncoder(target, blocking=True, timeout_buffer_ms=timeout_buffer_ms)
         delta_stepper_angle, target = self._deltaToTarget(target)
         current = self.current_angle
         speed = int(self.operating_speed_microsteps_per_second)
@@ -414,60 +461,37 @@ class Chute:
         return self._homeEndstop()
 
     def _homeEncoder(self) -> bool:
-        """Home against the magnet-ring encoder's index gap instead of a
-        mechanical switch: rotate until the encoder reports an index-sync
-        event, then zero the stepper's own position right there — the same
-        "zero the counter at a known fixed physical landmark" convention the
-        endstop case uses (see _homeEndstop()), just with the index gap as
-        the landmark instead of the switch. _backoffToFirstBin() then moves
-        from that zero to bin 0's leading edge exactly as it already does
-        for the endstop case, so the two modes end up at the same place.
-
-        Known approximation, not yet bench-verified: the stepper is stopped
-        on Python's next poll after is_index_synced() flips true, not at the
-        exact instant the firmware's ISR saw the index event, so there is a
-        small poll-latency-proportional position error here that the
-        endstop case does not have (its zero is set inside the firmware's
-        own step-tick ISR). get_count_at_index() could correct for this
-        using the encoder's own ISR-precise running count, but doing that
-        safely needs the encoder's count-to-direction sign convention
-        confirmed against real hardware first — deliberately not attempted
-        here; see ChuteEncoder.h's own "not bench-calibrated" caveat.
+        """Home against the magnet-ring encoder's index gap. The firmware
+        itself already runs this exact sequence fully autonomously (seek
+        the index gap, apply its own bench-calibrated mechanical offset,
+        zero the stepper's own position there) once at boot - this just
+        triggers the same state machine on demand and waits for it, instead
+        of the old approach of driving the stepper from Python and polling
+        is_index_synced() across the bus (which had a poll-latency-
+        proportional position error that this no longer has: the firmware
+        zeroes the position itself, synchronously with the index event, the
+        same way it already did at boot).
         """
-        self.logger.info("Chute: homing via magnet-ring encoder")
+        self.logger.info("Chute: homing via magnet-ring encoder (firmware-driven)")
         assert self.chute_encoder is not None
-        # Raw, unbounded degrees for this log only (not the 360-normalized
-        # current_angle) -- during a long homing rotation a wrapped value
-        # would make "moved so far" look like it went backwards.
-        pos_before = self.stepper.position_degrees / GEAR_RATIO
-        self.chute_encoder.clear_index_synced()
-        self.stepper.move_at_speed(HOME_SPEED_MICROSTEPS_PER_SEC)
+        self.chute_encoder.start_homing()
         start = time.monotonic()
-        while not self.chute_encoder.is_index_synced():
+        status: dict = {}
+        while True:
             if (time.monotonic() - start) * 1000 > HOME_TIMEOUT_MS:
-                self.stepper.move_at_speed(0)
-                moved = self.stepper.position_degrees / GEAR_RATIO - pos_before
-                self.logger.error(
-                    f"Chute: encoder homing timed out after {HOME_TIMEOUT_MS}ms without an "
-                    f"index-sync event (moved={moved:.2f}° so far)."
-                )
+                self.logger.error(f"Chute: encoder homing timed out after {HOME_TIMEOUT_MS}ms")
                 return False
-            time.sleep(0.01)
-        self.stepper.move_at_speed(0)
-        stop_start = time.monotonic()
-        while not self.stepper.stopped:
-            if (time.monotonic() - stop_start) * 1000 > HOME_TIMEOUT_MS:
-                self.logger.error("Chute: encoder homing: stepper did not stop after the index-sync event.")
+            status = self.chute_encoder.get_homing_status()
+            if status["failed"]:
+                self.logger.error("Chute: encoder homing failed (firmware-reported)")
                 return False
-            time.sleep(0.01)
-        self.stepper.position = 0
+            if status["homed"] and not status["active"]:
+                break
+            time.sleep(0.05)
         self._encoder_zero_count = self.chute_encoder.get_count()
         if not self._backoffToFirstBin():
             return False
-        self.logger.info(
-            "Chute: encoder-homed successfully "
-            f"(count_at_index={self.chute_encoder.get_count_at_index()}, zero_count={self._encoder_zero_count})"
-        )
+        self.logger.info(f"Chute: encoder-homed successfully (zero_count={self._encoder_zero_count})")
         self._homed = True
         self.pieces_since_check = 0
         return True

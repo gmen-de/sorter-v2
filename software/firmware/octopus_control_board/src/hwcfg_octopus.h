@@ -12,23 +12,25 @@
 //
 // Pin table taken from Marlin's/Klipper's own open-source pin definitions for
 // this board (the only reliable public source — BTT does not publish a bare
-// pinout doc). Motor0-Motor4 sockets are used for the 5 stepper channels;
-// Motor5/Motor6's endstop-shared pins carry the new chute magnet-ring Hall
-// sensors instead of steppers; two of the hotend heater MOSFET pins (HE1,
-// HE3) are repurposed as 24V LED/COB PWM outputs.
+// pinout doc). Motor3-Motor7 sockets are used for the 5 stepper channels
+// (deliberately skipping Motor2, the dual-output MOTOR2_1/MOTOR2_2 socket
+// shared by one driver, and avoiding Motor0/Motor1 below); Motor0/Motor1's
+// endstop-shared pins carry the new chute magnet-ring Hall sensors instead
+// of steppers; two of the hotend heater MOSFET pins (HE1, HE3) are
+// repurposed as 24V LED/COB PWM outputs.
 
 const char* const HW_ID = "octopus_v1_1";
 
 const uint8_t STEPPER_COUNT = 5;
-const uint32_t STEPPER_STEP_PINS[] = {PF13, PG0, PF11, PG4, PF9};
-const uint32_t STEPPER_DIR_PINS[]  = {PF12, PG1, PG3, PC1, PF10};
-const uint32_t STEPPER_nEN_PINS[]  = {PF14, PF15, PG5, PA0, PG2};
+const uint32_t STEPPER_STEP_PINS[] = {PC13, PE2, PE6, PG4, PF9};
+const uint32_t STEPPER_DIR_PINS[]  = {PF0,  PE3, PA14, PC1, PF10};
+const uint32_t STEPPER_nEN_PINS[]  = {PF1,  PD4, PE0,  PA0, PG2};
 
 #ifdef FIRMWARE_ROLE_DISTRIBUTION
 const char* const STEPPER_NAMES[] = {
-    "chute_stepper",       // ch0 — Motor0 — STEP=PF13 DIR=PF12 EN=PF14 UART=PC4 DIAG=PG6
-    "c_channel_1_rotor",   // ch1 — Motor1 — STEP=PG0  DIR=PG1  EN=PF15 UART=PD11 DIAG=PG9
-    "c_channel_3_rotor",   // ch2 — Motor2 — STEP=PF11 DIR=PG3  EN=PG5  UART=PC6 DIAG=PG10
+    "chute_stepper",       // ch0 — Motor5 — STEP=PC13 DIR=PF0  EN=PF1 UART=PE4 DIAG=PG13
+    "c_channel_1_rotor",   // ch1 — Motor6 — STEP=PE2  DIR=PE3  EN=PD4 UART=PE1 DIAG=PG14
+    "c_channel_3_rotor",   // ch2 — Motor7 — STEP=PE6  DIR=PA14 EN=PE0 UART=PD3 DIAG=PG15
     "carousel",            // ch3 — Motor3 — STEP=PG4  DIR=PC1  EN=PA0  UART=PC7 DIAG=PG11
     "c_channel_2_rotor"    // ch4 — Motor4 — STEP=PF9  DIR=PF10 EN=PG2  UART=PF2 DIAG=PG12
 };
@@ -47,7 +49,7 @@ const char* const STEPPER_NAMES[] = {
 // 2-wire bus with up to 4 addressed drivers) — so every channel uses TMC
 // UART address 0 (the default for MS1=MS2=low) and gets its own
 // TMC_UART_Bus instance on its own pin. See TMC_UART.h/.cpp.
-const uint32_t TMC_UART_PINS[] = {PC4, PD11, PC6, PC7, PF2};
+const uint32_t TMC_UART_PINS[] = {PE4, PE1, PD3, PC7, PF2};
 const uint8_t TMC_UART_ADDRESSES[] = {0, 0, 0, 0, 0};
 const long TMC_UART_BAUDRATE = 100000; // software bit-banged; see TMC_UART.h
 
@@ -55,32 +57,37 @@ const long TMC_UART_BAUDRATE = 100000; // software bit-banged; see TMC_UART.h
 // motor socket's endstop header signal (BTT ties them together with a
 // jumper) — confirm each socket's DIAG jumper is populated before relying
 // on stall detection.
-const int STEPPER_DIAG_PINS[] = {PG6, PG9, PG10, PG11, PG12};
+const int STEPPER_DIAG_PINS[] = {PG13, PG14, PG15, PG11, PG12};
 
 // No stepper on this board currently homes against a generic endstop (the
-// chute no longer needs one — see the magnet-ring encoder below, and no
-// other channel's homing input was identified when this board was
-// planned). One spare input is still declared on Motor7's otherwise-unused
-// endstop pin (PG15), reserved/unassigned, so DIGITAL_IO channel 0 exists
-// for future use instead of leaving DIGITAL_INPUT_COUNT at zero.
-const uint8_t DIGITAL_INPUT_COUNT = 1;
-const uint32_t digital_input_pins[] = {PG15}; // spare/unassigned
+// chute no longer needs one — see the magnet-ring encoder below). Motor2
+// (the dual-output socket) is unused and its endstop pin not identified, so
+// no spare digital input is declared here for now.
+const uint8_t DIGITAL_INPUT_COUNT = 0;
+const uint32_t digital_input_pins[] = {};
 
-// LED/24V PWM outputs, repurposed from hotend heater MOSFETs HE1 (PA3) and
-// HE3 (PB11). On the Pro board HE0/HE2 swap pins between revisions (which
-// is why this firmware avoided them); the standard board has no such
-// revision swap, but HE1/HE3 work identically here too, so there's no
-// reason to change the choice.
-const uint8_t DIGITAL_OUTPUT_COUNT = 2;
-const uint32_t digital_output_pins[] = {PA3, PB11};
-const int FAN0_OUTPUT_CHANNEL = -1;
-const uint8_t LED_OUTPUT_COUNT = 2;
+// LED/24V PWM outputs, repurposed from hotend heater MOSFETs HE0 (PA2),
+// HE1 (PA3) and HE2 (PB10) — three independent lighting zones. Pins taken
+// from Marlin's pins_BTT_OCTOPUS_V1_common.h (HEATER_0_PIN/HEATER_1_PIN/
+// HEATER_2_PIN); HE3 (PB11) is left unused/available for a future zone.
+// Channels 3-8 are the board's 6 fan headers (FAN0-FAN5 silkscreen), same
+// Marlin header (FAN0_PIN..FAN5_PIN = PA8, PE5, PD12, PD13, PD14, PD15) -
+// the board has 6 fan headers, not 8; there is no FAN6/FAN7. Exposed
+// through the same generic DIGITAL_IO.WRITE/WRITE_PWM commands as the LED
+// channels, just appended to the same array - no new command table slot.
+const uint8_t DIGITAL_OUTPUT_COUNT = 9;
+const uint32_t digital_output_pins[] = {PA2, PA3, PB10, PA8, PE5, PD12, PD13, PD14, PD15};
+const int FAN0_OUTPUT_CHANNEL = -1; // kept disabled - was already -1 before the fan channels existed; manual control only via DIGITAL_IO
+const uint8_t LED_OUTPUT_COUNT = 3;
+const uint8_t FAN_OUTPUT_COUNT = 6;
+const uint8_t FAN_OUTPUT_FIRST_CHANNEL = 3;
 
 // New feature, not present on the RP2040 boards: the chute's continuous-
 // rotation (>350°, slip-ring powered) position sensing. Two DRV5013
 // Hall-latch sensors read a 71-magnet ring (1 index gap) mounted on the
 // chute's own flange. See ChuteEncoder.h/.cpp and the table-5 protocol
-// addition documented in the firmware README. Wired to two otherwise-
-// unused motor sockets' endstop-shared pins (Motor5, Motor6).
-const uint32_t CHUTE_ENCODER_PIN_A = PG13;
-const uint32_t CHUTE_ENCODER_PIN_B = PG14;
+// addition documented in the firmware README. Wired to the two motor
+// sockets freed up by moving the steppers to Motor3-Motor7 (Motor0's and
+// Motor1's endstop-shared pins).
+const uint32_t CHUTE_ENCODER_PIN_A = PG6;
+const uint32_t CHUTE_ENCODER_PIN_B = PG9;

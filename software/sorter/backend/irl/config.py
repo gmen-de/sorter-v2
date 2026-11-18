@@ -10,7 +10,7 @@ CLASSIFICATION_CHANNEL_FLOW = "two_piece_state_machine_rev01"
 MACHINE_SETUP = "classification_channel"
 
 from global_config import GlobalConfig
-from hardware.bus import MCUBus, MCUBusError
+from hardware.bus import MCUBus, MCUBusError  # MCUBus: unused here, but tests/test_stepper_init.py patches irl.config.MCUBus.enumerate_buses to keep this module's tests off real hardware
 from hardware.cobs import DecodeError
 from hardware.fault import HardwareFault
 from hardware.sorter_interface import SorterInterface
@@ -38,7 +38,6 @@ from .parse_user_toml import (
     loadMachineSpecificParams,
     loadServoChannelConfig,
     loadWaveshareBleServoConfig,
-    loadWaveshareServoConfig,
 )
 from hardware_settings.chute import boardDefaults, readChuteSettings
 from hardware_settings.motors import MOTORS, Motor, motorSockets
@@ -975,7 +974,6 @@ def _bindHardware(irl_interface: IRLInterface, config: IRLConfig, gc: GlobalConf
     machine_specific_params = loadMachineSpecificParams(gc)
     motor_sockets = motorSockets(machine_specific_params, gc.logger)
     servo_channel_config = loadServoChannelConfig(gc, machine_specific_params)
-    mcu_ports = MCUBus.enumerate_buses()
     required_stepper_names = [motor_sockets[motor.name] for motor in MOTORS]
     gc.logger.info(f"Required steppers: {required_stepper_names}")
     control_boards = discover_control_boards(
@@ -1105,14 +1103,11 @@ def _bindHardware(irl_interface: IRLInterface, config: IRLConfig, gc: GlobalConf
         irl_interface.servo_controller = None
         irl_interface.servos = []
     else:
-        waveshare_config = loadWaveshareServoConfig(gc, machine_specific_params)
         waveshare_ble_config = loadWaveshareBleServoConfig(gc, machine_specific_params)
         irl_interface.servo_controller = build_servo_controller(
             gc,
             control_boards=control_boards,
             servo_channel_config=servo_channel_config,
-            waveshare_config=waveshare_config,
-            mcu_ports=mcu_ports,
             waveshare_ble_config=waveshare_ble_config,
         )
         irl_interface.servos = irl_interface.servo_controller.create_layer_servos(

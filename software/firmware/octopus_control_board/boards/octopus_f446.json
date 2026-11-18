@@ -5,10 +5,10 @@
     },
     "core": "stm32",
     "cpu": "cortex-m4",
-    "extra_flags": "-DSTM32F4xx -DSTM32F446xx -DSTM32F446ZEx -DARDUINO_GENERIC_F446ZETX",
+    "extra_flags": "-DSTM32F4xx -DSTM32F446xx -DSTM32F446ZEx -DARDUINO_GENERIC_F446ZETX -DHSE_VALUE=12000000 -DHSE_STARTUP_TIMEOUT=2000 -DUSBCON -DUSBD_USE_CDC -DUSBD_VID=0x0483 -DUSBD_PID=0x5740 -DHAL_PCD_MODULE_ENABLED -DFIRMWARE_ROLE_DISTRIBUTION",
     "f_cpu": "180000000L",
     "mcu": "stm32f446zet6",
-    "flash_offset": "0x8000",
+    "flash_offset": "0x0",
     "product_line": "STM32F446xx",
     "variant": "octopus_f446",
     "variants_dir": "boards/variants"
@@ -24,6 +24,7 @@
   "upload": {
     "maximum_ram_size": 131072,
     "maximum_size": 524288,
+    "offset_address": "0x08000000",
     "protocol": "dfu",
     "protocols": ["dfu"]
   },

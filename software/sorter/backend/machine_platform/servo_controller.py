@@ -4,10 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-import serial.tools.list_ports
-
 from global_config import GlobalConfig
-from irl.parse_user_toml import ServoChannelConfig, WaveshareBleServoConfig, WaveshareServoConfig
+from irl.parse_user_toml import ServoChannelConfig, WaveshareBleServoConfig
 from machine_platform.control_board import ControlBoard
 
 
@@ -215,139 +213,6 @@ class Pca9685ServoController(ServoController):
         return layer_servos
 
 
-class WaveshareServoController(ServoController):
-    backend_name = "waveshare"
-    supports_feedback = True
-    supports_calibration = True
-
-    def __init__(
-        self,
-        gc: GlobalConfig,
-        *,
-        port: str | None,
-        assignments: Sequence[LayerServoAssignment],
-        mcu_ports: Sequence[str],
-    ):
-        self._gc = gc
-        self._port = port
-        self._assignments = tuple(assignments)
-        self._mcu_ports = tuple(mcu_ports)
-        self._bus_service = None
-        self.issues = []
-
-    @property
-    def bus_service(self):
-        return self._bus_service
-
-    def create_layer_servos(self, distribution_layout: Any) -> list[Any]:
-        from hardware.waveshare_bus_service import get_waveshare_bus_service
-        from hardware.waveshare_servo import WaveshareServoMotor
-
-        port = self._resolve_port()
-        if port is None:
-            error = "Waveshare servo backend configured but no serial port found. Set servo.port in config."
-            self._gc.logger.warning(error)
-            return [
-                self._make_offline_servo(index, assignment, error)
-                for index, assignment in self._iter_layer_assignments(distribution_layout)
-            ]
-
-        self._gc.logger.info(f"Using Waveshare SC servo bus on {port}")
-        try:
-            service = get_waveshare_bus_service(port)
-            service.attach_persistent()
-            self._bus_service = service
-        except Exception as exc:
-            error = f"Failed to open Waveshare SC servo bus on {port}: {exc}"
-            self._gc.logger.warning(error)
-            return [
-                self._make_offline_servo(index, assignment, error)
-                for index, assignment in self._iter_layer_assignments(distribution_layout)
-            ]
-        layer_servos: list[Any] = []
-        for index, assignment in self._iter_layer_assignments(distribution_layout):
-            layer = distribution_layout.layers[index]
-            if assignment.id is None:
-                if bool(getattr(layer, "enabled", True)):
-                    error = "No servo configured for enabled layer."
-                    layer_servos.append(self._make_offline_servo(index, assignment, error))
-                else:
-                    servo = UnassignedServoMotor(invert=assignment.invert, layer_index=index)
-                    servo.set_name(f"layer_{index}_servo")
-                    layer_servos.append(servo)
-                continue
-            servo = WaveshareServoMotor(service, assignment.id, invert=assignment.invert)
-            try:
-                servo.initialize()
-            except Exception as exc:
-                error = f"Cannot communicate with servo {assignment.id}: {exc}"
-                self._gc.logger.warning(
-                    f"Waveshare servo layer {index + 1} id={assignment.id} unavailable: {exc}"
-                )
-                layer_servos.append(self._make_offline_servo(index, assignment, error))
-                continue
-            servo.set_name(f"layer_{index}_servo")
-            layer_servos.append(servo)
-            self._gc.logger.info(
-                f"Initialized Waveshare servo 'layer_{index}_servo' id={assignment.id}, "
-                f"invert={assignment.invert}"
-            )
-        return layer_servos
-
-    def shutdown(self) -> None:
-        if self._bus_service is None:
-            return
-        try:
-            self._bus_service.detach_persistent()
-        finally:
-            self._bus_service = None
-
-    def _iter_layer_assignments(self, distribution_layout: Any) -> list[tuple[int, LayerServoAssignment]]:
-        assignments: list[tuple[int, LayerServoAssignment]] = []
-        for index, _layer in enumerate(distribution_layout.layers):
-            assignment = (
-                self._assignments[index]
-                if index < len(self._assignments)
-                else LayerServoAssignment(id=None)
-            )
-            assignments.append((index, assignment))
-        return assignments
-
-    def _make_offline_servo(
-        self,
-        index: int,
-        assignment: LayerServoAssignment,
-        error: str,
-    ) -> OfflineServoMotor:
-        issue = {
-            "kind": "servo",
-            "backend": self.backend_name,
-            "layer_index": index,
-            "message": error,
-        }
-        if assignment.id is not None:
-            issue["servo_id"] = assignment.id
-        self.issues.append(issue)
-        offline = OfflineServoMotor(
-            servo_id=assignment.id,
-            invert=assignment.invert,
-            error=error,
-            layer_index=index,
-        )
-        offline.set_name(f"layer_{index}_servo")
-        return offline
-
-    def _resolve_port(self) -> str | None:
-        if self._port is not None:
-            return self._port
-
-        mcu_ports = set(self._mcu_ports)
-        for port in serial.tools.list_ports.comports():
-            if port.device not in mcu_ports and port.vid is not None:
-                return port.device
-        return None
-
-
 class WaveshareBleServoController(ServoController):
     """Layer servos driven over BLE by the esp32_ble_servo_bridge firmware
     (see software/firmware/esp32_ble_servo_bridge/README.md). Gate numbers,
@@ -495,8 +360,6 @@ def build_servo_controller(
     *,
     control_boards: Sequence[ControlBoard],
     servo_channel_config: Sequence[ServoChannelConfig],
-    waveshare_config: WaveshareServoConfig | None,
-    mcu_ports: Sequence[str],
     waveshare_ble_config: WaveshareBleServoConfig | None = None,
 ) -> ServoController:
     assignments = [
@@ -509,14 +372,6 @@ def build_servo_controller(
             gc,
             device=waveshare_ble_config.device,
             assignments=assignments,
-        )
-
-    if waveshare_config is not None:
-        return WaveshareServoController(
-            gc,
-            port=waveshare_config.port,
-            assignments=assignments,
-            mcu_ports=mcu_ports,
         )
 
     servo_source = _select_pca_servo_source(control_boards)

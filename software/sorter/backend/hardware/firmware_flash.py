@@ -19,6 +19,10 @@ UF2_MAGIC_END = 0x0AB16F30
 UF2_BLOCK_SIZE = 512
 UF2_FAMILY_RP2040 = 0xE48BFF56
 
+DFU_USB_ID = "0483:df11"
+DFU_WAIT_TIMEOUT_S = 120.0  # the user has to physically set BOOT0 + press reset
+DFU_FLASH_TIMEOUT_S = 60.0
+
 LINUX_MOUNT_POINT = "/mnt/rpi-rp2-flash"
 BOOTLOADER_MOUNT_TIMEOUT_S = 30.0
 BOOTLOADER_UNMOUNT_TIMEOUT_S = 20.0
@@ -63,6 +67,81 @@ def validateUf2(data: bytes) -> str | None:
     if family_present and family != UF2_FAMILY_RP2040:
         return f"UF2 family id {family:#010x} is not RP2040 — wrong target chip"
     return None
+
+
+def isOctopusVariant(info: dict | None) -> bool:
+    """Whether a probed/identified board's own reported firmware variant is
+    the Octopus port (see software/firmware/octopus_control_board) — its
+    FIRMWARE_VARIANT build flag, not a filename convention. This drives the
+    automatic choice between UF2 drag-and-drop and DFU flashing: the same
+    thing that boots differently on different hardware should not need the
+    person flashing it to know which recovery procedure applies."""
+    if not info:
+        return False
+    version = info.get("version") or {}
+    variant = (version.get("variant") or "") if isinstance(version, dict) else ""
+    return "octopus" in variant.lower()
+
+
+def dfuDevicePresent() -> bool:
+    """Whether a board is currently sitting in the STM32 ROM DFU bootloader
+    (BOOT0 jumper + reset — see the Octopus firmware's own README; there is
+    no UF2-style mass-storage equivalent on this board family)."""
+    if platform.system() == "Darwin":
+        return False
+    try:
+        result = subprocess.run(
+            ["lsusb", "-d", DFU_USB_ID], capture_output=True, text=True, timeout=5
+        )
+        return bool(result.stdout.strip())
+    except Exception:
+        return False
+
+
+def waitForDfuDevice(
+    gc: GlobalConfig, cancel: threading.Event, timeout_s: float = DFU_WAIT_TIMEOUT_S
+) -> None:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if cancel.is_set():
+            raise FlashCancelled()
+        if dfuDevicePresent():
+            return
+        time.sleep(0.5)
+    raise FlashError(
+        f"No DFU device ({DFU_USB_ID}) appeared within {timeout_s:.0f}s. "
+        "Set the BOOT0 jumper, press reset, then retry."
+    )
+
+
+def flashViaDfu(
+    gc: GlobalConfig,
+    bin_path: str,
+    cancel: threading.Event,
+    on_progress: ProgressFn,
+) -> None:
+    """dfu-util gives no clean machine-parseable progress stream, so this
+    reports start/done rather than a smooth bar — same as the Octopus
+    firmware's own README documents for a manual flash."""
+    if cancel.is_set():
+        raise FlashCancelled()
+    on_progress(0.0)
+    try:
+        proc = subprocess.run(
+            ["dfu-util", "-a", "0", "-s", "0x08000000:leave", "-D", bin_path],
+            capture_output=True,
+            text=True,
+            timeout=DFU_FLASH_TIMEOUT_S,
+        )
+    except FileNotFoundError:
+        raise FlashError("dfu-util is not installed on this machine.")
+    except subprocess.TimeoutExpired:
+        raise FlashError(f"dfu-util did not finish within {DFU_FLASH_TIMEOUT_S:.0f}s.")
+    if proc.returncode != 0:
+        raise FlashError(
+            f"dfu-util failed: {(proc.stderr or proc.stdout).strip() or 'unknown error'}"
+        )
+    on_progress(1.0)
 
 
 def identifyBoard(gc: GlobalConfig, port: str) -> dict | None:
@@ -129,6 +208,12 @@ def findBootloaderMount() -> Optional[str]:
 
 def bootloaderPresent() -> bool:
     return findBootloaderMount() is not None or findBootloaderBlockdev() is not None
+
+
+def anyBootloaderPresent() -> bool:
+    """RPI-RP2 (UF2) or DFU (Octopus) — whichever recovery bootloader a
+    connected-but-blank-or-wedged board happens to be sitting in."""
+    return bootloaderPresent() or dfuDevicePresent()
 
 
 def waitForBootloaderMount(

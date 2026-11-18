@@ -124,12 +124,15 @@ def checkPositionEncoder(chute: "Chute") -> PositionCheck:
     above (a real improvement: this check can run as often as the operator
     likes without ever pausing the chute).
 
-    Not yet bench-verified: if the encoder's count direction turns out to
-    run opposite the stepper's own direction convention, this will show a
-    large, constant drift on every single check rather than the occasional
-    small drift a real lost-step event would cause — that would be the
-    first sign the sign convention (or encoder_counts_per_revolution
-    itself, still a nominal guess per ChuteEncoder.h) needs correcting.
+    Both the encoder's count direction and encoder_counts_per_revolution
+    (180, see DEFAULT_ENCODER_COUNTS_PER_REVOLUTION) are bench-confirmed as
+    of 2026-11-16. Ordinary moves since this session no longer go through
+    the stepper's open-loop degrees-to-microsteps path in encoder mode
+    (see Chute._moveToAngleEncoder(), which targets the stepper's own
+    microstep position directly instead) — this check's own
+    stepper_deg_since_zero reading below still works unchanged, since it
+    just reads back the stepper's position, regardless of which command
+    put it there.
     """
     from .chute import GEAR_RATIO
 

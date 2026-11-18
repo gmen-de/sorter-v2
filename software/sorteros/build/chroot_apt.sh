@@ -91,7 +91,8 @@ systemctl mask dnsmasq.service || true
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 
-# plugdev group for udev Pico access (99-sorter-pico.rules baked in by overlay).
+# plugdev group for udev control-board access (99-sorter-pico.rules and
+# 99-sorter-octopus.rules, both baked in by overlay).
 # orangepi user must be a member so the backend can open /dev/ttyACM*.
 getent group plugdev >/dev/null || groupadd --system plugdev
 usermod -aG plugdev orangepi || true

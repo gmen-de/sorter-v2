@@ -1,0 +1,16 @@
+# udev rule for the BTT Octopus (STM32F446) control board, this project's
+# own firmware (software/firmware/octopus_control_board).
+#
+# Vendor 0483 is STMicroelectronics — unlike Pico's 2e8a (Raspberry Pi
+# Trading Ltd, used only by Pi's own boards), this VID is shared by a huge
+# range of unrelated STM32 devices (ST-Link debuggers, DFU bootloaders,
+# other products), so this rule also matches idProduct to stay specific to
+# this board's own USB identity (USBD_VID/USBD_PID in
+# octopus_f446.json's extra_flags) rather than granting access to every
+# STM32 device plugged into the machine.
+#
+# Same MODE/GROUP/TAG scheme as 99-sorter-pico.rules — see that file for
+# the reasoning.
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", MODE="0660", GROUP="plugdev", TAG+="uaccess"

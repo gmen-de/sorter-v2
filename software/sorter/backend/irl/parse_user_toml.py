@@ -24,12 +24,6 @@ class ServoChannelConfig:
 
 
 @dataclass
-class WaveshareServoConfig:
-    port: str | None  # None = auto-detect
-    channels: list[ServoChannelConfig]
-
-
-@dataclass
 class WaveshareBleServoConfig:
     device: str  # BLE address (or platform-specific identifier) of the esp32_ble_servo_bridge
     channels: list[ServoChannelConfig]  # id here is a *gate number*, not a raw SC servo id
@@ -78,10 +72,7 @@ def loadServoChannelConfig(
             channels.append(ServoChannelConfig(id=None, invert=bool(ch.get("invert", False))))
             continue
 
-        if backend_name == "waveshare":
-            valid = 1 <= ch_id <= 253
-            valid_text = "int 1-253"
-        elif backend_name == "waveshare_ble":
+        if backend_name == "waveshare_ble":
             valid = 1 <= ch_id <= 60
             valid_text = "a gate number from 1-60"
         else:
@@ -97,37 +88,6 @@ def loadServoChannelConfig(
         channels.append(ServoChannelConfig(id=ch_id, invert=bool(ch.get("invert", False))))
 
     return channels
-
-
-def loadWaveshareServoConfig(
-    gc: GlobalConfig,
-    machine_specific_params: dict[str, object] | None = None,
-) -> WaveshareServoConfig | None:
-    """Parse waveshare servo config from TOML. Returns None if backend is not 'waveshare'."""
-    raw = machine_specific_params
-    if raw is None:
-        raw = loadMachineSpecificParams(gc)
-
-    if not isinstance(raw, dict):
-        return None
-
-    servo_params = raw.get("servo")
-    if not isinstance(servo_params, dict):
-        return None
-
-    backend = servo_params.get("backend", "pca9685")
-    if backend != "waveshare":
-        return None
-
-    port = servo_params.get("port")  # None = auto-detect
-    if port is not None and not isinstance(port, str):
-        gc.logger.warning(f"Invalid servo.port={port!r}; expected string. Will auto-detect.")
-        port = None
-
-    return WaveshareServoConfig(
-        port=port,
-        channels=loadServoChannelConfig(gc, raw, backend="waveshare"),
-    )
 
 
 def loadWaveshareBleServoConfig(

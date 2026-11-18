@@ -17,18 +17,6 @@
 # id = 1       # gate number, not a raw SC servo id
 # invert = false
 
-# For Waveshare SC bus servos wired directly over USB-TTL (no ESP32/BLE board):
-# backend = "waveshare"
-# port = "/dev/cu.usbmodem5A7C1215731"  # optional, auto-detected if omitted
-#
-# [[servo.channels]]
-# id = 1
-# invert = false
-#
-# [[servo.channels]]
-# id = 2
-# invert = false
-
 # For PCA9685 (default when [servo] is left out entirely):
 # backend = "pca9685"
 # PCA9685 open/closed angles are calibrated per-layer (see [layers] below), not

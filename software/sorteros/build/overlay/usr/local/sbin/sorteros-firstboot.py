@@ -32,6 +32,7 @@ import subprocess
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -72,7 +73,7 @@ STAMP_DIR = Path("/var/lib/sorteros")
 CONFIG_PATH = Path("/etc/sorteros-config.toml")
 REF_PATH = Path("/etc/sorteros/ref")
 STATUS_PORT = 80
-REPO_URL = "https://github.com/basicallysource/sorter-v2"
+REPO_URL = "https://github.com/gmen-de/sorter-v2"
 REPO_DIR = Path("/home/orangepi/sorter-v2")
 SOFTWARE_DIR = REPO_DIR / "software"
 # The image bakes "stable" into REF_PATH: check out the newest release tag in
@@ -89,6 +90,19 @@ INTERNET_PROBE_HOSTS = ("deb.debian.org", "github.com")
 INTERNET_PROBE_TIMEOUT = 5
 BACKEND_HEALTH_URL = "http://127.0.0.1:8000/health"
 BACKEND_START_TIMEOUT = 600
+
+# Orange Pi 5 Pro only: this board has no usable SPI flash, so the
+# bootloader (idbloader/U-Boot, raw sectors ahead of partition 1) and /boot
+# always stay on the SD card — only the rootfs itself ever moves to NVMe,
+# by retargeting /boot/orangepiEnv.txt's rootdev= (see _relocate_root_to_nvme).
+NVME_ROOT_LABEL = "opi_root"  # cosmetic (lsblk/blkid); boot selects root by UUID, not label
+MIN_NVME_BYTES = 16 * 1024 ** 3  # ignore anything implausibly small
+STORAGE_CHOICE_PATH = STAMP_DIR / "storage-choice"  # "sd" | "nvme", written by the form's POST
+# Written just before the reboot that follows a relocation, so rsync carries
+# it onto the new root too — the one thing this stage checks to know it has
+# already run, across the reboot it itself causes.
+STORAGE_RELOCATED_PATH = STAMP_DIR / "storage-relocated"
+WAITING_FOR_STORAGE_CHOICE = "waiting for the storage choice"
 
 
 log = logging.getLogger("sorteros-firstboot")
@@ -124,6 +138,7 @@ _runtime: dict = {"net": False, "started_at": time.time(), "starting_since": Non
 
 
 STEP_WORDS = {
+    "choose-storage-target": "Choosing where to install",
     "ssh-host-keys": "Making the machine's keys",
     "grow-rootfs": "Growing the disk",
     "setup-swap": "Making swap",
@@ -137,6 +152,8 @@ STEP_WORDS = {
 }
 
 PHASE_WORDS = {
+    "choosing": ("Where should this install?",
+                 "An SSD is fitted. Pick SD card or NVMe SSD below — this only asks once."),
     "installing": ("Installing the Sorter",
                    "This takes a few minutes. This page opens the Sorter UI when it's ready."),
     "waiting": ("Waiting for the internet",
@@ -224,6 +241,8 @@ def _progress() -> dict:
         phase = "starting"
     elif snapshot.get(nxt.name, {}).get("info") == WAITING_FOR_INTERNET:
         phase = "waiting"
+    elif snapshot.get(nxt.name, {}).get("info") == WAITING_FOR_STORAGE_CHOICE:
+        phase = "choosing"
     else:
         phase = "installing"
 
@@ -240,7 +259,8 @@ def _progress() -> dict:
         # A stage that waits on an earlier one says "… yet"; that is not a failure.
         errors = [st.get("info") for st in states
                   if st.get("status") in ("waiting", "failed") and st.get("info")
-                  and st.get("info") != WAITING_FOR_INTERNET and not st.get("info", "").endswith(" yet")]
+                  and st.get("info") not in (WAITING_FOR_INTERNET, WAITING_FOR_STORAGE_CHOICE)
+                  and not st.get("info", "").endswith(" yet")]
         active = next((st for st in states if st.get("status") == "active"), None)
         if "install-services" in row["stages"] and phase == "starting":
             # Starting the Sorter is done when the UI has port 80, and then
@@ -254,6 +274,8 @@ def _progress() -> dict:
             row["state"], row["detail"] = "retrying", errors[0]
         elif any(st.get("info") == WAITING_FOR_INTERNET for st in states):
             row["state"], row["detail"] = "waiting", "Waiting for the internet"
+        elif any(st.get("info") == WAITING_FOR_STORAGE_CHOICE for st in states):
+            row["state"], row["detail"] = "waiting", "Choose SD card or NVMe below"
         else:
             row["state"], row["detail"] = "pending", ""
 
@@ -333,6 +355,13 @@ code{font-family:var(--mono);font-size:.875rem;overflow-wrap:anywhere}
 .opening{display:none}
 [data-opening] .opening{display:flex}
 [data-opening] .phase{display:none}
+.choosing{display:none}
+[data-firstboot="choosing"] .choosing{display:flex}
+[data-firstboot="choosing"] .phase{display:none}
+.choosing form{display:flex;gap:.5rem;margin-top:.25rem}
+.choosing button{flex:1;padding:.625rem 1rem;border:1px solid var(--line);border-radius:1px;
+background:var(--surface);color:var(--ink);font:inherit;font-weight:500;cursor:pointer}
+.choosing button:hover{border-color:var(--primary-ink)}
 .spinner{position:relative;display:inline-block;flex:none;width:var(--s);height:var(--s)}
 .spinner i{position:absolute;width:42%;height:42%;background:currentColor;opacity:.2;animation:quarter .667s linear infinite}
 .spinner i:nth-child(1){top:0;left:0}
@@ -400,6 +429,12 @@ def _render_status_page() -> bytes:
         f'<div><h1>{esc(headline)}</h1><p>{esc(lede)}</p></div></section>'
         f'<section class="panel hero opening">{_spinner(32)}'
         '<div><h1>Opening the Sorter UI</h1><p>It takes up to a minute the first time.</p></div></section>'
+        '<section class="panel hero choosing">'
+        f'<div><h1>{esc(PHASE_WORDS["choosing"][0])}</h1><p>{esc(PHASE_WORDS["choosing"][1])}</p>'
+        '<form method="post" action="/choose-storage">'
+        '<button type="submit" name="target" value="sd">SD card</button>'
+        '<button type="submit" name="target" value="nvme">NVMe SSD</button>'
+        '</form></div></section>'
         '<section class="phase"><div class="label-row"><h2 class="label">Steps</h2>'
         f'<span class="count">{done} of {len(p["rows"])} done</span></div>'
         f'<ol class="panel steps">{"".join(rows)}</ol></section>'
@@ -433,6 +468,21 @@ class _StatusHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self) -> None:  # noqa: N802 (BaseHTTPRequestHandler convention)
+        if self.path != "/choose-storage":
+            self.send_response(404)
+            self.end_headers()
+            return
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        body = self.rfile.read(length).decode("utf-8", errors="replace")
+        target = urllib.parse.parse_qs(body).get("target", [""])[0]
+        if target in ("sd", "nvme") and not STORAGE_CHOICE_PATH.exists():
+            STORAGE_CHOICE_PATH.write_text(target + "\n")
+            log.info("storage target chosen: %s", target)
+        self.send_response(303)
+        self.send_header("Location", "/")
+        self.end_headers()
 
     def log_message(self, *_args, **_kw) -> None:  # noqa: N802
         return  # silence default access log
@@ -509,6 +559,149 @@ def _generate_machine_name() -> str:
     return f"sorter-{color}-{piece}-{suffix}"
 
 
+def _root_device() -> str:
+    """The block device mounted at / (e.g. /dev/mmcblk1p1, /dev/nvme0n1p1)."""
+    for line in Path("/proc/mounts").read_text().splitlines():
+        cols = line.split()
+        if len(cols) >= 2 and cols[1] == "/":
+            root_dev = cols[0]
+            if root_dev.startswith("/dev/"):
+                return root_dev
+            raise RuntimeError(f"unexpected root device: {root_dev}")
+    raise RuntimeError("cannot find the root device in /proc/mounts")
+
+
+def _nvme_candidate() -> Path | None:
+    """The first big-enough NVMe disk, or None if there isn't one fitted."""
+    base = Path("/sys/class/nvme")
+    if not base.is_dir():
+        return None
+    for entry in sorted(base.iterdir()):
+        block = Path(f"/dev/{entry.name}n1")
+        try:
+            size_bytes = int(Path(f"/sys/class/block/{block.name}/size").read_text()) * 512
+        except OSError:
+            continue
+        if block.exists() and size_bytes >= MIN_NVME_BYTES:
+            return block
+    return None
+
+
+def _nvme_root_partition(nvme_disk: Path) -> str:
+    # nvme device names end in a digit (nvme0n1), so the partition number
+    # needs the same p-separator mmcblk uses (see stage_grow_rootfs's own
+    # comment on this) — nvme0n1 → nvme0n1p1.
+    return f"{nvme_disk}p1" if nvme_disk.name[-1].isdigit() else f"{nvme_disk}1"
+
+
+def _blkid_uuid(device: str) -> str:
+    uuid = subprocess.check_output(["blkid", "-s", "UUID", "-o", "value", device], text=True).strip()
+    if not uuid:
+        raise RuntimeError(f"blkid found no UUID for {device}")
+    return uuid
+
+
+def _relocate_root_to_nvme(nvme_disk: Path) -> None:
+    """Move the current rootfs onto `nvme_disk`, then reboot onto it.
+
+    This stage runs first, but the orchestrator (main(), below) has no
+    concept of one stage depending on another — every poll pass just
+    retries every stage that isn't done yet, in list order, so the other
+    before_ui stages (clone-repo, uv-sync, pnpm-*, ...) can easily finish
+    before the user answers the storage question if they take a while. That
+    only makes this rsync bigger and slower, never wrong: it copies
+    whatever is on / the moment the answer comes in, be that the bare image
+    or an already fully installed Sorter.
+
+    Root is picked by /boot/orangepiEnv.txt's `rootdev=` line (boot.cmd/
+    boot.scr read it and pass it straight through as the kernel's `root=`),
+    confirmed by inspecting an actual built image's boot.cmd — NOT a label
+    (the QEMU test harness's root=LABEL=opi_root, test/boot.sh, is its own
+    shortcut and does not reflect U-Boot's real boot path). Moving root is
+    therefore one line in that file, set to the new filesystem's UUID once
+    it exists — SD stays the boot partition, /boot never moves. Never edits
+    it until the NVMe copy is written, confirmed readable, and has its own
+    fstab corrected, so a failure here always leaves the SD card exactly as
+    bootable as it was.
+    """
+    env_path = Path("/boot/orangepiEnv.txt")
+    if not env_path.is_file():
+        raise RuntimeError(f"{env_path} not found — cannot retarget root for NVMe")
+    old_uuid = _blkid_uuid(_root_device())
+    nvme_part = _nvme_root_partition(nvme_disk)
+
+    sh(["parted", "-s", str(nvme_disk), "mklabel", "gpt", "mkpart", "primary", "ext4", "0%", "100%"])
+    sh(["mkfs.ext4", "-F", "-L", NVME_ROOT_LABEL, nvme_part])
+    new_uuid = _blkid_uuid(nvme_part)
+
+    mnt = Path("/mnt/nvme-root")
+    mnt.mkdir(parents=True, exist_ok=True)
+    sh(["mount", nvme_part, str(mnt)])
+    try:
+        rsync_cmd = ["rsync", "-aHAX", "--numeric-ids",
+                     "--exclude=/proc/*", "--exclude=/sys/*", "--exclude=/dev/*",
+                     "--exclude=/run/*", "--exclude=/tmp/*", "--exclude=/mnt/*",
+                     "/", f"{mnt}/"]
+        sh(rsync_cmd)
+        # Only written to the SD card (still live root right now), then
+        # carried onto the NVMe copy by the second pass below — the mark
+        # this stage checks for across the reboot it's about to cause.
+        STORAGE_RELOCATED_PATH.write_text(str(nvme_disk) + "\n")
+        sh(rsync_cmd)  # near-instant: catches the stamp file and anything else that changed mid-copy
+
+        # The copy's own fstab still names the SD card's UUID (rsync copied
+        # it verbatim) — fix it to the filesystem it actually lives on, so
+        # systemd's remount-root step matches what the kernel already
+        # mounted instead of looking for a UUID that is no longer root.
+        fstab = mnt / "etc/fstab"
+        text = fstab.read_text()
+        fixed = text.replace(f"UUID={old_uuid}", f"UUID={new_uuid}")
+        if fixed == text:
+            raise RuntimeError(f"{fstab} has no UUID={old_uuid} line to retarget")
+        fstab.write_text(fixed)
+    finally:
+        sh(["umount", str(mnt)])
+
+    # Verified copy in place, with its own fstab already correct: only now
+    # is it safe to retarget what the SD card's bootloader boots into.
+    env_text = env_path.read_text()
+    new_env_text = re.sub(r"(?m)^rootdev=.*$", f"rootdev=UUID={new_uuid}", env_text)
+    if new_env_text == env_text:
+        raise RuntimeError(f"{env_path} has no rootdev= line to retarget")
+    env_path.write_text(new_env_text)
+    log.info("root relocated to %s (UUID=%s); rebooting onto it", nvme_part, new_uuid)
+    sh(["sync"])
+    sh(["reboot"])
+
+
+def stage_choose_storage_target() -> None:
+    if STORAGE_RELOCATED_PATH.exists():
+        root_dev = _root_device()
+        if "nvme" in root_dev:
+            return  # confirmed: running from the relocated NVMe root
+        # Retargeted rootdev= for NVMe but came back up on something else —
+        # the board didn't take it. Surface this loudly rather than
+        # silently retrying (which would now source a relocation from a
+        # card whose own orangepiEnv.txt no longer points at it) or
+        # silently calling it done.
+        raise RuntimeError(
+            f"relocated to NVMe but booted from {root_dev} — check "
+            "/boot/orangepiEnv.txt's rootdev= on the SD card"
+        )
+    nvme = _nvme_candidate()
+    if nvme is None:
+        return  # no SSD fitted: stay on SD, nothing to ask
+    try:
+        choice = STORAGE_CHOICE_PATH.read_text().strip()
+    except OSError:
+        choice = ""
+    if choice not in ("sd", "nvme"):
+        raise RuntimeError(WAITING_FOR_STORAGE_CHOICE)
+    if choice == "sd":
+        return
+    _relocate_root_to_nvme(nvme)
+
+
 def stage_ssh_host_keys() -> None:
     if list(Path("/etc/ssh").glob("ssh_host_*_key")):
         return
@@ -516,15 +709,7 @@ def stage_ssh_host_keys() -> None:
 
 
 def stage_grow_rootfs() -> None:
-    # Find the block device mounted at /.
-    root_dev = None
-    for line in Path("/proc/mounts").read_text().splitlines():
-        cols = line.split()
-        if len(cols) >= 2 and cols[1] == "/":
-            root_dev = cols[0]
-            break
-    if not root_dev or not root_dev.startswith("/dev/"):
-        raise RuntimeError(f"unexpected root device: {root_dev}")
+    root_dev = _root_device()
 
     # Split device + partition number.
     # mmcblk/nvme:  /dev/mmcblk1p1  → disk=/dev/mmcblk1, part=1
@@ -847,6 +1032,7 @@ def stage_tailscale_up() -> None:
 
 
 STAGES: list[Stage] = [
+    Stage("choose-storage-target", needs_internet=False, run=stage_choose_storage_target),
     Stage("ssh-host-keys",       needs_internet=False, run=stage_ssh_host_keys),
     Stage("grow-rootfs",         needs_internet=False, run=stage_grow_rootfs),
     Stage("setup-swap",          needs_internet=False, run=stage_setup_swap),

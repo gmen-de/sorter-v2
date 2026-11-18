@@ -25,7 +25,6 @@ from local_state import (
 )
 from toml_config import getMachineNickname, setMachineNickname
 from server.set_progress_sync import getSetProgressSyncWorker
-from server.waveshare_inventory import get_waveshare_inventory_manager
 from server.security import is_ui_origin_allowed
 
 import server.shared_state as shared_state
@@ -154,6 +153,7 @@ from server.routers.status_ping import router as status_ping_router
 from server.routers.sharing import router as sharing_router
 from server.routers.leds import router as leds_router
 from server.routers.zones import router as zones_router
+from server.routers.nextcloud import router as nextcloud_router
 
 app.include_router(hardware_router)
 app.include_router(steppers_router)
@@ -193,6 +193,7 @@ app.include_router(versions_router)
 app.include_router(status_ping_router)
 app.include_router(zones_router)
 app.include_router(leds_router)
+app.include_router(nextcloud_router)
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -232,7 +233,6 @@ async def onStartup() -> None:
     asyncio.create_task(_loop_lag_probe())
     asyncio.create_task(_heartbeats())
     getSetProgressSyncWorker().start()
-    get_waveshare_inventory_manager().start()
     keep_tailscale_installed()
     from status_ping import getStatusPinger
 
@@ -241,15 +241,20 @@ async def onStartup() -> None:
     from server.routers.sorting_profiles import start_first_default_profile_if_none
 
     start_first_default_profile_if_none()
+    from server.nextcloud_sync import getNextcloudSyncer
+
+    getNextcloudSyncer().start()
 
 
 @app.on_event("shutdown")
 async def onShutdown() -> None:
     getSetProgressSyncWorker().stop()
-    get_waveshare_inventory_manager().stop()
     from status_ping import getStatusPinger
 
     getStatusPinger().stop()
+    from server.nextcloud_sync import getNextcloudSyncer
+
+    getNextcloudSyncer().stop()
 
 
 # ---------------------------------------------------------------------------

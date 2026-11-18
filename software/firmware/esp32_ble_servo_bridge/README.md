@@ -52,8 +52,10 @@ time again rather than all at once, same as onboarding new ones.
 
 ## BLE protocol
 
-The device advertises as `SORTER-SERVO-BLE` using the well-known **Nordic
-UART Service** UUIDs, so any generic BLE serial terminal app (e.g. "Serial
+The device advertises as `SORTER-SERVO-BLE_XX:XX` (the last two bytes of its
+BT MAC, e.g. `SORTER-SERVO-BLE_A7:38` — so a setup with more than one bridge
+board can tell them apart in a scan) using the well-known **Nordic UART
+Service** UUIDs, so any generic BLE serial terminal app (e.g. "Serial
 Bluetooth Terminal", nRF Connect) can talk to it for debugging without any
 custom tooling:
 
@@ -77,7 +79,20 @@ Python client reassembles them on `\n`).
 | `RESETALL` | `RESETALL OK <count>` | Factory-reset every reachable servo (see above). |
 | `LIST` | `GATES <g1> <g2> …` | Which gate IDs currently answer on the bus. |
 | `PING` | `PONG` | Liveness check. |
+| `DEMO ON` / `DEMO OFF` / `DEMO` | `DEMO ON` / `DEMO OFF` | Enable/disable/query demo mode (see below). Persisted across reboots. |
 | anything else | `ERR UNKNOWN_CMD` | |
+
+### Demo mode
+
+With `DEMO ON`, every gate command answers as if the real SC-series servo bus
+were there — after the same roughly one-second delay a real `OPEN`/`CLOSE`
+move takes — without ever touching `Serial1`/the SCServo library. Lets the
+Settings UI (and the rest of the bridge protocol: `LEARN`, `CALIBRATE`,
+`RESETALL`, `LIST`) be exercised, or shown to someone, with no servos wired
+up at all. The simulated gate list starts empty and fills in as gates are
+addressed (`OPEN`/`CLOSE`/`CALIBRATE`) or `LEARN`ed, exactly like reachable
+servos would on the real bus. `DEMO OFF` returns to driving the real bus;
+the on/off state is persisted in NVS, so it survives a reboot.
 
 ### Unsolicited message: `READY GATES <g1> <g2> …`
 

@@ -16,7 +16,9 @@
 
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <Preferences.h>
 #include <SCServo.h>
+#include <esp_mac.h>
 
 // -- Servo bus -------------------------------------------------------------
 
@@ -65,6 +67,32 @@ static inline int gateForId(uint8_t id) { return (int)id - GATE_ID_OFFSET; }
 
 NimBLECharacteristic *gTxCharacteristic = nullptr;
 String gRxLineBuffer;
+
+// ---------------------------------------------------------------------------
+// Demo mode — lets the Settings UI be exercised (and shown to someone) with
+// no real servos wired up. Every gate-level command answers as if the real
+// bus were there, after the same delay a real move would take, but never
+// touches Serial1/SCServo. Persisted in NVS so it survives a reboot (e.g.
+// the Octopus-flash-triggered reset that also resets this board, when both
+// are on the same USB hub) instead of silently reverting to "real" hardware.
+// ---------------------------------------------------------------------------
+
+Preferences gPrefs;
+bool gDemoMode = false;
+
+#define DEMO_DELAY_MS 1000
+#define DEMO_MAX_GATE 60
+
+struct DemoGate {
+  bool known = false;
+  bool open = false;
+};
+DemoGate gDemoGates[DEMO_MAX_GATE + 1];  // index 1..DEMO_MAX_GATE used, 0 unused
+
+void setDemoMode(bool enabled) {
+  gDemoMode = enabled;
+  gPrefs.putBool("demo", enabled);
+}
 
 // ---------------------------------------------------------------------------
 // Low-level servo helpers (thin wrappers over the vendored SCServo library)
@@ -197,6 +225,14 @@ bool calibrateServo(uint8_t id, uint16_t &safeMin, uint16_t &safeMax) {
 // ---------------------------------------------------------------------------
 
 String cmdOpenClose(int gate, bool open) {
+  if (gDemoMode) {
+    if (gate < 1 || gate > DEMO_MAX_GATE) return String(gate) + " ERR UNCALIBRATED";
+    delay(DEMO_DELAY_MS);
+    gDemoGates[gate].known = true;
+    gDemoGates[gate].open = open;
+    return String(gate) + (open ? " OPEN" : " CLOSED");
+  }
+
   uint8_t id = idForGate(gate);
   uint16_t minV, maxV;
   if (!readLimits(id, minV, maxV) || !isCalibrated(minV, maxV)) {
@@ -222,6 +258,12 @@ String cmdOpenClose(int gate, bool open) {
 }
 
 String cmdStatus(int gate) {
+  if (gDemoMode) {
+    if (gate < 1 || gate > DEMO_MAX_GATE) return String(gate) + " ERR UNCALIBRATED";
+    if (!gDemoGates[gate].known) return String(gate) + " UNKNOWN";
+    return String(gate) + (gDemoGates[gate].open ? " OPEN" : " CLOSED");
+  }
+
   uint8_t id = idForGate(gate);
   uint16_t minV, maxV;
   if (!readLimits(id, minV, maxV)) return String(gate) + " ERR OFFLINE";
@@ -237,6 +279,18 @@ String cmdStatus(int gate) {
 }
 
 String cmdLearn() {
+  if (gDemoMode) {
+    for (int gate = 1; gate <= DEMO_MAX_GATE; gate++) {
+      if (!gDemoGates[gate].known) {
+        delay(DEMO_DELAY_MS);
+        gDemoGates[gate].known = true;
+        gDemoGates[gate].open = false;
+        return "LEARNED " + String(gate) + " OK";
+      }
+    }
+    return "LEARN NONE";
+  }
+
   if (!pingServo(FACTORY_ID)) return "LEARN NONE";
 
   int nextId = MIN_GATE_ID;
@@ -261,6 +315,14 @@ String cmdLearn() {
 }
 
 String cmdCalibrate(int gate) {
+  if (gDemoMode) {
+    if (gate < 1 || gate > DEMO_MAX_GATE) return "CALIBRATE ERR " + String(gate);
+    delay(DEMO_DELAY_MS);
+    gDemoGates[gate].known = true;
+    gDemoGates[gate].open = false;
+    return "CALIBRATED " + String(gate);
+  }
+
   uint8_t id = idForGate(gate);
   if (!pingServo(id)) return "CALIBRATE ERR " + String(gate) + " OFFLINE";
   uint16_t safeMin, safeMax;
@@ -269,6 +331,15 @@ String cmdCalibrate(int gate) {
 }
 
 String cmdResetAll() {
+  if (gDemoMode) {
+    int count = 0;
+    for (int gate = 1; gate <= DEMO_MAX_GATE; gate++) {
+      if (gDemoGates[gate].known) count++;
+      gDemoGates[gate] = DemoGate();
+    }
+    return "RESETALL OK " + String(count);
+  }
+
   int count = 0;
   for (int id = FACTORY_ID; id <= MAX_GATE_ID; id++) {
     if (id > FACTORY_ID && id < MIN_GATE_ID) continue;  // 2..10 are never used
@@ -296,6 +367,12 @@ String cmdResetAll() {
 // sent once a client subscribes to notifications (see TxCallbacks below).
 String scanGateIds() {
   String gates;
+  if (gDemoMode) {
+    for (int gate = 1; gate <= DEMO_MAX_GATE; gate++) {
+      if (gDemoGates[gate].known) gates += " " + String(gate);
+    }
+    return gates;
+  }
   for (int id = MIN_GATE_ID; id <= MAX_GATE_ID; id++) {
     if (pingServo((uint8_t)id)) {
       gates += " " + String(gateForId((uint8_t)id));
@@ -339,6 +416,14 @@ String handleCommand(const String &line) {
   if (verb == "RESETALL") return cmdResetAll();
   if (verb == "LIST") return cmdList();
   if (verb == "PING") return "PONG";
+  if (verb == "DEMO") {
+    String arg = rest;
+    arg.toUpperCase();
+    if (arg == "ON") setDemoMode(true);
+    else if (arg == "OFF") setDemoMode(false);
+    else if (arg.length() > 0) return "ERR BAD_DEMO_ARG";
+    return String("DEMO ") + (gDemoMode ? "ON" : "OFF");
+  }
 
   return "ERR UNKNOWN_CMD";
 }
@@ -384,14 +469,35 @@ class RxCallbacks : public NimBLECharacteristicCallbacks {
 // having to ask first.
 void sendInventory() { sendNotify("READY GATES" + scanGateIds()); }
 
+// onSubscribe() runs on NimBLE's own host task, as part of it handling the
+// client's CCCD write — calling notify() synchronously from inside it (as a
+// first version of this did) raced that same write and made the host
+// return ATT_ERR_UNLIKELY for it, dropping the connection right after
+// "connected" (confirmed with bleak's debug log: StartNotify fails, then an
+// immediate disconnect). So this only raises a flag; loop() sends the
+// notification from outside the callback, once the subscribe is done.
+volatile bool gSendInventoryPending = false;
+
 class TxCallbacks : public NimBLECharacteristicCallbacks {
   void onSubscribe(NimBLECharacteristic *pCharacteristic, ble_gap_conn_desc *desc, uint16_t subValue) override {
-    if (subValue > 0) sendInventory();
+    if (subValue > 0) gSendInventoryPending = true;
   }
 };
 
+// "SORTER-SERVO-BLE" plus the last two bytes of the BT MAC (e.g.
+// "SORTER-SERVO-BLE_A7:38"), so a setup with more than one bridge board can
+// tell them apart in a BLE scan, and a one-board setup still recognizes the
+// name without needing to know its MAC at all.
+String bleDeviceName() {
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_BT);
+  char suffix[6];
+  snprintf(suffix, sizeof(suffix), "%02X:%02X", mac[4], mac[5]);
+  return String("SORTER-SERVO-BLE_") + suffix;
+}
+
 void setupBle() {
-  NimBLEDevice::init("SORTER-SERVO-BLE");
+  NimBLEDevice::init(bleDeviceName().c_str());
   NimBLEServer *server = NimBLEDevice::createServer();
   NimBLEService *service = server->createService(SVC_UUID);
 
@@ -417,12 +523,22 @@ void setup() {
   Serial1.begin(SERVO_BAUD, SERIAL_8N1, S_RXD, S_TXD);
   sc.pSerial = &Serial1;
 
+  gPrefs.begin("sorter_ble", false);
+  gDemoMode = gPrefs.getBool("demo", false);
+
   setupBle();
 
   Serial.println("esp32_ble_servo_bridge ready");
+  if (gDemoMode) Serial.println("demo mode: ON (no real servo bus)");
 }
 
 void loop() {
-  // All work happens in RxCallbacks::onWrite(), triggered by BLE writes.
+  // Most work happens in RxCallbacks::onWrite(), triggered by BLE writes.
+  // The one exception: the post-subscribe inventory push, deferred here from
+  // TxCallbacks::onSubscribe() (see gSendInventoryPending's comment).
+  if (gSendInventoryPending) {
+    gSendInventoryPending = false;
+    sendInventory();
+  }
   delay(10);
 }

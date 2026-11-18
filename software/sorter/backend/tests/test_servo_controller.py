@@ -23,7 +23,6 @@ sys.modules.setdefault("global_config", global_config_stub)
 irl_stub = types.ModuleType("irl")
 parse_user_toml_stub = types.ModuleType("irl.parse_user_toml")
 parse_user_toml_stub.ServoChannelConfig = object
-parse_user_toml_stub.WaveshareServoConfig = object
 parse_user_toml_stub.WaveshareBleServoConfig = object
 irl_stub.parse_user_toml = parse_user_toml_stub
 sys.modules.setdefault("irl", irl_stub)
@@ -48,7 +47,6 @@ sys.modules[spec.name] = servo_controller
 spec.loader.exec_module(servo_controller)
 
 LayerServoAssignment = servo_controller.LayerServoAssignment
-WaveshareServoController = servo_controller.WaveshareServoController
 WaveshareBleServoController = servo_controller.WaveshareBleServoController
 
 
@@ -58,35 +56,6 @@ class _Logger:
 
     def warning(self, *_args, **_kwargs) -> None:
         return
-
-
-class WaveshareServoControllerTests(unittest.TestCase):
-    def test_missing_trailing_assignments_are_treated_as_unassigned(self) -> None:
-        controller = WaveshareServoController(
-            SimpleNamespace(logger=_Logger()),
-            port=None,
-            assignments=[
-                LayerServoAssignment(id=2, invert=True),
-                LayerServoAssignment(id=None, invert=False),
-            ],
-            mcu_ports=[],
-        )
-        layout = SimpleNamespace(
-            layers=[
-                SimpleNamespace(enabled=True),
-                SimpleNamespace(enabled=False),
-                SimpleNamespace(enabled=False),
-                SimpleNamespace(enabled=False),
-            ]
-        )
-
-        assignments = controller._iter_layer_assignments(layout)
-
-        self.assertEqual(4, len(assignments))
-        self.assertEqual(2, assignments[0][1].id)
-        self.assertIsNone(assignments[1][1].id)
-        self.assertIsNone(assignments[2][1].id)
-        self.assertIsNone(assignments[3][1].id)
 
 
 class WaveshareBleServoControllerTests(unittest.TestCase):

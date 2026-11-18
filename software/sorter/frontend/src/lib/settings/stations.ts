@@ -6,6 +6,7 @@ import Database from '@lucide/svelte/icons/database';
 import Gauge from '@lucide/svelte/icons/gauge';
 import Timer from '@lucide/svelte/icons/timer';
 import GitBranch from '@lucide/svelte/icons/git-branch';
+import Joystick from '@lucide/svelte/icons/joystick';
 import Layers3 from '@lucide/svelte/icons/layers';
 import Network from '@lucide/svelte/icons/network';
 import Palette from '@lucide/svelte/icons/palette';
@@ -13,6 +14,7 @@ import Settings from '@lucide/svelte/icons/settings';
 import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 import Wifi from '@lucide/svelte/icons/wifi';
+import CloudUpload from '@lucide/svelte/icons/cloud-upload';
 import Wrench from '@lucide/svelte/icons/wrench';
 import Zap from '@lucide/svelte/icons/zap';
 import {
@@ -99,6 +101,12 @@ export const hiveModelsNavItem: SettingsNavItem = {
 	icon: Cpu
 };
 
+export const nextcloudNavItem: SettingsNavItem = {
+	href: '/settings/nextcloud',
+	label: 'Nextcloud',
+	icon: CloudUpload
+};
+
 export const classificationProvidersNavItem: SettingsNavItem = {
 	href: '/settings/providers',
 	label: 'Providers',
@@ -147,6 +155,12 @@ export const controlBoardNavItem: SettingsNavItem = {
 	href: '/settings/control-board',
 	label: 'Control board',
 	icon: CircuitBoard
+};
+
+export const servoControlNavItem: SettingsNavItem = {
+	href: '/settings/servo-control',
+	label: 'Servo control',
+	icon: Joystick
 };
 
 export const jitterTestNavItem: SettingsNavItem = {
@@ -265,6 +279,7 @@ export const settingsNavItems: SettingsNavEntry[] = [
 	appearanceNavItem,
 	hiveNavItem,
 	dataNavItem,
+	nextcloudNavItem,
 	hiveModelsNavItem,
 	classificationProvidersNavItem,
 	versionsNavItem,
@@ -273,6 +288,7 @@ export const settingsNavItems: SettingsNavEntry[] = [
 	chuteNavItem,
 	storageLayersNavItem,
 	controlBoardNavItem,
+	servoControlNavItem,
 	{ type: 'heading', label: 'Helpers' },
 	incidentsNavItem,
 	cycleTimeNavItem,

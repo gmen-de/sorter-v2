@@ -14,14 +14,20 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 import server.shared_state as shared_state
-from hardware import firmware_flash
+from hardware import firmware_flash, octopus_boot_gpio
 from hardware.bus import MCUBus, MCUDevice
 from hardware.firmware_flash import FlashCancelled, FlashError
 
 router = APIRouter()
 
-GITHUB_REPO = "basicallysource/sorter-v2"
-GITHUB_RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
+GITHUB_REPO = "gmen-de/sorter-v2"
+# Firmware releases from our own fork (where new board ports like the
+# Octopus port land) AND from upstream (existing RP2040 releases, still the
+# right firmware for machines with those boards) — merged, not one
+# replacing the other. The frontend/asset-family matching below already
+# only lets you pick an asset compatible with whatever board is connected,
+# so showing both sources' releases together is safe.
+GITHUB_FIRMWARE_REPOS = [GITHUB_REPO, "basicallysource/sorter-v2"]
 GITHUB_RELEASES_PAGE = 100  # the most GitHub returns at once
 RELEASES_CACHE_TTL_S = 60.0
 UPLOAD_DIR = "/tmp/sorter-firmware-uploads"
@@ -34,6 +40,8 @@ _ASSET_PATTERNS: List[tuple[re.Pattern[str], str, str, str]] = [
     (re.compile(r"^basically-v1-1-feeder-.*\.uf2$"), "basically_rp2040", "feeder-v1-1", "feeder"),
     (re.compile(r"^basically-v1-1-distribution-.*\.uf2$"), "basically_rp2040", "distribution-v1-1", "distribution"),
     (re.compile(r"^basically-v1-2-distribution-.*\.uf2$"), "basically_rp2040", "distribution-v1-2", "distribution"),
+    (re.compile(r"^octopus-distribution-.*\.bin$"), "octopus", "distribution-octopus", "distribution"),
+    (re.compile(r"^esp32-ble-servo-bridge-.*\.bin$"), "esp32_ble_bridge", "esp32-ble-servo-bridge", "servo_bridge"),
     (re.compile(r"^feeder-skr-.*\.uf2$"), "skr_pico", "feeder-skr", "feeder"),
     (re.compile(r"^distribution-skr-.*\.uf2$"), "skr_pico", "distribution-skr", "distribution"),
 ]
@@ -251,7 +259,7 @@ def get_firmware_boards(refresh: bool = False) -> Dict[str, Any]:
         return {
             "boards": live,
             "hardware_state": shared_state.hardware_state,
-            "bootloader_present": firmware_flash.bootloaderPresent(),
+            "bootloader_present": firmware_flash.anyBootloaderPresent(),
             "flash_allowed": False,
             "flash_blocked_reason": "Hardware is initialized. Reset to standby before flashing.",
         }
@@ -271,7 +279,7 @@ def get_firmware_boards(refresh: bool = False) -> Dict[str, Any]:
         return {
             "boards": [],
             "hardware_state": shared_state.hardware_state,
-            "bootloader_present": firmware_flash.bootloaderPresent(),
+            "bootloader_present": firmware_flash.anyBootloaderPresent(),
             "flash_allowed": False,
             "flash_blocked_reason": "A flash is in progress.",
             "active_job_id": active_job.id,
@@ -293,7 +301,7 @@ def get_firmware_boards(refresh: bool = False) -> Dict[str, Any]:
     return {
         "boards": boards,
         "hardware_state": shared_state.hardware_state,
-        "bootloader_present": firmware_flash.bootloaderPresent(),
+        "bootloader_present": firmware_flash.anyBootloaderPresent(),
         "flash_allowed": True,
         "flash_blocked_reason": None,
     }
@@ -333,14 +341,15 @@ def _parseChangelog(body: str) -> Optional[Dict[str, Any]]:
     return {"heading": heading, "entries": entries}
 
 
-def _fetchAllReleases() -> List[Dict[str, Any]]:
-    """Every release in the repo, newest first. Firmware shares the repo with
+def _fetchAllReleases(repo: str) -> List[Dict[str, Any]]:
+    """Every release in one repo, newest first. Firmware shares the repo with
     Hive and SorterOS, which release far more often: the newest firmware was
     32nd on 2026-09-24, so a first page of 20 held none of it."""
     releases: List[Dict[str, Any]] = []
+    url = f"https://api.github.com/repos/{repo}/releases"
     for page in range(1, 21):
         res = requests.get(
-            GITHUB_RELEASES_URL,
+            url,
             params={"per_page": GITHUB_RELEASES_PAGE, "page": page},
             headers={"Accept": "application/vnd.github+json"},
             timeout=10,
@@ -364,20 +373,27 @@ def get_firmware_releases(refresh: bool = False) -> Dict[str, Any]:
     ):
         return _releases_cache["data"]
 
-    try:
-        raw_releases = _fetchAllReleases()
-    except Exception as exc:
+    fetch_errors: List[str] = []
+    raw_releases: List[tuple[str, Dict[str, Any]]] = []
+    for repo in GITHUB_FIRMWARE_REPOS:
+        try:
+            raw_releases += [(repo, r) for r in _fetchAllReleases(repo)]
+        except Exception as exc:
+            fetch_errors.append(f"{repo}: {exc}")
+
+    if not raw_releases and fetch_errors:
         if _releases_cache["data"] is not None:
             stale = dict(_releases_cache["data"])
             stale["stale"] = True
-            stale["fetch_error"] = str(exc)
+            stale["fetch_error"] = "; ".join(fetch_errors)
             return stale
         raise HTTPException(
-            status_code=502, detail=f"Could not reach GitHub releases: {exc}"
+            status_code=502,
+            detail=f"Could not reach GitHub releases: {'; '.join(fetch_errors)}",
         )
 
     releases = []
-    for release in raw_releases:
+    for repo, release in raw_releases:
         tag = release.get("tag_name", "")
         if not tag.startswith("firmware/"):
             continue
@@ -393,14 +409,21 @@ def get_firmware_releases(refresh: bool = False) -> Dict[str, Any]:
                 "tag": tag,
                 "version": tag.removeprefix("firmware/"),
                 "name": release.get("name"),
+                "repo": repo,
                 "published_at": release.get("published_at"),
                 "prerelease": bool(release.get("prerelease")),
                 "changelog": _parseChangelog(release.get("body") or ""),
                 "assets": assets,
             }
         )
+    releases.sort(key=lambda r: r.get("published_at") or "", reverse=True)
 
-    payload = {"releases": releases, "repo": GITHUB_REPO, "stale": False}
+    payload = {
+        "releases": releases,
+        "repos": GITHUB_FIRMWARE_REPOS,
+        "stale": False,
+        "fetch_error": "; ".join(fetch_errors) if fetch_errors else None,
+    }
     _releases_cache["ts"] = now
     _releases_cache["data"] = payload
     gc.logger.info(f"Fetched {len(releases)} firmware releases from GitHub")
@@ -414,13 +437,17 @@ async def upload_firmware(request: Request, filename: str = "firmware.uf2") -> D
         raise HTTPException(status_code=400, detail="Empty upload.")
     if len(data) > MAX_UF2_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="UF2 file too large (max 16 MB).")
-    problem = firmware_flash.validateUf2(data)
-    if problem is not None:
-        raise HTTPException(status_code=400, detail=f"Invalid UF2: {problem}")
+    # .bin is a raw DFU image (Octopus family) — no UF2 magic to check, the
+    # board itself (not the filename) decides which flashing method runs.
+    is_dfu_image = os.path.splitext(filename)[1].lower() == ".bin"
+    if not is_dfu_image:
+        problem = firmware_flash.validateUf2(data)
+        if problem is not None:
+            raise HTTPException(status_code=400, detail=f"Invalid UF2: {problem}")
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     upload_id = uuid.uuid4().hex[:12]
-    path = os.path.join(UPLOAD_DIR, f"{upload_id}.uf2")
+    path = os.path.join(UPLOAD_DIR, f"{upload_id}{'.bin' if is_dfu_image else '.uf2'}")
     with open(path, "wb") as f:
         f.write(data)
 
@@ -448,8 +475,9 @@ async def upload_firmware(request: Request, filename: str = "firmware.uf2") -> D
 
 
 def _downloadReleaseAsset(gc: Any, job: FlashJob, url: str) -> str:
+    is_dfu_image = url.lower().endswith(".bin")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    path = os.path.join(UPLOAD_DIR, f"release-{job.id}.uf2")
+    path = os.path.join(UPLOAD_DIR, f"release-{job.id}{'.bin' if is_dfu_image else '.uf2'}")
     with requests.get(url, stream=True, timeout=30) as res:
         res.raise_for_status()
         total = int(res.headers.get("Content-Length") or 0)
@@ -462,11 +490,12 @@ def _downloadReleaseAsset(gc: Any, job: FlashJob, url: str) -> str:
                 written += len(chunk)
                 if total:
                     job.setProgress(written / total)
-    with open(path, "rb") as f:
-        data = f.read()
-    problem = firmware_flash.validateUf2(data)
-    if problem is not None:
-        raise FlashError(f"Downloaded asset is not a valid UF2: {problem}")
+    if not is_dfu_image:
+        with open(path, "rb") as f:
+            data = f.read()
+        problem = firmware_flash.validateUf2(data)
+        if problem is not None:
+            raise FlashError(f"Downloaded asset is not a valid UF2: {problem}")
     gc.logger.info(f"Firmware flash {job.id}: downloaded {written} bytes from {url}")
     return path
 
@@ -493,14 +522,35 @@ def _resolveUf2Path(gc: Any, job: FlashJob) -> str:
 
 def _runFlashJob(gc: Any, job: FlashJob) -> None:
     try:
-        uf2_path = _resolveUf2Path(gc, job)
+        image_path = _resolveUf2Path(gc, job)
 
-        already_in_bootloader = firmware_flash.bootloaderPresent()
-        if job.request.recovery or already_in_bootloader:
+        # Which recovery procedure applies is a property of the board, not
+        # something the person flashing it should have to know: a UF2
+        # drag-and-drop bootloader on RP2040-family boards, DFU (BOOT0
+        # jumper + reset, no software-triggered entry — see the Octopus
+        # firmware's own README) on the Octopus. Detected, not chosen.
+        already_in_uf2_bootloader = firmware_flash.bootloaderPresent()
+        already_in_dfu = firmware_flash.dfuDevicePresent()
+
+        if job.request.recovery:
+            if already_in_dfu and already_in_uf2_bootloader:
+                raise FlashError(
+                    "Both a DFU device and an RPI-RP2 drive are present — "
+                    "unplug whichever board you are not flashing and retry."
+                )
+            if already_in_dfu:
+                is_dfu = True
+            elif already_in_uf2_bootloader:
+                is_dfu = False
+            else:
+                raise FlashError(
+                    "Recovery mode but no bootloader detected — plug in a board "
+                    "already in RPI-RP2 or DFU (BOOT0 + reset) mode and retry."
+                )
             job.addLog(
-                "Bootloader already present — skipping reboot command."
-                if already_in_bootloader
-                else "Recovery mode — waiting for a board in bootloader (RPI-RP2)."
+                "Recovery mode — found a board already in "
+                + ("DFU" if is_dfu else "RPI-RP2")
+                + "."
             )
         else:
             port = job.request.board_port
@@ -511,7 +561,7 @@ def _runFlashJob(gc: Any, job: FlashJob) -> None:
             if info is None:
                 raise FlashError(
                     f"No responsive board on {port}. If it is blank or wedged, "
-                    "hold BOOTSEL while replugging and use a recovery flash."
+                    "hold BOOTSEL (RP2040) or use a DFU recovery flash (Octopus)."
                 )
             device_name = info.get("device_name", "?")
             expected = job.request.expected_device_name
@@ -521,20 +571,60 @@ def _runFlashJob(gc: Any, job: FlashJob) -> None:
                     f"'{expected}'. Refusing to flash the wrong board."
                 )
             job.result["previous_version"] = info.get("version")
-            job.setPhase("rebooting", f"Rebooting '{device_name}' into bootloader...")
-            firmware_flash.rebootToBootloader(gc, port)
+            is_dfu = firmware_flash.isOctopusVariant(info)
+            if is_dfu:
+                if already_in_dfu:
+                    job.addLog("Board is already in DFU mode.")
+                elif octopus_boot_gpio.available():
+                    job.setPhase("waiting_bootloader", "Entering DFU over GPIO (BOOT0 + reset)...")
+                    try:
+                        octopus_boot_gpio.enter_dfu()
+                        job.addLog("Drove BOOT0 high and pulsed reset over GPIO.")
+                    except Exception as exc:
+                        job.addLog(
+                            f"GPIO DFU entry failed ({exc}) — set BOOT0 (header J75) "
+                            "and press reset by hand."
+                        )
+                else:
+                    job.setPhase(
+                        "waiting_bootloader",
+                        "Set the BOOT0 jumper and press reset on the Octopus board...",
+                    )
+                    job.addLog(
+                        "No GPIO wiring available for BOOT0/reset — "
+                        "set BOOT0 (header J75) and press reset by hand."
+                    )
+            else:
+                job.setPhase("rebooting", f"Rebooting '{device_name}' into bootloader...")
+                firmware_flash.rebootToBootloader(gc, port)
 
-        job.setPhase("waiting_bootloader", "Waiting for RPI-RP2 drive...")
-        mount = firmware_flash.waitForBootloaderMount(gc, job.cancel_event)
-        job.addLog(f"Bootloader mounted at {mount}")
+        if is_dfu:
+            if not already_in_dfu:
+                job.setPhase("waiting_bootloader", "Waiting for a DFU device...")
+                firmware_flash.waitForDfuDevice(gc, job.cancel_event)
+            job.addLog("DFU device present.")
 
-        job.setPhase("copying", f"Copying {os.path.basename(uf2_path)}...")
-        firmware_flash.copyUf2ToMount(
-            gc, uf2_path, mount, job.cancel_event, job.setProgress
-        )
+            job.setPhase("copying", f"Flashing {os.path.basename(image_path)} via DFU...")
+            firmware_flash.flashViaDfu(gc, image_path, job.cancel_event, job.setProgress)
 
-        job.setPhase("waiting_reboot", "Waiting for the board to reboot...")
-        firmware_flash.waitForBootloaderGone(gc, job.cancel_event)
+            if octopus_boot_gpio.available():
+                try:
+                    octopus_boot_gpio.release_boot0()
+                    job.addLog("Released BOOT0 over GPIO (back to normal boot on next reset).")
+                except Exception as exc:
+                    job.addLog(f"Could not release BOOT0 over GPIO ({exc}) — remove the jumper by hand.")
+        else:
+            job.setPhase("waiting_bootloader", "Waiting for RPI-RP2 drive...")
+            mount = firmware_flash.waitForBootloaderMount(gc, job.cancel_event)
+            job.addLog(f"Bootloader mounted at {mount}")
+
+            job.setPhase("copying", f"Copying {os.path.basename(image_path)}...")
+            firmware_flash.copyUf2ToMount(
+                gc, image_path, mount, job.cancel_event, job.setProgress
+            )
+
+            job.setPhase("waiting_reboot", "Waiting for the board to reboot...")
+            firmware_flash.waitForBootloaderGone(gc, job.cancel_event)
 
         job.setPhase("verifying", "Looking for the board on serial...")
         info = firmware_flash.waitForSerialBoard(gc, job.cancel_event)
@@ -561,7 +651,8 @@ def _runFlashJob(gc: Any, job: FlashJob) -> None:
             "cancelled",
             error=(
                 "Cancelled. If the board was already rebooted to bootloader it is "
-                "waiting in RPI-RP2 — use a recovery flash to finish."
+                "waiting in RPI-RP2 (or DFU, for an Octopus board) — use a "
+                "recovery flash to finish."
             ),
             retryable=True,
         )

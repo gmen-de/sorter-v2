@@ -1,9 +1,9 @@
 """Tests for the chute's configurable position sensor (endstop vs. the
-Octopus board's magnet-ring encoder). See the plan this was built from:
-C:\\Users\\j.grell\\.claude\\plans\\calm-sparking-kettle.md (not committed,
-local to the session that wrote this) and
-software/firmware/octopus_control_board/ChuteEncoder.h for the firmware
-side's own "not yet bench-calibrated" caveat that this mirrors.
+Octopus board's magnet-ring encoder). Updated 2026-11-16 for the
+bench-calibrated, firmware-driven homing/positioning (start_homing(),
+move_to_step_pos()) added this session - see
+software/firmware/octopus_control_board/src/main.cpp and
+subsystems/distribution/chute.py's _homeEncoder()/_moveToAngleEncoder().
 """
 
 import os
@@ -86,11 +86,31 @@ class _FakeStepper:
 
 
 class _FakeChuteEncoder:
-    def __init__(self, *, count: int = 0, count_at_index: int = 0, synced: bool = True):
+    """Mirrors the real ChuteEncoder's firmware-driven behavior: start_homing()
+    and move_to_step_pos() are both fire-and-forget commands whose real
+    effect (zeroing the stepper's position, or driving it to an absolute
+    microstep target) the firmware carries out on its own - so the fake
+    applies that same side effect directly to the fake stepper, the same
+    way the real board eventually would, instead of the test polling a
+    separate "is it done yet" signal across several fake ticks."""
+
+    def __init__(
+        self, *, count: int = 0, count_at_index: int = 0, synced: bool = True,
+        stepper: "_FakeStepper | None" = None, homing_outcome: str = "succeeds",
+    ):
+        # homing_outcome: "succeeds" (default), "times_out" (firmware never
+        # reports homed or failed - e.g. no index event ever seen), or
+        # "fails" (firmware latches chute_homing_failed).
         self._count = count
         self._count_at_index = count_at_index
         self._synced = synced
+        self._stepper = stepper
+        self._homing_outcome = homing_outcome
         self.clear_index_synced_calls = 0
+        self.start_homing_calls = 0
+        self.move_to_step_pos_calls: list[int] = []
+        self._homed = False
+        self._homing_failed = False
 
     def get_count(self) -> int:
         return self._count
@@ -106,6 +126,35 @@ class _FakeChuteEncoder:
 
     def clear_index_synced(self) -> None:
         self.clear_index_synced_calls += 1
+
+    def start_homing(self) -> None:
+        self.start_homing_calls += 1
+        if self._homing_outcome == "times_out":
+            self._homed = False
+            self._homing_failed = False
+            return
+        if self._homing_outcome == "fails":
+            self._homed = False
+            self._homing_failed = True
+            return
+        if self._stepper is not None:
+            self._stepper.position = 0.0
+        self._homed = True
+        self._homing_failed = False
+
+    def get_homing_status(self) -> dict:
+        return {"homed": self._homed, "active": False, "failed": self._homing_failed}
+
+    def move_to_step_pos(self, target_usteps: int) -> None:
+        self.move_to_step_pos_calls.append(target_usteps)
+        if self._stepper is not None:
+            # Absolute command, same units the real firmware/stepper share:
+            # CHUTE_ENCODER_USTEPS_PER_REV microsteps == one full GEAR_RATIO
+            # motor revolution. The fake stepper's "position" is plain motor
+            # degrees (see _FakeStepper's docstring), so convert accordingly.
+            from subsystems.distribution.chute import CHUTE_ENCODER_USTEPS_PER_REV, GEAR_RATIO
+
+            self._stepper.position = target_usteps * (GEAR_RATIO * 360.0 / CHUTE_ENCODER_USTEPS_PER_REV)
 
 
 def _empty_layout() -> SimpleNamespace:
@@ -156,21 +205,18 @@ class ChuteEncoderHomingTests(unittest.TestCase):
     def test_home_dispatches_to_encoder_and_zeroes_position(self) -> None:
         stepper = _FakeStepper()
         stepper.position = 12345  # pre-existing open-loop drift
-        encoder = _FakeChuteEncoder(count=42, count_at_index=40, synced=True)
+        encoder = _FakeChuteEncoder(count=42, count_at_index=40, stepper=stepper)
         chute = self._chute(encoder, stepper)
 
         self.assertTrue(chute.home())
         self.assertTrue(chute.homed)
         self.assertEqual(0, stepper.position)
         self.assertEqual(42, chute._encoder_zero_count)
-        self.assertEqual(1, encoder.clear_index_synced_calls)
-        # Homed at negative speed (same direction convention as the endstop case).
-        self.assertTrue(any(s < 0 for s in stepper.move_at_speed_calls))
+        self.assertEqual(1, encoder.start_homing_calls)
 
-    def test_home_times_out_without_index_sync(self) -> None:
+    def test_home_times_out_when_firmware_never_reports_homed(self) -> None:
         stepper = _FakeStepper()
-        stepper.stopped = False  # never reports stopped -> keeps "moving"
-        encoder = _FakeChuteEncoder(synced=False)
+        encoder = _FakeChuteEncoder(stepper=stepper, homing_outcome="times_out")
         chute = self._chute(encoder, stepper)
 
         # Patch the timeout low so the test doesn't actually wait 15s.
@@ -182,6 +228,14 @@ class ChuteEncoderHomingTests(unittest.TestCase):
             self.assertFalse(chute.home())
         finally:
             chute_module.HOME_TIMEOUT_MS = original_timeout
+        self.assertFalse(chute.homed)
+
+    def test_home_fails_when_firmware_reports_homing_failed(self) -> None:
+        stepper = _FakeStepper()
+        encoder = _FakeChuteEncoder(stepper=stepper, homing_outcome="fails")
+        chute = self._chute(encoder, stepper)
+
+        self.assertFalse(chute.home())
         self.assertFalse(chute.homed)
 
     def test_encoder_properties_raise_in_endstop_mode(self) -> None:
@@ -200,26 +254,36 @@ class ChuteEncoderHomingTests(unittest.TestCase):
 class ChuteShortestPathTests(unittest.TestCase):
     """The reason for switching from endstop to encoder in the first place:
     once the chute can cross 0/360, moves should take the shorter way
-    around, not just be unbounded."""
+    around, not just be unbounded.
+
+    Since this session's firmware rework, the shortest-path WRAP itself is
+    computed on the board (ChuteEncoder.move_to_step_pos(), bench-confirmed
+    there - see software/firmware/octopus_control_board/src/main.cpp's
+    chute_shortest_usteps_delta()), not in chute.py any more. What's left
+    to verify at this layer is that moveToAngle() sends the correct
+    ABSOLUTE target (in the stepper's own microstep frame) for a given
+    chute-degree target, and that current_angle correctly reads back
+    wherever the (fake, here instantly "arrived") stepper ends up."""
 
     def _chute(self, *, encoder: bool) -> tuple[Chute, _FakeStepper]:
         stepper = _FakeStepper()
         if encoder:
             chute = Chute(
-                _fake_gc(), stepper, None, _empty_layout(), chute_encoder=_FakeChuteEncoder()
+                _fake_gc(), stepper, None, _empty_layout(),
+                chute_encoder=_FakeChuteEncoder(stepper=stepper),
             )
         else:
             chute = Chute(_fake_gc(), stepper, object(), _empty_layout())
         return chute, stepper
 
-    def test_encoder_mode_picks_the_shorter_way_across_zero(self) -> None:
+    def test_encoder_mode_targets_the_absolute_microstep_position(self) -> None:
+        from subsystems.distribution.chute import CHUTE_ENCODER_USTEPS_PER_REV
+
         chute, stepper = self._chute(encoder=True)
         stepper.position = 10.0 * GEAR_RATIO  # current_angle == 10°
         chute.moveToAngle(350.0)
-        delta_deg = stepper.move_degrees_calls[-1] / GEAR_RATIO
-        # -20°, not +340° (the "long way" the old direct-delta math would
-        # have taken): crossing zero backwards is the shorter trip.
-        self.assertAlmostEqual(-20.0, delta_deg, places=3)
+        target_usteps = chute.chute_encoder.move_to_step_pos_calls[-1]
+        self.assertEqual(round(350.0 / 360.0 * CHUTE_ENCODER_USTEPS_PER_REV), target_usteps)
         self.assertAlmostEqual(350.0, chute.current_angle, places=3)
 
     def test_endstop_mode_keeps_the_original_direct_path(self) -> None:
@@ -231,12 +295,14 @@ class ChuteShortestPathTests(unittest.TestCase):
         # take the long way around (+340°), exactly as before this change.
         self.assertAlmostEqual(340.0, delta_deg, places=3)
 
-    def test_encoder_mode_shortest_path_also_works_the_other_direction(self) -> None:
+    def test_encoder_mode_also_works_approaching_from_the_other_side(self) -> None:
+        from subsystems.distribution.chute import CHUTE_ENCODER_USTEPS_PER_REV
+
         chute, stepper = self._chute(encoder=True)
         stepper.position = 350.0 * GEAR_RATIO  # current_angle == 350°
         chute.moveToAngle(10.0)
-        delta_deg = stepper.move_degrees_calls[-1] / GEAR_RATIO
-        self.assertAlmostEqual(20.0, delta_deg, places=3)
+        target_usteps = chute.chute_encoder.move_to_step_pos_calls[-1]
+        self.assertEqual(round(10.0 / 360.0 * CHUTE_ENCODER_USTEPS_PER_REV), target_usteps)
         self.assertAlmostEqual(10.0, chute.current_angle, places=3)
 
 
@@ -268,7 +334,7 @@ class ChuteReachabilityTests(unittest.TestCase):
 class ChuteEncoderPositionCheckDriftTests(unittest.TestCase):
     def test_zero_drift_survives_a_full_revolution(self) -> None:
         stepper = _FakeStepper()
-        encoder = _FakeChuteEncoder(count=0, count_at_index=0, synced=True)
+        encoder = _FakeChuteEncoder(count=0, count_at_index=0, stepper=stepper)
         chute = Chute(
             _fake_gc(), stepper, None, _empty_layout(),
             chute_encoder=encoder,

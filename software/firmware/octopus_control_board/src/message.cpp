@@ -99,6 +99,7 @@ void BusMessageProcessor::processIncomingData(char c) {
         if (_rx_buffer_pos < 8) {
             // Empty message, ignore (doesn't even fit the CRC and header)
             _msg_len = 0;
+            _rx_buffer_pos = 0;
             return;
         }
         int res = COBS_decode((uint8_t *)rx_buffer, _rx_buffer_pos, (uint8_t *)_rx_message, sizeof(_rx_message));

@@ -1,54 +1,37 @@
-"""Layer servos, on PCA9685 channels or the Waveshare bus: settings, speeds, calibration and moves."""
+"""Layer servos, on PCA9685 channels or the Waveshare BLE gate bridge: settings, speeds, calibration and moves."""
 
 from __future__ import annotations
 
+import os
+import threading
 import time
+import uuid
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
+import requests
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 import machine_toml
-from hardware.waveshare_bus_service import get_waveshare_bus_service
 from hardware_settings.servos import SPEEDS, ServoSpeeds, applyServoSpeeds, readServoSpeeds, saveServoSpeeds
 from bin_layout_store import set_servo_channel_angle
 from irl.bin_layout import channelIdForLayer, getBinLayout
 from server import shared_state
 from server.routers.steppers import _ensure_not_homing
+from hardware import esp32_flash
+from hardware.waveshare_ble_bridge import scan_devices as _scan_waveshare_ble_devices
 from server.waveshare_ble_inventory import (
     _active_waveshare_ble_bridge,
     get_status as _get_waveshare_ble_status,
     get_waveshare_ble_bridge_for_api,
 )
-from server.waveshare_inventory import (
-    _active_waveshare_service,
-    _configured_waveshare_port,
-    get_waveshare_inventory_manager,
-)
 
-_SERVO_BACKENDS = {"pca9685", "waveshare", "waveshare_ble"}
+_SERVO_BACKENDS = {"pca9685", "waveshare_ble"}
 
 router = APIRouter()
 
 _PCA9685_CHANNEL_COUNT = 16
-
-
-def _get_waveshare_service() -> Any:
-    service = _active_waveshare_service()
-    if service is not None:
-        return service
-    port = _configured_waveshare_port()
-    if port is None:
-        raise HTTPException(status_code=503, detail="No Waveshare bus available.")
-    return get_waveshare_bus_service(port, timeout=0.02)
-
-
-def _waveshare_inventory_status(*, port: str | None = None, refresh: bool = False) -> Dict[str, Any]:
-    manager = get_waveshare_inventory_manager()
-    if refresh:
-        return manager.refresh(port=port, allow_active_runtime_scan=True)
-    return manager.get_status(port=port)
 
 
 class ServoChannelConfigPayload(BaseModel):
@@ -61,17 +44,8 @@ class ServoHardwareSettingsPayload(BaseModel):
     open_speed: Optional[int] = None
     close_speed: Optional[int] = None
     homing_speed: Optional[int] = None
-    port: Optional[str] = None
     device: Optional[str] = None  # BLE address, for backend == "waveshare_ble"
     channels: List[ServoChannelConfigPayload] = []
-
-
-class ServoSetIdPayload(BaseModel):
-    new_id: int
-
-
-class ServoMovePayload(BaseModel):
-    position: str  # "open" | "close" | "center"
 
 
 class ServoNudgePayload(BaseModel):
@@ -136,41 +110,6 @@ def _waveshare_ble_available_gate_ids(config: Dict[str, Any]) -> List[int]:
     bridge = _active_waveshare_ble_bridge()
     if bridge is not None:
         found_ids.update(bridge.known_gates)
-
-    return sorted(found_ids)
-
-
-def _waveshare_available_servo_ids(config: Dict[str, Any]) -> List[int]:
-    found_ids: set[int] = set()
-
-    servo = config.get("servo", {})
-    if isinstance(servo, dict):
-        channels_raw = servo.get("channels", [])
-        if isinstance(channels_raw, list):
-            for item in channels_raw:
-                if not isinstance(item, dict):
-                    continue
-                channel_id = item.get("id")
-                if isinstance(channel_id, int) and not isinstance(channel_id, bool) and channel_id > 0:
-                    found_ids.add(channel_id)
-
-    active_irl = shared_state.getActiveIRL()
-    live_servos = []
-    if active_irl is not None:
-        live_servos = list(getattr(active_irl, "servos", []))
-        for servo_obj in live_servos:
-            channel = getattr(servo_obj, "channel", None)
-            if isinstance(channel, int) and not isinstance(channel, bool) and channel > 0:
-                found_ids.add(channel)
-
-    port = None
-    servo = config.get("servo", {})
-    if isinstance(servo, dict):
-        port = servo.get("port") if isinstance(servo.get("port"), str) else None
-    try:
-        found_ids.update(get_waveshare_inventory_manager().get_known_servo_ids(port=port))
-    except Exception:
-        pass
 
     return sorted(found_ids)
 
@@ -275,10 +214,6 @@ def _servo_settings_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
     if backend not in _SERVO_BACKENDS:
         backend = "pca9685"
 
-    port = servo.get("port")
-    if port is not None and not isinstance(port, str):
-        port = None
-
     device = servo.get("device")
     if device is not None and not isinstance(device, str):
         device = None
@@ -307,7 +242,7 @@ def _servo_settings_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
     channels: List[Dict[str, Any]] = []
     for index in range(layer_count):
         existing = parsed_channels[index] if index < len(parsed_channels) else None
-        default_id = index + 1 if backend in {"waveshare", "waveshare_ble"} else index
+        default_id = index + 1 if backend == "waveshare_ble" else index
         channels.append(
             {
                 "id": (int(existing["id"]) if existing is not None and existing["id"] is not None else None)
@@ -319,22 +254,24 @@ def _servo_settings_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
     if backend == "pca9685":
         available_channel_ids = _pca_available_servo_channels()
-    elif backend == "waveshare":
-        available_channel_ids = _waveshare_available_servo_ids(config)
     else:
         available_channel_ids = _waveshare_ble_available_gate_ids(config)
 
     return {
         "backend": backend,
         **asdict(readServoSpeeds(config)),
-        "port": port.strip() if isinstance(port, str) and port.strip() else None,
         "device": device.strip() if isinstance(device, str) and device.strip() else None,
         "channels": channels,
         "layer_count": layer_count,
         "available_channel_ids": available_channel_ids,
-        "supports_calibration": backend in {"waveshare", "waveshare_ble"},
+        "supports_calibration": backend == "waveshare_ble",
         "issues": _servo_hardware_issues(),
     }
+
+
+@router.get("/api/hardware-config/servo")
+def get_servo_hardware_config() -> Dict[str, Any]:
+    return _servo_settings_from_config(machine_toml.read())
 
 
 @router.post("/api/hardware-config/servo")
@@ -344,7 +281,6 @@ def save_servo_hardware_config(
     backend = payload.backend if payload.backend in _SERVO_BACKENDS else "pca9685"
     # Speeds the request leaves out stay as saved (the setup wizard sends none).
     speed_changes = {key: getattr(payload, key) for key in SPEEDS if key in payload.model_fields_set}
-    port = payload.port.strip() if isinstance(payload.port, str) and payload.port.strip() else None
     device = payload.device.strip() if isinstance(payload.device, str) and payload.device.strip() else None
     available_pca_channels = _pca_available_servo_channels()
     # Validate against the persisted layout we actually index into below, not the
@@ -375,10 +311,7 @@ def save_servo_hardware_config(
             channels.append({"id": None, "invert": bool(channel.invert)})
             continue
 
-        if backend == "waveshare":
-            valid = 1 <= channel_id <= 253
-            help_text = "an SC servo ID between 1 and 253"
-        elif backend == "waveshare_ble":
+        if backend == "waveshare_ble":
             valid = 1 <= channel_id <= 60
             help_text = "a gate number between 1 and 60"
         else:
@@ -414,16 +347,12 @@ def save_servo_hardware_config(
             servo_table = {}
         servo_table["backend"] = backend
         servo_table["channels"] = channels
-        if backend == "waveshare" and port is not None:
-            servo_table["port"] = port
-        else:
-            servo_table.pop("port", None)
+        servo_table.pop("port", None)
         if backend == "waveshare_ble" and device is not None:
             servo_table["device"] = device
         else:
             servo_table.pop("device", None)
-        if backend != "waveshare":
-            servo_table.pop("highest_seen_id", None)
+        servo_table.pop("highest_seen_id", None)
         config["servo"] = servo_table
 
     try:
@@ -438,7 +367,6 @@ def save_servo_hardware_config(
     structural_change = (
         backend != previous["backend"]
         or channel_ids != previous_ids
-        or (backend == "waveshare" and port != previous["port"])
         or (backend == "waveshare_ble" and device != previous["device"])
     )
 
@@ -452,7 +380,7 @@ def save_servo_hardware_config(
             if len(live_servos) == len(channels):
                 for index, servo in enumerate(live_servos):
                     invert = channel_inverts[index]
-                    if backend in {"waveshare", "waveshare_ble"}:
+                    if backend == "waveshare_ble":
                         if hasattr(servo, "set_invert"):
                             servo.set_invert(invert)
                     else:
@@ -512,20 +440,8 @@ def nudge_layer_servo(layer_index: int, payload: ServoNudgePayload) -> Dict[str,
         _apply_standard_speed(servo)
 
         current_pos = int(servo.position)
-        # PCA ServoMotor.position returns tenths-of-degrees, move_to takes degrees 0-180
-        # Waveshare BusServo.position returns raw 0-1023, move_to takes angle 0-180
-        # Use move_to(angle) which handles mapping internally
-        if hasattr(servo, '_angle_to_position'):
-            # waveshare bus servo: position is raw, convert to angle space
-            limits = getattr(servo, '_min_limit', 0), getattr(servo, '_max_limit', 1023)
-            range_size = limits[1] - limits[0]
-            if range_size > 0:
-                current_angle = int((current_pos - limits[0]) * 180 / range_size)
-            else:
-                current_angle = 90
-        else:
-            # PCA servo: position is tenths of degrees
-            current_angle = current_pos // 10
+        # PCA ServoMotor.position returns tenths-of-degrees, move_to takes degrees 0-180.
+        current_angle = current_pos // 10
 
         new_angle = max(0, min(180, current_angle + payload.degrees))
         servo.move_to(new_angle)
@@ -669,7 +585,7 @@ def get_servo_status() -> Dict[str, Any]:
     """Per-layer servo online state for debugging the red
     "Servo bus offline" banner. Returns one entry per layer with its
     live ``available`` flag plus the aggregate ``bus_online`` status —
-    useful when the operator has reconnected the Waveshare USB and
+    useful when the operator has reconnected the Waveshare BLE bridge and
     wants to verify the bus is back before pressing Resume.
     """
     active_irl = shared_state.getActiveIRL()
@@ -705,225 +621,26 @@ def get_servo_status() -> Dict[str, Any]:
     }
 
 
-@router.get("/api/hardware-config/waveshare/status")
-def get_waveshare_inventory_status(port: str | None = None) -> Dict[str, Any]:
-    return _waveshare_inventory_status(port=port)
-
-
-@router.post("/api/hardware-config/waveshare/rescan")
-def rescan_waveshare_inventory(port: str | None = None) -> Dict[str, Any]:
-    _ensure_not_homing("scan Waveshare servos")
-    return _waveshare_inventory_status(port=port, refresh=True)
-
-
-@router.post("/api/hardware-config/waveshare/servos/{servo_id}/set-id")
-def set_waveshare_servo_id(servo_id: int, payload: ServoSetIdPayload) -> Dict[str, Any]:
-    """Change a servo's ID on the bus."""
-    _ensure_not_homing("change a Waveshare servo ID")
-    new_id = payload.new_id
-    if new_id < 1 or new_id > 253:
-        raise HTTPException(status_code=400, detail="New ID must be between 1 and 253.")
-    if new_id == servo_id:
-        raise HTTPException(status_code=400, detail="New ID is the same as the current ID.")
-
-    service = _get_waveshare_service()
-
-    try:
-        if not service.ping(servo_id):
-            raise HTTPException(status_code=404, detail=f"No servo with ID {servo_id} found on the bus.")
-        if service.ping(new_id):
-            raise HTTPException(status_code=409, detail=f"A servo with ID {new_id} already exists on the bus.")
-
-        if not service.set_id(servo_id, new_id):
-            raise HTTPException(status_code=500, detail="set_id command failed.")
-
-        time.sleep(0.05)
-        if not service.ping(new_id):
-            raise HTTPException(
-                status_code=500,
-                detail=f"ID change sent but servo does not respond at new ID {new_id}. Power-cycle may be needed.",
-            )
-
-        info = service.read_servo_info(new_id)
-        try:
-            get_waveshare_inventory_manager().refresh(
-                port=getattr(service, "port", None),
-                allow_active_runtime_scan=True,
-            )
-        except Exception:
-            pass
-        return {
-            "ok": True,
-            "old_id": servo_id,
-            "new_id": new_id,
-            "servo": info,
-            "message": f"Servo ID changed from {servo_id} to {new_id}.",
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to change servo ID: {e}")
-
-
-@router.post("/api/hardware-config/waveshare/servos/{servo_id}/calibrate")
-def calibrate_waveshare_servo(servo_id: int) -> Dict[str, Any]:
-    """Auto-calibrate the open/close range of a single servo on the bus."""
-    _ensure_not_homing("calibrate a Waveshare servo")
-    if servo_id < 1 or servo_id > 253:
-        raise HTTPException(status_code=400, detail="Servo ID must be between 1 and 253.")
-
-    service = _get_waveshare_service()
-
-    try:
-        if not service.ping(servo_id):
-            raise HTTPException(status_code=404, detail=f"No servo with ID {servo_id} found on the bus.")
-
-        try:
-            safe_min, safe_max = service.calibrate_servo(servo_id)
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Calibration failed: {exc}")
-
-        info = service.read_servo_info(servo_id)
-        try:
-            get_waveshare_inventory_manager().refresh(
-                port=getattr(service, "port", None),
-                allow_active_runtime_scan=True,
-            )
-        except Exception:
-            pass
-        return {
-            "ok": True,
-            "servo_id": servo_id,
-            "limits": {"min": safe_min, "max": safe_max},
-            "servo": info,
-            "message": f"Servo {servo_id} calibrated. Range {safe_min}–{safe_max} saved to EEPROM.",
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to calibrate servo: {exc}")
-
-
-@router.post("/api/hardware-config/waveshare/servos/{servo_id}/move")
-def move_waveshare_servo(servo_id: int, payload: ServoMovePayload) -> Dict[str, Any]:
-    """Move a single servo to its open/close/center position based on EEPROM limits."""
-    _ensure_not_homing("move a Waveshare servo")
-    if servo_id < 1 or servo_id > 253:
-        raise HTTPException(status_code=400, detail="Servo ID must be between 1 and 253.")
-
-    target = (payload.position or "").lower().strip()
-    if target not in {"open", "close", "center"}:
-        raise HTTPException(
-            status_code=400,
-            detail="position must be one of: open, close, center.",
-        )
-
-    service = _get_waveshare_service()
-
-    try:
-        if not service.ping(servo_id):
-            raise HTTPException(status_code=404, detail=f"No servo with ID {servo_id} found on the bus.")
-
-        limits = service.read_angle_limits(servo_id)
-        if limits is None:
-            raise HTTPException(status_code=500, detail="Could not read servo angle limits.")
-        min_lim, max_lim = limits
-        if max_lim - min_lim < 20:
-            raise HTTPException(
-                status_code=409,
-                detail="Servo has no calibrated range. Run auto-calibration first.",
-            )
-
-        if target == "open":
-            position = min_lim
-        elif target == "close":
-            position = max_lim
-        else:
-            position = (min_lim + max_lim) // 2
-
-        service.set_torque(servo_id, True)
-        time.sleep(0.01)
-        if not service.move_to(servo_id, position, 400):
-            raise HTTPException(status_code=500, detail="move_to command failed.")
-        try:
-            get_waveshare_inventory_manager().trigger_refresh()
-        except Exception:
-            pass
-
-        return {
-            "ok": True,
-            "servo_id": servo_id,
-            "position": target,
-            "raw_position": position,
-            "limits": {"min": min_lim, "max": max_lim},
-            "message": f"Servo {servo_id} moved to {target} ({position}).",
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to move servo: {exc}")
-
-
-@router.post("/api/hardware-config/waveshare/servos/{servo_id}/nudge")
-def nudge_waveshare_servo(servo_id: int, payload: ServoNudgePayload) -> Dict[str, Any]:
-    _ensure_not_homing("nudge a Waveshare servo")
-    if servo_id < 1 or servo_id > 253:
-        raise HTTPException(status_code=400, detail="Servo ID must be between 1 and 253.")
-
-    service = _get_waveshare_service()
-
-    try:
-        if not service.ping(servo_id):
-            raise HTTPException(status_code=404, detail=f"No servo with ID {servo_id} found on the bus.")
-
-        limits = service.read_angle_limits(servo_id)
-        if limits is None:
-            raise HTTPException(status_code=500, detail="Could not read servo angle limits.")
-        min_lim, max_lim = limits
-        range_size = max_lim - min_lim
-        if range_size < 20:
-            raise HTTPException(status_code=409, detail="Servo has no calibrated range. Run auto-calibration first.")
-
-        current_pos = service.read_position(servo_id)
-        if current_pos is None:
-            raise HTTPException(status_code=500, detail="Could not read current servo position.")
-
-        raw_delta = int(payload.degrees * range_size / 180)
-        new_pos = max(0, min(1023, current_pos + raw_delta))
-
-        service.set_torque(servo_id, True)
-        time.sleep(0.01)
-        if not service.move_to(servo_id, new_pos, 200):
-            raise HTTPException(status_code=500, detail="move_to command failed.")
-        try:
-            get_waveshare_inventory_manager().trigger_refresh()
-        except Exception:
-            pass
-
-        return {
-            "ok": True,
-            "servo_id": servo_id,
-            "degrees": payload.degrees,
-            "raw_position": new_pos,
-            "previous_position": current_pos,
-            "limits": {"min": min_lim, "max": max_lim},
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to nudge servo: {exc}")
-
-
 # ---------------------------------------------------------------------------
 # Waveshare BLE gate bridge (esp32_ble_servo_bridge) — all servo intelligence
 # (open/closed/blocked, auto ID assignment, calibration) lives on the board
-# itself, so there's no raw position/nudge/lock-angle surface here, unlike
-# the wired Waveshare endpoints above.
+# itself, so there's no raw position/nudge/lock-angle surface here.
 # ---------------------------------------------------------------------------
 
 
 class WaveshareBleGateMovePayload(BaseModel):
     position: str  # "open" | "close"
+
+
+@router.get("/api/hardware-config/waveshare-ble/scan")
+def scan_waveshare_ble_devices(timeout: float = 5.0) -> Dict[str, Any]:
+    """Nearby BLE devices, for the pairing UI. Independent of any configured
+    or live bridge — just a discovery scan to pick an address from."""
+    try:
+        devices = _scan_waveshare_ble_devices(timeout=max(1.0, min(timeout, 20.0)))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"BLE scan failed: {exc}")
+    return {"ok": True, "devices": devices}
 
 
 @router.get("/api/hardware-config/waveshare-ble/status")
@@ -1071,6 +788,49 @@ def status_waveshare_ble_gate(gate: int) -> Dict[str, Any]:
     return {"ok": True, "gate": gate, "raw": response, "state": state}
 
 
+@router.get("/api/hardware-config/waveshare-ble/demo")
+def get_waveshare_ble_demo_mode(device: str | None = None) -> Dict[str, Any]:
+    try:
+        bridge = get_waveshare_ble_bridge_for_api(device)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    try:
+        enabled = bridge.get_demo_mode()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read demo mode: {exc}")
+    return {"ok": True, "demo_mode": enabled}
+
+
+class WaveshareBleDemoModePayload(BaseModel):
+    enabled: bool
+
+
+@router.post("/api/hardware-config/waveshare-ble/demo")
+def set_waveshare_ble_demo_mode(
+    payload: WaveshareBleDemoModePayload, device: str | None = None
+) -> Dict[str, Any]:
+    _ensure_not_homing("change the Waveshare BLE bridge's demo mode")
+    try:
+        bridge = get_waveshare_ble_bridge_for_api(device)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    try:
+        enabled = bridge.set_demo_mode(payload.enabled)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not change demo mode: {exc}")
+    try:
+        bridge.refresh_known_gates()
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "demo_mode": enabled,
+        "message": f"Demo mode {'enabled' if enabled else 'disabled'} — the bridge no longer drives real servos."
+        if enabled
+        else "Demo mode disabled — the bridge drives the real servo bus again.",
+    }
+
+
 @router.post("/api/hardware-config/waveshare-ble/gates/{gate}/calibrate")
 def calibrate_waveshare_ble_gate(gate: int) -> Dict[str, Any]:
     _ensure_not_homing("calibrate a Waveshare BLE gate")
@@ -1090,3 +850,159 @@ def calibrate_waveshare_ble_gate(gate: int) -> Dict[str, Any]:
     if not response.startswith("CALIBRATED"):
         raise HTTPException(status_code=500, detail=f"Calibration failed: {response}")
     return {"ok": True, "gate": gate, "raw": response, "message": f"Gate {gate} calibrated."}
+
+
+# ---------------------------------------------------------------------------
+# ESP32 firmware flashing — downloads a release asset built by
+# .github/workflows/firmware-release.yml (family "esp32_ble_bridge" in
+# /api/firmware/releases) and flashes it over USB-serial with esptool.
+# Separate job machinery from server/routers/firmware.py's: that one
+# identifies boards over the sorter's own MCU bus protocol and juggles two
+# different bootloader-entry mechanisms, neither of which applies to the
+# ESP32 (found by USB vid/pid only, flashed by the standard Espressif tool).
+# ---------------------------------------------------------------------------
+
+_ESP32_UPLOAD_DIR = "/tmp/sorter-esp32-firmware"
+_esp32_jobs: Dict[str, "Esp32FlashJob"] = {}
+_esp32_jobs_order: List[str] = []
+_esp32_jobs_lock = threading.Lock()
+_esp32_flash_lock = threading.Lock()
+_MAX_ESP32_JOBS_KEPT = 10
+
+
+class Esp32FlashRequest(BaseModel):
+    asset_url: str
+    asset_name: Optional[str] = None
+
+
+class Esp32FlashJob:
+    def __init__(self, request: Esp32FlashRequest):
+        self.id = uuid.uuid4().hex[:12]
+        self.request = request
+        self.created_ts = time.time()
+        self.phase = "queued"
+        self.progress: Optional[float] = None
+        self.status = "running"  # running | done | failed | cancelled
+        self.error: Optional[str] = None
+        self.log: List[str] = []
+        self.cancel_event = threading.Event()
+        self._lock = threading.Lock()
+
+    def setPhase(self, phase: str, message: Optional[str] = None) -> None:
+        with self._lock:
+            self.phase = phase
+            self.progress = None
+            if message:
+                self.log.append(message)
+
+    def setProgress(self, progress: float) -> None:
+        with self._lock:
+            self.progress = max(0.0, min(1.0, progress))
+
+    def addLog(self, message: str) -> None:
+        with self._lock:
+            self.log.append(message)
+
+    def finish(self, status: str, error: Optional[str] = None) -> None:
+        with self._lock:
+            self.status = status
+            self.error = error
+            if error:
+                self.log.append(error)
+
+    def toPayload(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "job_id": self.id,
+                "created_ts": self.created_ts,
+                "phase": self.phase,
+                "progress": self.progress,
+                "status": self.status,
+                "error": self.error,
+                "log": list(self.log[-40:]),
+                "asset_name": self.request.asset_name,
+            }
+
+
+def _runEsp32FlashJob(job: Esp32FlashJob) -> None:
+    try:
+        os.makedirs(_ESP32_UPLOAD_DIR, exist_ok=True)
+        bin_path = os.path.join(_ESP32_UPLOAD_DIR, f"{job.id}.bin")
+        job.setPhase("downloading", f"Downloading {job.request.asset_name or job.request.asset_url}...")
+        with requests.get(job.request.asset_url, stream=True, timeout=30) as res:
+            res.raise_for_status()
+            total = int(res.headers.get("Content-Length") or 0)
+            written = 0
+            with open(bin_path, "wb") as f:
+                for chunk in res.iter_content(chunk_size=64 * 1024):
+                    if job.cancel_event.is_set():
+                        raise esp32_flash.FlashCancelled()
+                    f.write(chunk)
+                    written += len(chunk)
+                    if total:
+                        job.setProgress(written / total)
+
+        job.setPhase("waiting_port", "Waiting for the ESP32 on USB...")
+        port = esp32_flash.wait_for_esp32_port(job.cancel_event)
+        job.addLog(f"ESP32 found on {port}.")
+
+        job.setPhase("flashing", f"Flashing {os.path.basename(bin_path)} via esptool...")
+        esp32_flash.flash_esp32(shared_state.gc_ref, bin_path, port, job.cancel_event, job.setProgress)
+
+        job.setPhase("done", "Flash complete. The ESP32 has rebooted into the new firmware.")
+        job.finish("done")
+    except esp32_flash.FlashCancelled:
+        job.finish("cancelled", error="Cancelled.")
+    except esp32_flash.FlashError as exc:
+        job.finish("failed", error=str(exc))
+    except Exception as exc:
+        job.finish("failed", error=f"Unexpected error: {exc}")
+    finally:
+        _esp32_flash_lock.release()
+
+
+def _registerEsp32Job(job: Esp32FlashJob) -> None:
+    with _esp32_jobs_lock:
+        _esp32_jobs[job.id] = job
+        _esp32_jobs_order.append(job.id)
+        while len(_esp32_jobs_order) > _MAX_ESP32_JOBS_KEPT:
+            dropped = _esp32_jobs_order.pop(0)
+            _esp32_jobs.pop(dropped, None)
+
+
+@router.post("/api/hardware-config/waveshare-ble/esp32-flash")
+def start_esp32_flash(request: Esp32FlashRequest) -> Dict[str, Any]:
+    if not _esp32_flash_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="An ESP32 flash is already in progress.")
+    try:
+        job = Esp32FlashJob(request)
+        _registerEsp32Job(job)
+        thread = threading.Thread(
+            target=_runEsp32FlashJob, args=(job,), daemon=True, name=f"esp32-flash-{job.id}"
+        )
+        thread.start()
+    except Exception:
+        _esp32_flash_lock.release()
+        raise
+    return {"job_id": job.id, "job": job.toPayload()}
+
+
+@router.get("/api/hardware-config/waveshare-ble/esp32-flash/{job_id}")
+def get_esp32_flash_job(job_id: str) -> Dict[str, Any]:
+    with _esp32_jobs_lock:
+        job = _esp32_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Unknown flash job '{job_id}'")
+    return job.toPayload()
+
+
+@router.post("/api/hardware-config/waveshare-ble/esp32-flash/{job_id}/cancel")
+def cancel_esp32_flash_job(job_id: str) -> Dict[str, Any]:
+    with _esp32_jobs_lock:
+        job = _esp32_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Unknown flash job '{job_id}'")
+    if job.status != "running":
+        return {"ok": False, "message": f"Job is already {job.status}.", "job": job.toPayload()}
+    job.cancel_event.set()
+    return {"ok": True, "message": "Cancel requested.", "job": job.toPayload()}

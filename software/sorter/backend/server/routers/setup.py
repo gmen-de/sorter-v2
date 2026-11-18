@@ -204,37 +204,19 @@ def _format_vid_pid(vid: int | None, pid: int | None) -> str | None:
     return f"{vid:04x}:{pid:04x}"
 
 
-def _probe_waveshare_servo_count(device_path: str) -> int:
-    """Open the serial port as a Waveshare SC servo bus and ping IDs 1..10.
-
-    Returns the number of servos that responded, or 0 if the port cannot be
-    opened or nothing on the bus speaks the SC protocol.
-    """
-    try:
-        from hardware.waveshare_bus_service import get_waveshare_bus_service
-    except Exception:
-        return 0
-
-    try:
-        service = get_waveshare_bus_service(device_path, timeout=0.01)
-    except Exception:
-        return 0
-    try:
-        return service.probe_servo_count(1, 10)
-    except Exception:
-        return 0
-
-
 def _enumerate_usb_devices(
-    *, board_summaries: list[dict[str, Any]], probe_servo_buses: bool
+    *, board_summaries: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     """List every USB serial device with its classification.
 
     - Ports that match one of the discovered control boards are marked
       ``controller`` and carry the board family / role / logical steppers.
-    - Remaining USB serial ports are probed as Waveshare servo buses (unless
-      ``probe_servo_buses`` is False) and labelled ``servo_bus`` if any servo
-      answers, or ``unknown`` otherwise.
+    - Remaining USB serial ports are labelled ``unknown`` (or
+      ``unrecognised_controller`` for a known MCU VID that didn't answer the
+      SorterInterface probe). Layer servos only ever go over the ESP32 BLE
+      bridge now, so nothing here probes a port for a wired servo bus
+      anymore — doing that unconditionally on every USB serial port used to
+      collide with whatever control board happened to be plugged in.
     """
     boards_by_port: dict[str, dict[str, Any]] = {}
     for board in board_summaries:
@@ -308,21 +290,6 @@ def _enumerate_usb_devices(
                     "detail": "MCU did not respond to SorterInterface probe.",
                 }
             )
-        elif probe_servo_buses:
-            servo_count = _probe_waveshare_servo_count(device_path)
-            if servo_count > 0:
-                entry.update(
-                    {
-                        "category": "servo_bus",
-                        "use_by_default": True,
-                        "servo_count": servo_count,
-                        "detail": f"Responded to {servo_count} servo ID(s)",
-                    }
-                )
-            else:
-                entry["detail"] = "No response to Waveshare servo ping."
-        else:
-            entry["detail"] = "Skipped servo probe (hardware busy)."
 
         devices.append(entry)
         seen_devices.add(device_path)
@@ -335,11 +302,9 @@ def _device_sort_key(entry: dict[str, Any]) -> int:
     category = entry.get("category")
     if category == "controller":
         return 0
-    if category == "servo_bus":
-        return 1
     if category == "unrecognised_controller":
-        return 2
-    return 3
+        return 1
+    return 2
 
 
 def _build_discovery_payload(
@@ -371,66 +336,7 @@ def _build_discovery_payload(
     }
     pca_available = any(int(board.get("servo_count", 0)) > 0 for board in board_summaries)
 
-    active_irl = shared_state.getActiveIRL()
-    live_servo_port: str | None = None
-    live_servo_count = 0
-    if active_irl is not None:
-        servo_controller = getattr(active_irl, "servo_controller", None)
-        bus_service = getattr(servo_controller, "bus_service", None)
-        live_servo_port = getattr(bus_service, "port", None)
-        live_servo_count = len(getattr(active_irl, "servos", []))
-
-    probe_servo_buses = shared_state.hardware_state == "standby" and live_servo_port is None
-    usb_devices = _enumerate_usb_devices(
-        board_summaries=board_summaries,
-        probe_servo_buses=probe_servo_buses,
-    )
-
-    if live_servo_port is not None:
-        matched_live_port = False
-        for device in usb_devices:
-            if device.get("device") != live_servo_port:
-                continue
-            device["category"] = "servo_bus"
-            device["use_by_default"] = True
-            device["servo_count"] = max(int(device.get("servo_count", 0) or 0), live_servo_count)
-            device["detail"] = f"Using active controller bus ({live_servo_count} servo(s))"
-            matched_live_port = True
-            break
-
-        if not matched_live_port:
-            port_meta = next(
-                (
-                    port for port in serial.tools.list_ports.comports()
-                    if getattr(port, "device", None) == live_servo_port
-                ),
-                None,
-            )
-            usb_devices.append(
-                {
-                    "device": live_servo_port,
-                    "product": getattr(port_meta, "product", None) or "Waveshare servo bus",
-                    "serial": getattr(port_meta, "serial_number", None),
-                    "vid_pid": _format_vid_pid(
-                        getattr(port_meta, "vid", None),
-                        getattr(port_meta, "pid", None),
-                    ),
-                    "category": "servo_bus",
-                    "use_by_default": True,
-                    "servo_count": live_servo_count,
-                    "detail": f"Using active controller bus ({live_servo_count} servo(s))",
-                }
-            )
-
-    waveshare_ports = [
-        {
-            "device": device["device"],
-            "product": device.get("product") or "Unknown serial device",
-            "serial": device.get("serial"),
-        }
-        for device in usb_devices
-        if device.get("category") == "servo_bus"
-    ]
+    usb_devices = _enumerate_usb_devices(board_summaries=board_summaries)
 
     # A Pico with no firmware never answers on serial; it shows up as the RPI-RP2
     # drive instead, and only a recovery flash from Settings brings it up.
@@ -451,7 +357,6 @@ def _build_discovery_payload(
         "roles": roles,
         "missing_required_steppers": missing_required_steppers,
         "pca_available": pca_available,
-        "waveshare_ports": waveshare_ports,
         "usb_devices": usb_devices,
         "bootloader_board": bootloader_board,
         "issues": issues,
@@ -484,7 +389,7 @@ def get_setup_wizard_summary() -> Dict[str, Any]:
         "boards_detected": bool(discovery["boards"]) and not discovery["missing_required_steppers"],
         "cameras_assigned": _camera_assignments_complete(camera_assignments),
         "servo_configured": (
-            servo_settings["backend"] == "waveshare"
+            servo_settings["backend"] == "waveshare_ble"
             or bool(discovery["pca_available"])
         )
         and int(servo_settings.get("layer_count", 0)) > 0,
@@ -506,7 +411,6 @@ def get_setup_wizard_summary() -> Dict[str, Any]:
             "servo": {
                 "backend": servo_settings["backend"],
                 "layer_count": servo_settings["layer_count"],
-                "port": servo_settings["port"],
             },
             "stepper_directions": _current_stepper_direction_payload(),
         },

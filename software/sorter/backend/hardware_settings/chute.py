@@ -36,9 +36,12 @@ DEFAULT_POSITION_CHECK_EVERY = 50
 # no switch — see hardware/sorter_interface.py's ChuteEncoder).
 DEFAULT_CHUTE_POSITION_SENSOR = "endstop"
 VALID_CHUTE_POSITION_SENSORS = ("endstop", "encoder")
-# Nominal guess (2 quadrature counts per magnet-ish), NOT bench-calibrated —
-# see software/firmware/octopus_control_board/ChuteEncoder.h's own caveat.
-DEFAULT_ENCODER_COUNTS_PER_REVOLUTION = 144
+# Bench-calibrated 2026-11-15/16 (linear regression over 7 hand-positioned
+# reference points, residuals < 1 count) — see
+# software/firmware/octopus_control_board/src/main.cpp's CHUTE_COUNTS_PER_REV.
+# 45 magnets x 4x quadrature, not the 144 (looked like 2x per magnet) or
+# 176 (44 magnets) earlier guesses.
+DEFAULT_ENCODER_COUNTS_PER_REVOLUTION = 180
 
 GEOMETRY = ("num_sections", "section_width_deg", "first_section_offset_deg")
 LEGACY_GEOMETRY = ("first_bin_center", "pillar_width_deg")
@@ -65,7 +68,7 @@ class ChuteSettings:
     position_check_every: int
     # "endstop" or "encoder" — see DEFAULT_CHUTE_POSITION_SENSOR.
     chute_position_sensor: str
-    # Nominal, not bench-calibrated — only meaningful in "encoder" mode.
+    # Bench-calibrated (see DEFAULT_ENCODER_COUNTS_PER_REVOLUTION) — only meaningful in "encoder" mode.
     encoder_counts_per_revolution: int
     # The settings machine.toml holds; the others are defaults.
     saved: frozenset[str] = frozenset()

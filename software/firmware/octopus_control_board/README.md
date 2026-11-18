@@ -71,27 +71,29 @@ this firmware itself has been bench-verified against the real magnet ring.
 
 ## Pin mapping
 
-5 stepper channels on Motor0-Motor4 sockets (pin names from Marlin's/
+5 stepper channels on Motor3-Motor7 sockets (pin names from Marlin's/
 Klipper's own open-source pin files for this board — BTT publishes no bare
-pinout doc):
+pinout doc). Deliberately skips Motor2 (the dual-output MOTOR2_1/MOTOR2_2
+socket sharing one driver) and frees up Motor0/Motor1 for the chute encoder
+below:
 
 | Channel | Socket | STEP | DIR | EN | UART (single-wire) | DIAG/endstop-shared |
 |---|---|---|---|---|---|---|
-| chute_stepper | Motor0 | PF13 | PF12 | PF14 | PC4 | PG6 |
-| c_channel_1_rotor | Motor1 | PG0 | PG1 | PF15 | PD11 | PG9 |
-| c_channel_3_rotor | Motor2 | PF11 | PG3 | PG5 | PC6 | PG10 |
+| chute_stepper | Motor5 | PC13 | PF0 | PF1 | PE4 | PG13 |
+| c_channel_1_rotor | Motor6 | PE2 | PE3 | PD4 | PE1 | PG14 |
+| c_channel_3_rotor | Motor7 | PE6 | PA14 | PE0 | PD3 | PG15 |
 | carousel | Motor3 | PG4 | PC1 | PA0 | PC7 | PG11 |
 | c_channel_2_rotor | Motor4 | PF9 | PF10 | PG2 | PF2 | PG12 |
 
-Chute magnet-ring Hall sensors (2× DRV5013), on two otherwise-unused motor
-sockets' endstop-shared pins: **PG13** (Motor5), **PG14** (Motor6).
+Chute magnet-ring Hall sensors (2× DRV5013), on Motor0's and Motor1's
+now-unused endstop-shared pins: **PG6** (Motor0), **PG9** (Motor1).
 
-LED PWM outputs, repurposed from hotend heater MOSFETs **HE1 → PA3** and
-**HE3 → PB11**.
+LED PWM outputs, repurposed from hotend heater MOSFETs **HE0 → PA2**,
+**HE1 → PA3** and **HE2 → PB10** (three independent lighting zones; HE3/PB11
+is unused/available for a future zone).
 
-One spare digital input, `DIGITAL_IO` channel 0, on Motor7's endstop pin
-**PG15** — reserved/unassigned, declared so the channel exists for future
-use instead of leaving the board with zero generic digital inputs.
+No spare digital input is currently declared — Motor2 (unused) is the only
+socket left over, and its endstop pin hasn't been identified.
 
 DIAG is electrically the same pin as that socket's endstop header signal
 (BTT bridges them with small jumpers) — confirm each used socket's DIAG
@@ -122,7 +124,55 @@ and this firmware's pin table is independent of which one is fitted.
 pio run -e octopus
 ```
 
-**Confirmed compiling and linking cleanly (2026-11-06)** against
+**Confirmed booting and enumerating as a real USB-CDC device on actual
+hardware (2026-11-14)** — `COM9`, `VID_0483&PID_5740`, Windows. Getting
+there from "compiles but never enumerates" needed three fixes, all
+already applied:
+- **The actual root cause: `-DUSBCON -DUSBD_USE_CDC` were never set.**
+  Arduino_Core_STM32 only maps the `Serial` object to real USB-CDC
+  (`SerialUSB`) when *both* flags are defined
+  (`cores/arduino/WSerial.h`); without them, `Serial.begin()` silently
+  initializes a plain hardware UART instead and the USB device
+  peripheral is never touched at all — compiles fine, links fine, zero
+  USB activity on the bus, not even an unrecognized-device entry.
+  Confirmed by the firmware's flash usage jumping 36KB -> 45KB once the
+  USB device stack was actually linked in. Now set in
+  `octopus_f446.json`'s `extra_flags`, along with `USBD_VID=0x0483`/
+  `USBD_PID=0x5740` (ST's own VID, the framework's default PID) and
+  `HAL_PCD_MODULE_ENABLED`.
+- **Clock source was HSI, not HSE.** `boards/variants/octopus_f446/
+  generic_clock.c` (cloned from the upstream generic/Nucleo variant)
+  configured `SystemClock_Config()` off the internal 16MHz HSI
+  oscillator. This board's F446 variant actually has a real 12MHz HSE
+  crystal (confirmed: BTT's own FAQ says F446 Octopus takes 12MHz, vs.
+  8MHz on the F429/F407 variants). HSI's ~1% tolerance isn't accurate
+  enough for USB full-speed's required 48MHz clock (needs ~0.25%) — on
+  its own this wouldn't necessarily block enumeration outright, but it's
+  a real correctness bug fixed alongside the USBCON one. Switched to
+  HSE with PLLM=6/PLLSAIM=6/PLLSAIN=96 recomputed for the real 12MHz
+  input (SYSCLK still 180MHz, CLK48 still exactly 48MHz — see the file's
+  own comments for the arithmetic). PLLSAI's M divider is confirmed
+  independent of the main PLL's on F446 specifically (verified in the
+  HAL source, `stm32f4xx_hal_rcc_ex.c`'s `#if defined(STM32F446xx)`
+  branch), so this didn't need to match the main PLLM.
+- **`HSE_VALUE` was never defined**, so it silently defaulted to 25MHz
+  (`stm32f4xx_ll_rcc.h`'s `#if !defined(HSE_VALUE)` fallback) regardless
+  of which oscillator was actually selected — this would have left
+  `HAL_InitTick()`/`millis()`/`micros()` systematically off even after
+  fixing the oscillator source. Now `-DHSE_VALUE=12000000` in
+  `extra_flags`, matching the real crystal.
+
+Diagnosed on real hardware by disassembling the linked `firmware.elf`
+(`arm-none-eabi-objdump`) to confirm a failed `HAL_RCC_OscConfig()` would
+hang silently forever (`Error_Handler()` gets inlined to a bare `b.n`
+self-branch, no LED, no symptom) — then flashing a temporary one-line
+diagnostic build that blinks PA13 (Marlin's `LED_PIN` for this board) as
+the very first thing in `setup()`, to confirm clock init was actually
+succeeding before looking elsewhere. That ruled out the clock hanging
+and pointed at the `Serial`/USB wiring instead.
+
+Earlier note, now superseded by the above —
+**confirmed compiling and linking cleanly (2026-11-06)** against
 `platform = ststm32@20.0.0` / `framework-arduinoststm32@3.0.0` (RAM 2.4%,
 Flash 6.9% of a 512KB/128KB F446ZE). Getting there needed two non-obvious
 fixes, both already applied in this project and worth knowing about if you
@@ -150,37 +200,81 @@ here, but this wasn't independently confirmed for the non-Pro board. Plan
 around flashing via DFU or BTT's SD-card bootloader, not a debug probe,
 and verify this assumption against the real board/schematic.
 
-- **SD-card (recommended, non-destructive)**: copy the built `.bin` onto
-  the board's SD card, named so BTT's own bootloader picks it up (typically
-  `firmware.bin`; it renames it to `FIRMWARE.CUR` after flashing on the
-  next boot). Does not disturb that bootloader.
-- **DFU over USB-C** (`pio run -t upload`, as configured in
-  `platformio.ini`): enter the STM32 ROM DFU bootloader (BOOT0 jumper,
-  reported at header "J75" on this board) and flash directly.
-  **This overwrites BTT's own SD-card bootloader** — after a raw DFU flash,
-  SD-card-based updates stop working until that bootloader `.hex` is
-  reflashed. Prefer the SD-card method unless you specifically need DFU.
+**DFU over USB-C (the only supported method — `pio run -t upload`)**:
+enter the STM32 ROM DFU bootloader (BOOT0 jumper, reported at header "J75"
+on this board, plus a reset-button press — a DFU "leave" after flashing is
+a software jump to the app, not a hardware reset, so BOOT0 is only
+re-sampled on an actual reset/power-on), then flash directly. Needs the
+WinUSB driver bound to the `0483:df11` DFU device via
+[Zadig](https://zadig.akeo.ie/) on Windows (the default Windows driver
+gives `LIBUSB_ERROR_NOT_SUPPORTED`). The app is built to run starting at
+`0x08000000` (`build.flash_offset`/`upload.offset_address` both `0x0`/
+`0x08000000` in `octopus_f446.json`) — DFU writes it directly there, no
+bootloader involved, so a plain power cycle (BOOT0 removed) boots straight
+into the app every time. **SD-card flashing is no longer supported**: see
+the bootloader-destruction bug below for why, and don't try to revive it
+by moving `flash_offset` back to `0x8000` without first reflashing BTT's
+own bootloader `.hex` (not available from BTT as a separate public
+download as far as this project found).
+
+- **Critical bug #1, found and fixed 2026-11-14 — DFU was flashing 0x8000
+  bytes too low, hanging on every single DFU flash regardless of firmware
+  content.** At the time, `build.flash_offset: "0x8000"` in
+  `octopus_f446.json` reached the *linker* correctly (via
+  `LD_FLASH_OFFSET`, confirmed on the ELF: `.isr_vector` at `0x08008000`,
+  entry point `0x0801094d` — code was built assuming it runs starting at
+  `0x08008000`, leaving the low 32KB for BTT's own SD-card bootloader).
+  But the ststm32 platform's DFU upload step (`builder/main.py`) reads a
+  *different*, unrelated key, `upload.offset_address`, which this
+  board.json never set — so it silently defaulted to `0x08000000`. Every
+  DFU flash wrote the image starting 0x8000 bytes below where its own
+  vector table's absolute addresses assumed it would be, so the reset
+  vector pointed to flash that, after the shift, was empty/erased — a
+  guaranteed silent hang (no LED, no USB, nothing) independent of what the
+  firmware actually did. This cost an entire debugging session that
+  (wrongly, in hindsight) suspected `ChuteEncoder.cpp`/linker placement of
+  a C++ static, because DFU-flashed builds never worked no matter what was
+  bisected away, while SD-card-flashed builds (which go through BTT's own
+  bootloader, writing to the correct address itself) worked fine. Fixed at
+  the time by adding `"offset_address": "0x08008000"` to
+  `octopus_f446.json`'s `upload` section, matching Marlin's own
+  `ini/stm32f4.ini` pairing of `board_build.offset = 0x8000` with
+  `board_upload.offset_address = 0x08008000` for this board family.
+- **Critical bug #2, found and fixed the same day — bug #1 had already
+  destroyed BTT's own bootloader, so fixing the offset alone wasn't
+  enough.** Every DFU flash made *before* bug #1 was fixed wrote (with the
+  wrong, defaulted `0x08000000` offset) directly into the first 32KB of
+  flash — exactly where BTT's factory SD-card bootloader lives. That
+  erase+write happened regardless of whether the resulting app ran
+  correctly, so by the time bug #1 was fixed, BTT's bootloader was already
+  gone. Symptom: DFU flashing worked fine (dfu-util's "leave" is a
+  software jump straight into the app, bypassing the bootloader
+  entirely — confirmed via `pio run -t upload`, COM9 enumerating right
+  after), but a genuine power cycle went completely silent (no DFU device,
+  no COM9, nothing on the bus at all) — because Main Flash boot
+  (BOOT0 low) fetches the vector table from `0x08000000`, which now had no
+  valid bootloader left to jump onward to the app at `0x08008000`. Since
+  this project already committed to DFU-only (see above) and was never
+  going to rely on BTT's bootloader again, the fix was to stop reserving
+  the first 32KB at all: `build.flash_offset` and `upload.offset_address`
+  both moved to `0x0`/`0x08000000`, so the app's own vector table now sits
+  at the chip's native boot address and every power cycle boots directly
+  into it with no intermediary. Confirmed via `arm-none-eabi-objdump -h`
+  (`.isr_vector` LMA back at `0x08000000`) and, on real hardware, COM9
+  enumerating after a full cold power cycle (BOOT0 jumper removed) — not
+  just after a DFU "leave".
 
 ## Known limitations — not yet verified on real hardware
 
-The firmware compiles and links cleanly (see above), but nothing below has
-been bench-tested; this firmware was written from the RP2040 original's
-exact logic plus Marlin's/Klipper's published pin tables for this board
-family, following the same "write it carefully, flag what's unverified"
-approach as this repo's ESP32 BLE servo bridge firmware. Note: the two
-community forum reports below were specifically about the **Octopus Pro**,
-not the standard board this firmware now targets — likely still relevant
-(same PCB family, same STM32duino core) but not confirmed against the
-standard board itself.
-
-- **USB-CDC (`Serial`) enumeration**: a PlatformIO community report found
-  `Serial` not reliably enumerating on the Octopus Pro with some
-  `ststm32`/variant combinations when using the Marlin-derived custom
-  variant folder. This firmware uses the stock chip-package variant
-  (not Marlin's), which should avoid that specific issue, but this is the
-  single most important thing to verify first — before porting/trusting
-  anything else, flash a minimal sketch and confirm `Serial` actually shows
-  up as a COM/tty device.
+USB-CDC enumeration and clock init are now confirmed working on real
+hardware (see above) — everything below this point is still unverified;
+this firmware was written from the RP2040 original's exact logic plus
+Marlin's/Klipper's published pin tables for this board family, following
+the same "write it carefully, flag what's unverified" approach as this
+repo's ESP32 BLE servo bridge firmware. Note: the community forum report
+below was specifically about the **Octopus Pro**, not the standard board
+this firmware now targets — likely still relevant (same PCB family, same
+STM32duino core) but not confirmed against the standard board itself.
 - **Driver-socket pin buffering**: a stm32duino forum report on the
   Octopus Pro mentioned some motor-socket header pins routing through
   74HCT125 tri-state bus-buffer ICs; Marlin/Klipper drive them fine with
@@ -207,11 +301,14 @@ standard board itself.
   for up to ~1 byte-time, bounded to roughly 100us) hasn't been measured.
 - **`REBOOT_BOOTLOADER` semantics changed**: the RP2040 original jumps into
   a persistent UF2 mass-storage bootloader mode. This board has no
-  equivalent; `CMDH_reboot_bootloader` just does a plain `NVIC_SystemReset()`,
-  relying on BTT's bootloader re-checking the SD card on every boot. If the
-  host tooling (e.g. a future flash script) expects the UF2-style "board
+  equivalent; `CMDH_reboot_bootloader` just does a plain
+  `NVIC_SystemReset()`, which (now that the app lives at `0x08000000`, see
+  the flashing section above) boots straight back into this same app, not
+  into any bootloader or "waiting for a new file" mode. If the host
+  tooling (e.g. a future flash script) expects the UF2-style "board
   disappears and reappears as a mass storage device" behavior, it will need
-  updating — this board doesn't do that.
+  updating — this board doesn't do that; a new firmware image always needs
+  a manual DFU session (BOOT0 + reset).
 - **Chute magnet-ring encoder decode**: the quadrature decode table, the
   index-gap detection threshold, and the whole notion of "count" in
   `ChuteEncoder.*` are nominal, not calibrated against a real magnet ring +
