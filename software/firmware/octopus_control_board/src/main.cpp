@@ -1199,10 +1199,19 @@ void setup() {
 
     stepgen_timer->setOverflow(STEP_TICK_RATE_HZ, HERTZ_FORMAT);
     stepgen_timer->attachInterrupt(stepgen_isr);
+    // Highest NVIC priority (0,0): real step timing must never wait behind
+    // USB-CDC traffic. Neither this nor USB had an explicit priority before
+    // (both ran on the framework's defaults) - bench-observed 2026-11-18
+    // as the chute moving measurably slower (same speed/accel, same TMC
+    // registers, confirmed byte-for-byte) when driven over a busier/
+    // noisier USB link (Orange Pi) than a quiet direct one (a PC), which a
+    // starved stepgen tick explains and a coincidence doesn't.
+    stepgen_timer->setInterruptPriority(0, 0);
     stepgen_timer->resume();
 
     motion_timer->setOverflow(STEP_MOTION_UPDATE_RATE_HZ, HERTZ_FORMAT);
     motion_timer->attachInterrupt(motion_update_isr);
+    motion_timer->setInterruptPriority(0, 0);
     motion_timer->resume();
 
     // SAFETY (2026-11-17): the chute used to auto-home unconditionally right
