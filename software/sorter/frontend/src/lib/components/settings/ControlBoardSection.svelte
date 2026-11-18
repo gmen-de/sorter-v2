@@ -48,6 +48,7 @@
 		boards: Board[];
 		hardware_state: string;
 		bootloader_present: boolean;
+		dfu_present: boolean;
 		flash_allowed: boolean;
 		flash_blocked_reason: string | null;
 		active_job_id?: string;
@@ -441,7 +442,9 @@
 			<Alert tone="warning">
 				No control board answered over USB.
 				{#if boardsMeta?.flash_blocked_reason}{boardsMeta.flash_blocked_reason}{/if}
-				{#if boardsMeta?.bootloader_present}
+				{#if boardsMeta?.dfu_present}
+					An Octopus board in DFU mode is there: use a recovery flash below.
+				{:else if boardsMeta?.bootloader_present}
 					A board in bootloader mode (RPI-RP2) is there: use a recovery flash below.
 				{/if}
 			</Alert>
@@ -522,7 +525,8 @@
 					/>
 				</Field>
 				<Checkbox bind:checked={recoveryMode} disabled={jobActive}>
-					Recovery flash: the board is already in its bootloader (RPI-RP2), or blank
+					Recovery flash: the board is already in its bootloader (RPI-RP2, or DFU on an
+					Octopus), or blank
 				</Checkbox>
 			</div>
 

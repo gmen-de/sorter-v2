@@ -260,6 +260,7 @@ def get_firmware_boards(refresh: bool = False) -> Dict[str, Any]:
             "boards": live,
             "hardware_state": shared_state.hardware_state,
             "bootloader_present": firmware_flash.anyBootloaderPresent(),
+            "dfu_present": firmware_flash.dfuDevicePresent(),
             "flash_allowed": False,
             "flash_blocked_reason": "Hardware is initialized. Reset to standby before flashing.",
         }
@@ -270,6 +271,7 @@ def get_firmware_boards(refresh: bool = False) -> Dict[str, Any]:
             "boards": [],
             "hardware_state": shared_state.hardware_state,
             "bootloader_present": False,
+            "dfu_present": False,
             "flash_allowed": False,
             "flash_blocked_reason": f"Cannot probe boards: {busy}.",
         }
@@ -280,6 +282,7 @@ def get_firmware_boards(refresh: bool = False) -> Dict[str, Any]:
             "boards": [],
             "hardware_state": shared_state.hardware_state,
             "bootloader_present": firmware_flash.anyBootloaderPresent(),
+            "dfu_present": firmware_flash.dfuDevicePresent(),
             "flash_allowed": False,
             "flash_blocked_reason": "A flash is in progress.",
             "active_job_id": active_job.id,
@@ -302,6 +305,7 @@ def get_firmware_boards(refresh: bool = False) -> Dict[str, Any]:
         "boards": boards,
         "hardware_state": shared_state.hardware_state,
         "bootloader_present": firmware_flash.anyBootloaderPresent(),
+        "dfu_present": firmware_flash.dfuDevicePresent(),
         "flash_allowed": True,
         "flash_blocked_reason": None,
     }

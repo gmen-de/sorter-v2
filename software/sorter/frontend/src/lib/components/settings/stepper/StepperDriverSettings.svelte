@@ -22,7 +22,8 @@
 		stepperDirectionInverted = $bindable(),
 		cruiseSpeed = null,
 		stallguardHref = undefined,
-		sgAuto = false
+		sgAuto = false,
+		microstepsLocked = false
 	}: {
 		loading: boolean;
 		tmcIrun: number;
@@ -41,6 +42,11 @@
 		stallguardHref?: string;
 		// Automatic tuning sets the threshold and the speed floor.
 		sgAuto?: boolean;
+		// On an Octopus-encoder chute, the firmware's bin-aiming math has this
+		// value baked into a fixed constant (CHUTE_STEP_USTEPS_PER_REV) — changing
+		// it here would silently move every bin. Locked on that page instead of
+		// editable and easy to change by accident.
+		microstepsLocked?: boolean;
 	} = $props();
 </script>
 
@@ -94,11 +100,18 @@
 			() => tmcIhold,
 			(v) => (tmcIhold = v)
 		)}
-		<SettingRow label="Microstepping" for="tmc-microsteps">
+		<SettingRow
+			label="Microstepping"
+			for="tmc-microsteps"
+			help={microstepsLocked
+				? 'Locked: the chute’s bin-aiming math is calibrated for this value.'
+				: undefined}
+		>
 			<div class="w-28">
 				<Select
 					id="tmc-microsteps"
 					size="sm"
+					disabled={microstepsLocked}
 					value={String(tmcMicrosteps)}
 					onchange={(v) => (tmcMicrosteps = Number(v))}
 					options={[1, 2, 4, 8, 16, 32, 64, 128, 256].map((ms) => ({

@@ -8,6 +8,7 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import Popover from '$lib/components/ui/Popover.svelte';
 	import { sortingProfileStore } from '$lib/stores/sortingProfile.svelte';
+	import Crosshair from '@lucide/svelte/icons/crosshair';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Tag from '@lucide/svelte/icons/tag';
 	import X from '@lucide/svelte/icons/x';
@@ -52,7 +53,82 @@
 		assignSelected = [...detailsBin.bin.category_ids];
 		assignSearch = '';
 		assignDropdownOpen = false;
+		correction = detailsBin.bin.chute_correction_usteps ?? 0;
+		savedCorrection = correction;
 	});
+
+	// Chute fine-tuning: a per-bin microstep offset the Octopus firmware adds
+	// to its own computed bin position (TARGET_BIN). Only takes effect in
+	// encoder_native mode.
+	let correction = $state(0);
+	let savedCorrection = $state(0);
+	let savingCorrection = $state(false);
+	let movingChute = $state(false);
+
+	function nudge(delta: number) {
+		correction = Math.round(correction + delta);
+	}
+
+	async function saveCorrection(value: number | null): Promise<boolean> {
+		if (!detailsBin) return false;
+		savingCorrection = true;
+		try {
+			const res = await fetch(`${baseUrl}/api/bins/chute-correction`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					layer_index: detailsBin.layerIndex,
+					section_index: detailsBin.bin.section_index,
+					bin_index: detailsBin.bin.bin_index,
+					correction_usteps: value
+				})
+			});
+			if (!res.ok) {
+				const detail = await res.json().catch(() => null);
+				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
+			}
+			const data = await res.json();
+			correction = data.correction_usteps ?? 0;
+			savedCorrection = correction;
+			return true;
+		} catch (e: unknown) {
+			onError(e instanceof Error ? e.message : 'Failed to save the chute correction');
+			return false;
+		} finally {
+			savingCorrection = false;
+		}
+	}
+
+	async function moveChuteHere() {
+		if (!detailsBin || movingChute) return;
+		movingChute = true;
+		try {
+			const res = await fetch(`${baseUrl}/api/bins/move-to`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					layer_index: detailsBin.layerIndex,
+					section_index: detailsBin.bin.section_index,
+					bin_index: detailsBin.bin.bin_index
+				})
+			});
+			if (!res.ok) {
+				const detail = await res.json().catch(() => null);
+				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
+			}
+		} catch (e: unknown) {
+			onError(e instanceof Error ? e.message : 'Failed to move the chute');
+		} finally {
+			movingChute = false;
+		}
+	}
+
+	async function saveAndMove() {
+		if (await saveCorrection(correction)) {
+			onSaved(`Chute correction ${correction} µsteps saved.`);
+			await moveChuteHere();
+		}
+	}
 
 	const setMeta = $derived.by((): SetMeta | null => {
 		const categoryIds = detailsBin?.bin.category_ids;
@@ -262,6 +338,60 @@
 					<p class="mt-3 text-sm text-ink-muted">
 						No categories assigned. Matching pieces fall through to the discard bin.
 					</p>
+				{/if}
+			</section>
+
+			<section class="rounded-control bg-well p-4">
+				<div class="flex items-center justify-between gap-3">
+					<h3 class="flex items-center gap-2 text-base font-semibold text-ink">
+						<Crosshair size={16} />
+						Chute fine-tuning
+					</h3>
+					<Button size="sm" loading={movingChute} onclick={() => void moveChuteHere()}>
+						Move the chute here
+					</Button>
+				</div>
+				<p class="mt-1 mb-3 text-sm text-ink-muted">
+					Microsteps added to where the board aims for this bin (Octopus only). Positive and negative
+					move it the two ways round; save and move to check where it lands.
+				</p>
+				<div class="flex flex-wrap items-center gap-2">
+					<Button size="sm" onclick={() => nudge(-20)}>-20</Button>
+					<Button size="sm" onclick={() => nudge(-5)}>-5</Button>
+					<div class="w-32">
+						<Input
+							aria-label="Correction in microsteps"
+							type="number"
+							step={1}
+							bind:value={correction}
+							unit="µsteps"
+						/>
+					</div>
+					<Button size="sm" onclick={() => nudge(5)}>+5</Button>
+					<Button size="sm" onclick={() => nudge(20)}>+20</Button>
+					<div class="ml-auto flex gap-2">
+						<Button
+							size="sm"
+							disabled={savedCorrection === 0 && correction === 0}
+							loading={savingCorrection}
+							onclick={async () => {
+								if (await saveCorrection(null)) onSaved('Chute correction reset.');
+							}}
+						>
+							Reset
+						</Button>
+						<Button
+							size="sm"
+							variant="primary"
+							loading={savingCorrection || movingChute}
+							onclick={() => void saveAndMove()}
+						>
+							Save and move
+						</Button>
+					</div>
+				</div>
+				{#if correction !== savedCorrection}
+					<p class="mt-2 text-sm text-warning-ink">Not saved yet (saved: {savedCorrection} µsteps).</p>
 				{/if}
 			</section>
 

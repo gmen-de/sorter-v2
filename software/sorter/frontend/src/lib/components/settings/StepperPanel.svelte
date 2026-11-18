@@ -806,6 +806,7 @@
 			cruiseSpeed={isChute ? chuteOperatingSpeed : null}
 			{stallguardHref}
 			{sgAuto}
+			microstepsLocked={isChute && chuteHasEncoder}
 		/>
 	{/if}
 {/snippet}

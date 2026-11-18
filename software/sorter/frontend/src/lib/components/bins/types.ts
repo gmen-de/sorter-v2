@@ -6,6 +6,7 @@ export type BinInfo = {
 	angle: number;
 	category_ids: string[];
 	not_in_inventory?: boolean;
+	chute_correction_usteps?: number;
 };
 
 export type LayerInfo = {
