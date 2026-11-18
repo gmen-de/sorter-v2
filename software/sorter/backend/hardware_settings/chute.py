@@ -32,10 +32,16 @@ DEFAULT_HOME_PIN_CHANNEL = 3
 DEFAULT_ENDSTOP_ACTIVE_HIGH = True
 DEFAULT_POSITION_CHECK = False
 DEFAULT_POSITION_CHECK_EVERY = 50
-# "endstop" (mechanical home switch) or "encoder" (magnet-ring Hall encoder,
-# no switch — see hardware/sorter_interface.py's ChuteEncoder).
+# "endstop" (mechanical home switch), "encoder" (magnet-ring Hall encoder,
+# no switch, bin angle computed in Python — see hardware/sorter_interface.py's
+# ChuteEncoder) or "encoder_native" (same hardware as "encoder", but the
+# Octopus firmware computes the bin angle itself — see CHUTE_ENCODER.TARGET_BIN
+# in software/firmware/octopus_control_board/src/main.cpp).
 DEFAULT_CHUTE_POSITION_SENSOR = "endstop"
-VALID_CHUTE_POSITION_SENSORS = ("endstop", "encoder")
+VALID_CHUTE_POSITION_SENSORS = ("endstop", "encoder", "encoder_native")
+# Matches the firmware's own CHUTE_HOME_OFFSET_USTEPS_DEFAULT; only meaningful
+# in "encoder_native" mode (pushed to the board via CHUTE_ENCODER.SET_HOME_CORRECTION).
+DEFAULT_HOME_CORRECTION_USTEPS = 215
 # Bench-calibrated 2026-11-15/16 (linear regression over 7 hand-positioned
 # reference points, residuals < 1 count) — see
 # software/firmware/octopus_control_board/src/main.cpp's CHUTE_COUNTS_PER_REV.
@@ -52,6 +58,7 @@ CHANGEABLE = GEOMETRY + LEGACY_GEOMETRY + (
     "position_check_every",
     "chute_position_sensor",
     "encoder_counts_per_revolution",
+    "home_correction_usteps",
 )
 
 
@@ -70,6 +77,8 @@ class ChuteSettings:
     chute_position_sensor: str
     # Bench-calibrated (see DEFAULT_ENCODER_COUNTS_PER_REVOLUTION) — only meaningful in "encoder" mode.
     encoder_counts_per_revolution: int
+    # Only meaningful in "encoder_native" mode — see DEFAULT_HOME_CORRECTION_USTEPS.
+    home_correction_usteps: int
     # The settings machine.toml holds; the others are defaults.
     saved: frozenset[str] = frozenset()
 
@@ -186,11 +195,15 @@ def readChuteSettings(
         ),
         chute_position_sensor=read(
             "chute_position_sensor", chute_position_sensor,
-            lambda value: value in VALID_CHUTE_POSITION_SENSORS, "\"endstop\" or \"encoder\"",
+            lambda value: value in VALID_CHUTE_POSITION_SENSORS, "\"endstop\", \"encoder\" or \"encoder_native\"",
         ),
         encoder_counts_per_revolution=read(
             "encoder_counts_per_revolution", DEFAULT_ENCODER_COUNTS_PER_REVOLUTION,
             _positiveInt, "a whole number of counts above 0",
+        ),
+        home_correction_usteps=read(
+            "home_correction_usteps", DEFAULT_HOME_CORRECTION_USTEPS,
+            lambda value: type(value) is int, "a whole number of microsteps",
         ),
         saved=frozenset(saved),
     )
@@ -243,10 +256,13 @@ def saveChuteSettings(
             raise ValueError("position_check_every must be a whole number of pieces above 0.")
         sensor = changes.get("chute_position_sensor")
         if sensor is not None and sensor not in VALID_CHUTE_POSITION_SENSORS:
-            raise ValueError('chute_position_sensor must be "endstop" or "encoder".')
+            raise ValueError('chute_position_sensor must be "endstop", "encoder" or "encoder_native".')
         counts_per_rev = changes.get("encoder_counts_per_revolution")
         if counts_per_rev is not None and not _positiveInt(counts_per_rev):
             raise ValueError("encoder_counts_per_revolution must be a whole number of counts above 0.")
+        home_correction = changes.get("home_correction_usteps")
+        if home_correction is not None and type(home_correction) is not int:
+            raise ValueError("home_correction_usteps must be a whole number of microsteps.")
 
         chute = config.get(CHUTE)
         if not isinstance(chute, dict):
@@ -272,6 +288,8 @@ def saveChuteSettings(
             chute["chute_position_sensor"] = sensor
         if counts_per_rev is not None:
             chute["encoder_counts_per_revolution"] = counts_per_rev
+        if home_correction is not None:
+            chute["home_correction_usteps"] = home_correction
     return readChuteSettings(
         config, home_pin_channel=home_pin_channel, endstop_active_high=endstop_active_high,
         chute_position_sensor=chute_position_sensor,
@@ -289,6 +307,7 @@ def applyChuteSettings(chute: Any, settings: ChuteSettings) -> None:
     )
     chute.setOperatingSpeed(settings.operating_speed_microsteps_per_second)
     chute.setPositionCheck(settings.position_check, settings.position_check_every)
+    chute.setHomeCorrection(settings.home_correction_usteps)
 
 
 def _isNumber(value: Any) -> bool:

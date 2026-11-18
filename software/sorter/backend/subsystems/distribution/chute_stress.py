@@ -21,7 +21,13 @@ from stress_test_runs import (
     recordChuteStressRunStart,
     updateChuteStressRunProgress,
 )
-from subsystems.distribution.chute import GEAR_RATIO, HOME_SPEED_MICROSTEPS_PER_SEC, HOME_TIMEOUT_MS, Chute
+from subsystems.distribution.chute import (
+    GEAR_RATIO,
+    HOME_SPEED_MICROSTEPS_PER_SEC,
+    HOME_TIMEOUT_MS,
+    BinAddress,
+    Chute,
+)
 
 _TELEMETRY_STATUS_MAP = {
     "completed": stepper_telemetry.RUN_STATUS_COMPLETED,
@@ -30,7 +36,7 @@ _TELEMETRY_STATUS_MAP = {
     "stalled": stepper_telemetry.RUN_STATUS_ABORTED,
 }
 
-StressMode = Literal["sweep", "random"]
+StressMode = Literal["sweep", "random", "acceleration_ramp"]
 RunStatus = Literal[
     "running", "paused", "stopping", "completed", "stopped", "failed", "stalled"
 ]
@@ -66,6 +72,12 @@ class StressTestParams:
     duration_s: float
     speed_microsteps_per_sec: int
     invert_direction: bool = False
+    # acceleration_ramp mode only: start low, run accel_moves_per_step bin
+    # moves, then step up by accel_step and repeat - same shape as
+    # /stepper/stallguard-sweep, applied to acceleration instead of SGTHRS.
+    accel_start_microsteps_per_second_sq: int = 2000
+    accel_step_microsteps_per_second_sq: int = 1000
+    accel_moves_per_step: int = 10
 
 
 @dataclass
@@ -81,6 +93,8 @@ class StressTestState:
     last_target_deg: float | None = None
     telemetry_run_id: str | None = None
     stalled_at_deg: float | None = None
+    current_acceleration: int | None = None
+    highest_clean_acceleration: int | None = None
 
     def toDict(self) -> dict[str, Any]:
         return {
@@ -98,6 +112,8 @@ class StressTestState:
             "last_target_deg": self.last_target_deg,
             "telemetry_run_id": self.telemetry_run_id,
             "stalled_at_deg": self.stalled_at_deg,
+            "current_acceleration": self.current_acceleration,
+            "highest_clean_acceleration": self.highest_clean_acceleration,
             "error": self.error,
         }
 
@@ -115,6 +131,8 @@ def _snapshot(state: StressTestState) -> StressTestState:
         last_target_deg=state.last_target_deg,
         telemetry_run_id=state.telemetry_run_id,
         stalled_at_deg=state.stalled_at_deg,
+        current_acceleration=state.current_acceleration,
+        highest_clean_acceleration=state.highest_clean_acceleration,
     )
 
 
@@ -151,13 +169,20 @@ class ChuteStressTestRunner:
                 raise ValueError("duration_s must be > 0")
             if params.speed_microsteps_per_sec <= 0:
                 raise ValueError("speed_microsteps_per_sec must be > 0")
-            if params.mode not in ("sweep", "random"):
-                raise ValueError("mode must be 'sweep' or 'random'")
+            if params.mode not in ("sweep", "random", "acceleration_ramp"):
+                raise ValueError("mode must be 'sweep', 'random' or 'acceleration_ramp'")
             if params.mode == "sweep" and self.chute.home_pin is None:
                 # Encoder-mode boards have no mechanical switch for
                 # _homeToZero()'s hand-rolled homing to drive against; this
                 # mode hasn't been adapted for that yet.
                 raise ValueError("mode 'sweep' needs a chute with an endstop; this board uses an encoder.")
+            if params.mode == "acceleration_ramp":
+                if params.accel_start_microsteps_per_second_sq <= 0:
+                    raise ValueError("accel_start_microsteps_per_second_sq must be > 0")
+                if params.accel_step_microsteps_per_second_sq <= 0:
+                    raise ValueError("accel_step_microsteps_per_second_sq must be > 0")
+                if params.accel_moves_per_step <= 0:
+                    raise ValueError("accel_moves_per_step must be > 0")
 
             now = time.time()
             run_id = str(uuid.uuid4())
@@ -228,6 +253,57 @@ class ChuteStressTestRunner:
             if abs(candidate - current_deg) >= MIN_RANDOM_DELTA_DEG:
                 return candidate
         return max_deg if current_deg < max_deg / 2.0 else min_deg
+
+    def _pickRandomBinAddress(self) -> BinAddress | None:
+        candidates: list[tuple[int, int, int]] = []
+        for li, layer in enumerate(self.chute.layout.layers):
+            for si, section in enumerate(getattr(layer, "sections", None) or []):
+                n = len(getattr(section, "bins", None) or [])
+                if n > 0:
+                    candidates.append((li, si, n))
+        if not candidates:
+            return None
+        li, si, n = random.choice(candidates)
+        return BinAddress(layer_index=li, section_index=si, bin_index=random.randrange(n))
+
+    def _moveToRandomBin(self) -> tuple[float, BinAddress]:
+        """A leg via Chute.moveToBin() - encoder_native boards route through
+        the firmware's TARGET_BIN, other boards through the existing Python
+        angle math - instead of _moveTo()'s own raw GEAR_RATIO/
+        stepper.move_degrees() call, so "random" mode (and the acceleration
+        ramp below) actually exercises the real bin-routing path rather than
+        bypassing it. Raises RuntimeError if the layout has no bins, or the
+        move was refused (not homed, aiming not set, etc.)."""
+        address = self._pickRandomBinAddress()
+        if address is None:
+            raise RuntimeError("the bin layout has no bins to target")
+        current_deg = self.chute.current_angle
+        estimated_ms = self.chute.moveToBin(address)
+        if estimated_ms is None:
+            raise RuntimeError(f"moveToBin({address}) was refused")
+        timeout_s = (estimated_ms / 1000.0) + LEG_TIMEOUT_BUFFER_S
+        stepper = self.chute.stepper
+        leg_start = time.monotonic()
+        while True:
+            if self._stop_event.is_set():
+                self._halt()
+                break
+            try:
+                if stepper.stopped:
+                    break
+            except Exception:
+                pass
+            if (time.monotonic() - leg_start) > timeout_s:
+                self.logger.warning(f"Chute stress: bin move to {address} exceeded {timeout_s:.1f}s timeout")
+                self._halt()
+                break
+            time.sleep(POLL_INTERVAL_S)
+        try:
+            final_deg = self.chute.current_angle
+            distance = abs(final_deg - current_deg)
+        except Exception:
+            distance = 0.0
+        return distance, address
 
     def _homeToZero(self) -> float:
         assert self._state is not None
@@ -434,7 +510,10 @@ class ChuteStressTestRunner:
         params = self._state.params
         stepper = self.chute.stepper
         prev_operating_speed = int(self.chute.operating_speed_microsteps_per_second)
+        prev_default_acceleration = stepper.default_acceleration
         recorder: tmc_telemetry.TmcTelemetryRecorder | None = None
+        ramp_accel = int(params.accel_start_microsteps_per_second_sq)
+        ramp_moves_this_step = 0
 
         try:
             stepper.set_speed_limits(
@@ -442,6 +521,10 @@ class ChuteStressTestRunner:
                 max_speed=int(params.speed_microsteps_per_sec),
             )
             self.chute.setOperatingSpeed(int(params.speed_microsteps_per_sec))
+            if params.mode == "acceleration_ramp":
+                stepper.set_default_acceleration(ramp_accel)
+                with self._lock:
+                    self._state.current_acceleration = ramp_accel
             recorder = self._startTelemetry(stepper)
 
             start_monotonic = time.monotonic()
@@ -457,14 +540,40 @@ class ChuteStressTestRunner:
                 if elapsed >= params.duration_s:
                     break
 
-                target = self._pickNextTarget(self.chute.current_angle)
-                with self._lock:
-                    self._state.last_target_deg = target if target is not None else 0.0
-
-                if target is None:
-                    distance = self._homeToZero()
+                target_desc = "home"
+                if params.mode in ("random", "acceleration_ramp"):
+                    try:
+                        distance, address = self._moveToRandomBin()
+                    except RuntimeError as exc:
+                        if params.mode == "acceleration_ramp":
+                            # The expected way this mode ends: report the
+                            # last fully-clean acceleration, same shape as
+                            # /stepper/stallguard-sweep's "highest clean
+                            # value" result.
+                            self.logger.error(
+                                f"Chute stress: acceleration ramp stopped at {ramp_accel} µsteps/s² ({exc}); "
+                                f"highest clean value was {self._state.highest_clean_acceleration}"
+                            )
+                            self._halt()
+                            with self._lock:
+                                self._state.status = "stalled"
+                                self._state.error = f"Move refused at {ramp_accel} µsteps/s²: {exc}"
+                                self._state.ended_at = time.time()
+                            break
+                        raise
+                    bin_angle = self.chute.angleForVirtualBin(
+                        address.section_index, address.bin_index,
+                        self.chute._binsInSection(address.layer_index, address.section_index),
+                    )
+                    target_desc = f"bin {address} ({bin_angle:.1f}°)" if bin_angle is not None else f"bin {address}"
+                    with self._lock:
+                        self._state.last_target_deg = bin_angle or 0.0
                 else:
-                    distance = self._moveTo(target)
+                    target = self._pickNextTarget(self.chute.current_angle)
+                    target_desc = "home" if target is None else f"{target:.1f}°"
+                    with self._lock:
+                        self._state.last_target_deg = target if target is not None else 0.0
+                    distance = self._homeToZero() if target is None else self._moveTo(target)
                 with self._lock:
                     self._state.total_distance_deg += distance
                     self._state.elapsed_s = time.monotonic() - start_monotonic
@@ -478,11 +587,10 @@ class ChuteStressTestRunner:
                         stall_deg = self.chute.current_angle
                     except Exception:
                         stall_deg = None
-                    target_desc = "home" if target is None else f"{target:.1f}°"
                     where = f"{stall_deg:.1f}°" if stall_deg is not None else "unknown angle"
                     message = (
-                        f"StallGuard stall confirmed at {where} "
-                        f"(leg target {target_desc})"
+                        f"StallGuard stall confirmed at {where} (leg target {target_desc})"
+                        + (f" at {ramp_accel} µsteps/s²" if params.mode == "acceleration_ramp" else "")
                     )
                     self.logger.error(f"Chute stress: {message}; halting run.")
                     with self._lock:
@@ -491,6 +599,18 @@ class ChuteStressTestRunner:
                         self._state.error = message
                         self._state.ended_at = time.time()
                     break
+
+                if params.mode == "acceleration_ramp":
+                    ramp_moves_this_step += 1
+                    if ramp_moves_this_step >= params.accel_moves_per_step:
+                        with self._lock:
+                            self._state.highest_clean_acceleration = ramp_accel
+                        ramp_moves_this_step = 0
+                        ramp_accel += int(params.accel_step_microsteps_per_second_sq)
+                        stepper.set_default_acceleration(ramp_accel)
+                        with self._lock:
+                            self._state.current_acceleration = ramp_accel
+                        self.logger.info(f"Chute stress: acceleration ramp stepping up to {ramp_accel} µsteps/s²")
 
                 now = time.monotonic()
                 if now - last_persist >= 1.0:
@@ -535,6 +655,13 @@ class ChuteStressTestRunner:
                 self.logger.warning(
                     f"Chute stress: failed to restore operating speed: {e}"
                 )
+            if prev_default_acceleration is not None:
+                try:
+                    stepper.set_default_acceleration(int(prev_default_acceleration))
+                except Exception as e:
+                    self.logger.warning(
+                        f"Chute stress: failed to restore acceleration: {e}"
+                    )
             if self._state is not None:
                 finalizeChuteStressRun(
                     run_id=self._state.run_id,

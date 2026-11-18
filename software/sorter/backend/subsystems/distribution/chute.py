@@ -5,12 +5,14 @@ from global_config import GlobalConfig
 from hardware_settings.chute import (
     DEFAULT_ENCODER_COUNTS_PER_REVOLUTION,
     DEFAULT_FIRST_SECTION_OFFSET_DEG,
+    DEFAULT_HOME_CORRECTION_USTEPS,
     DEFAULT_NUM_SECTIONS,
     DEFAULT_OPERATING_SPEED_MICROSTEPS_PER_SEC,
     DEFAULT_POSITION_CHECK,
     DEFAULT_POSITION_CHECK_EVERY,
     DEFAULT_SECTION_WIDTH_DEG,
 )
+from bin_layout_store import get_chute_bin_corrections
 from irl.bin_layout import DistributionLayout
 
 if TYPE_CHECKING:
@@ -85,6 +87,8 @@ class Chute:
         position_check_every: int = DEFAULT_POSITION_CHECK_EVERY,
         chute_encoder: "ChuteEncoder | None" = None,
         encoder_counts_per_revolution: int = DEFAULT_ENCODER_COUNTS_PER_REVOLUTION,
+        chute_position_sensor_mode: str | None = None,
+        home_correction_usteps: int = DEFAULT_HOME_CORRECTION_USTEPS,
     ):
         if (home_pin is None) == (chute_encoder is None):
             raise ValueError("Chute needs exactly one of home_pin or chute_encoder.")
@@ -93,6 +97,12 @@ class Chute:
         self.stepper = stepper
         self.home_pin = home_pin
         self.chute_encoder = chute_encoder
+        # Overrides the derived "endstop"/"encoder" value below with
+        # "encoder_native" (Octopus-only - the firmware computes the bin
+        # angle itself, see _moveToBinNative()). Both still pass
+        # chute_encoder and leave home_pin None; this is the only thing that
+        # tells the two apart, since the __init__ guard above can't.
+        self._position_sensor_mode_override = chute_position_sensor_mode
         self.encoder_counts_per_revolution = max(1, int(encoder_counts_per_revolution))
         # Encoder count recorded exactly when the stepper's own position was
         # last zeroed (see _homeEncoder()) — the reference point for
@@ -111,9 +121,14 @@ class Chute:
         self.position_check_every = max(1, int(position_check_every))
         self.pieces_since_check = 0
         self.checking = False
+        self.home_correction_usteps = int(home_correction_usteps)
+        self._pushAimingToFirmware()
+        self._syncHomedFromFirmware()
 
     @property
     def chute_position_sensor(self) -> str:
+        if self._position_sensor_mode_override is not None:
+            return self._position_sensor_mode_override
         return "endstop" if self.home_pin is not None else "encoder"
 
     @property
@@ -122,12 +137,21 @@ class Chute:
 
     def markUnhomed(self, reason: str = "") -> None:
         """Drop the home reference. A stall means lost steps -> the recorded position
-        is no longer trustworthy, so force a re-home before the next precise move."""
+        is no longer trustworthy, so force a re-home before the next precise move.
+        In encoder mode the firmware has its own "homed" belief
+        (chute_auto_homed, enforced by every move via refuseMoveIfNotHomed())
+        - this must be told too, not just this Python-side flag, or the
+        firmware would keep accepting moves off a now-meaningless zero."""
         if self._homed:
             self.logger.warning(
                 f"Chute: home reference invalidated{f' ({reason})' if reason else ''}; re-home required."
             )
         self._homed = False
+        if self.chute_encoder is not None:
+            try:
+                self.chute_encoder.clear_homed()
+            except Exception as exc:
+                self.logger.warning(f"Chute: could not clear the firmware's homed flag: {exc}")
 
     @property
     def section_pitch_deg(self) -> float:
@@ -165,6 +189,11 @@ class Chute:
         self.first_section_offset_deg = float(first_section_offset_deg)
         if endstop_active_high is not None:
             self.endstop_active_high = endstop_active_high
+        self._pushAimingToFirmware()
+
+    def setHomeCorrection(self, home_correction_usteps: int) -> None:
+        self.home_correction_usteps = int(home_correction_usteps)
+        self._pushAimingToFirmware()
 
     def setPositionCheck(self, enabled: bool, every: int) -> None:
         self.position_check = bool(enabled)
@@ -311,7 +340,11 @@ class Chute:
 
     def _setSpeed(self, speed: int) -> None:
         # The board keeps the last speed limits any caller sent (start-up's, a
-        # jog's, a sweep's), so every chute move sets its own.
+        # jog's, a sweep's), so every move through this path sets its own.
+        # encoder_native's TARGET_BIN moves (_moveToBinNative()) don't call
+        # this any more - speed travels with that request itself instead
+        # (see ChuteEncoder.target_bin()), so it can't be clobbered by some
+        # other tool's SET_SPEED_LIMITS between two bin moves.
         self.stepper.set_speed_limits(MIN_SPEED_MICROSTEPS_PER_SEC, speed)
 
     def _deltaToTarget(self, target: float) -> tuple[float, float]:
@@ -330,7 +363,12 @@ class Chute:
     def moveToAngle(self, target: float, max_speed: int | None = None) -> int | None:
         """Start a move at the operating speed, or at `max_speed` when given; the
         estimated duration in ms, or None if the board refused it."""
-        if self.chute_position_sensor == "encoder":
+        if self.chute_position_sensor in ("encoder", "encoder_native"):
+            # encoder_native's own bin-routing (moveToBin -> _moveToBinNative)
+            # bypasses this entirely; a raw angle target (jog UI, homing
+            # backoff, chute_stress) has no bin to hand the firmware, so it
+            # still goes through the same open-loop step-position path
+            # "encoder" mode uses.
             return self._moveToAngleEncoder(target, max_speed=max_speed, blocking=False)
         delta_stepper_angle, target = self._deltaToTarget(target)
         current = self.current_angle
@@ -403,6 +441,8 @@ class Chute:
         return self.getAngleForBin(address) is not None
 
     def moveToBin(self, address: BinAddress) -> int | None:
+        if self.chute_position_sensor == "encoder_native":
+            return self._moveToBinNative(address)
         target = self.getAngleForBin(address)
         if target is None:
             self.logger.error(f"Chute: bin {address} is unreachable")
@@ -414,6 +454,125 @@ class Chute:
         if estimated_ms is not None:
             self.pieces_since_check += 1
         return estimated_ms
+
+    def moveToBinBlocking(self, address: BinAddress, timeout_buffer_ms: int = 0) -> int | None:
+        """Move and wait; the estimated duration in ms, or None if it was
+        refused or did not finish. The blocking counterpart to moveToBin(),
+        for callers (homing's own backoff) that need to know the move is
+        physically done before continuing."""
+        if self.chute_position_sensor == "encoder_native":
+            return self._moveToBinNative(address, blocking=True, timeout_buffer_ms=timeout_buffer_ms)
+        target = self.getAngleForBin(address)
+        if target is None:
+            self.logger.error(f"Chute: bin {address} is unreachable")
+            return None
+        return self.moveToAngleBlocking(target, timeout_buffer_ms=timeout_buffer_ms)
+
+    def _moveToBinNative(
+        self, address: BinAddress, *, blocking: bool = False, timeout_buffer_ms: int = 0
+    ) -> int | None:
+        """encoder_native mode only: skip Python's own angle math for the
+        move itself and let the firmware's TARGET_BIN compute the bin
+        center (from the aiming geometry pushed by _pushAimingToFirmware())
+        and drive there directly - see ChuteEncoder.target_bin(). k (bins
+        per section) and the flat bin index are derived the same way
+        angleForVirtualBin()'s (section_index, bin_index, bins_in_section)
+        are, so a native and a non-native board aim at the identical
+        physical bin. The angle is still computed here too, but only for
+        the duration estimate and as a cross-check against what the
+        firmware actually echoes back - never to drive the move."""
+        assert self.chute_encoder is not None
+        k = self._binsInSection(address.layer_index, address.section_index)
+        num_bins = self.num_sections * k
+        flat_bin_index = address.section_index * k + address.bin_index
+        correction_usteps = self.getBinCorrection(address)
+        target_angle = self.angleForVirtualBin(address.section_index, address.bin_index, k)
+        if target_angle is None:
+            self.logger.error(f"Chute: bin {address} is unreachable")
+            return None
+        current = self.current_angle
+        delta_deg = ((target_angle - current + 180.0) % 360.0) - 180.0
+        speed = int(self.operating_speed_microsteps_per_second)
+        estimated_ms = self.stepper.estimateMoveDegreesMs(delta_deg * GEAR_RATIO, max_speed=speed)
+        timeout_ms = max(1, estimated_ms + timeout_buffer_ms)
+
+        if self.gc.disable_chute:
+            self.logger.info(
+                f"Chute: [DISABLED] would{'(blocking)' if blocking else ''} target_bin layer={address.layer_index} "
+                f"num_bins={num_bins} bin_index={flat_bin_index} correction={correction_usteps} (est_ms={estimated_ms})"
+            )
+            return estimated_ms
+
+        # Speed travels WITH this one request (see ChuteEncoder.target_bin())
+        # instead of a separate, stateful SET_SPEED_LIMITS write beforehand -
+        # no _setSpeed() call needed here any more.
+        target_usteps = self.chute_encoder.target_bin(
+            address.layer_index, num_bins, flat_bin_index, correction_usteps, speed
+        )
+        expected_usteps = round(target_angle % 360.0 / 360.0 * CHUTE_ENCODER_USTEPS_PER_REV) + correction_usteps
+        if target_usteps != expected_usteps:
+            self.logger.warning(
+                f"Chute: TARGET_BIN echoed {target_usteps} usteps, Python expected {expected_usteps} "
+                "for the same bin - firmware/Python aiming math has drifted out of lockstep."
+            )
+        self.logger.info(
+            f"Chute: target_bin{'(blocking)' if blocking else ''} layer={address.layer_index} num_bins={num_bins} "
+            f"bin_index={flat_bin_index} correction={correction_usteps} -> {target_usteps} usteps (est_ms={estimated_ms})"
+        )
+        if not blocking:
+            self.pieces_since_check += 1
+            return estimated_ms
+        start = time.monotonic()
+        while not self.stepper.stopped:
+            if (time.monotonic() - start) * 1000 > timeout_ms:
+                self.logger.error("Chute: target_bin move(blocking) did not finish in time")
+                return None
+            time.sleep(0.01)
+        self.pieces_since_check += 1
+        return estimated_ms
+
+    def getBinCorrection(self, address: BinAddress) -> int:
+        key = f"{address.layer_index}:{address.section_index}:{address.bin_index}"
+        return int(get_chute_bin_corrections().get(key, 0))
+
+    def _pushAimingToFirmware(self) -> None:
+        """encoder_native only: push the aiming geometry and home correction
+        the firmware needs for TARGET_BIN/homing. RAM only on that side, so
+        this runs once at hardware start-up and again on every settings
+        change (setAimingCalibration(), setHomeCorrection()) - see the
+        plan's note that the backend stays the one place these are edited."""
+        if self.chute_position_sensor != "encoder_native":
+            return
+        assert self.chute_encoder is not None
+        self.chute_encoder.set_aiming(
+            self.num_sections, self.section_width_deg, self.first_section_offset_deg
+        )
+        self.chute_encoder.set_home_correction(self.home_correction_usteps)
+
+    def _syncHomedFromFirmware(self) -> None:
+        """Firmware is the one true owner of "homed" for any encoder-capable
+        board (chute_auto_homed - see CLEAR_HOMED and refuseMoveIfNotHomed()'s
+        own comments in main.cpp), but it's only ever told the OTHER
+        direction (home() waits for it to report homed; markUnhomed() now
+        tells it to drop that belief). A freshly constructed Chute (e.g. a
+        backend restart while the board itself keeps running, already
+        homed) must not just assume _homed=False from here and shadow-track
+        from a wrong starting point - that would only cost an unnecessary
+        re-home, never a wrong move (every move is still gated by
+        firmware's own check), but there's no reason to accept even that
+        when asking is this cheap. Best-effort: a failed query just keeps
+        the safe "assume unhomed" default."""
+        if self.chute_encoder is None:
+            return
+        try:
+            if self.chute_encoder.get_homing_status().get("homed"):
+                self._homed = True
+                self.logger.info(
+                    "Chute: firmware already reports homed from a previous session; "
+                    "not re-homing unnecessarily."
+                )
+        except Exception as exc:
+            self.logger.warning(f"Chute: could not read the firmware's homed status at start-up: {exc}")
 
     def moveToAngleBlocking(self, target: float, timeout_buffer_ms: int = 0) -> int | None:
         """Move and wait; the estimated duration in ms, or None if it was refused or did not finish."""
@@ -446,7 +605,19 @@ class Chute:
         if backoff_angle is None or backoff_angle <= 0.0:
             return True
         try:
-            if self.moveToAngleBlocking(backoff_angle, timeout_buffer_ms=1500) is None:
+            if self.chute_position_sensor == "encoder_native":
+                # "Layer" is irrelevant here (TARGET_BIN's angle math ignores
+                # it - see SET_AIMING's comment); 0/0/0 just means "bin 0 of
+                # section 0", which is exactly what the angle math above
+                # also just computed - going through TARGET_BIN here too
+                # keeps this move (and any per-bin fine-tune correction on
+                # bin 0/0/0) on the same, single bin-routing path everything
+                # else now uses, instead of a third raw-step-position call.
+                address = BinAddress(layer_index=0, section_index=0, bin_index=0)
+                if self.moveToBinBlocking(address, timeout_buffer_ms=1500) is None:
+                    self.logger.error("Chute: backoff to bin 1 did not finish")
+                    return False
+            elif self.moveToAngleBlocking(backoff_angle, timeout_buffer_ms=1500) is None:
                 self.logger.error("Chute: backoff to bin 1 did not finish")
                 return False
             self.logger.info(f"Chute: backed off to bin 1 ({backoff_angle:.2f}°)")

@@ -104,6 +104,7 @@ class _SweepMotion:
     def tick(self, now: float) -> None: ...
     def moving(self, now: float) -> bool:
         return True
+    def stop(self) -> None: ...
 
 
 class _ConstantMotion(_SweepMotion):
@@ -127,7 +128,16 @@ class _ChuteRandomMotion(_SweepMotion):
     degrees clamped to [min_deg, max_deg] within [0, CHUTE_SAFE_MAX_DEG], so it
     can never reach an endstop. Homes first if the chute lacks a reference —
     without that, "0 deg" is wherever it powered on and the clamp is meaningless.
-    Targets are at least min_delta_deg apart so every move is a real excursion."""
+    Targets are at least min_delta_deg apart so every move is a real excursion.
+
+    On an Octopus board (chute.chute_encoder is not None), the picking and
+    moving itself is handed to the firmware once via
+    CHUTE_ENCODER.START_RANDOM_STRESS (see ChuteEncoder.start_random_stress())
+    - this class then only keeps polling SG_RESULT/CS_ACTUAL/TSTEP for the
+    telemetry chart, same as every other profile, instead of also deciding
+    and sending each move. Every other board (no chute_encoder) keeps the
+    original Python-driven go-to-angle loop below, since there's no
+    firmware-side equivalent for it there."""
 
     def __init__(self, chute: Any, speed: int, min_delta_deg: float, min_deg: float, max_deg: float) -> None:
         self._chute = chute
@@ -138,6 +148,7 @@ class _ChuteRandomMotion(_SweepMotion):
         # Don't re-check stopped for a beat after issuing a move, so we don't read
         # a stale "stopped" before the firmware has started the move.
         self._next_check_at = 0.0
+        self._native = getattr(chute, "chute_encoder", None) is not None
 
     def _home_if_needed(self) -> None:
         if bool(getattr(self._chute, "homed", False)):
@@ -185,9 +196,21 @@ class _ChuteRandomMotion(_SweepMotion):
 
     def start(self, now: float) -> None:
         self._home_if_needed()
+        if self._native:
+            from subsystems.distribution.chute import CHUTE_ENCODER_USTEPS_PER_REV
+
+            def to_usteps(deg: float) -> int:
+                return round(deg / 360.0 * CHUTE_ENCODER_USTEPS_PER_REV)
+
+            self._chute.chute_encoder.start_random_stress(
+                to_usteps(self._min), to_usteps(self._max), to_usteps(self._min_delta)
+            )
+            return
         self._go(now)
 
     def tick(self, now: float) -> None:
+        if self._native:
+            return  # the firmware itself picks and starts each next move now
         # Issue the next target only once the previous move has actually finished.
         # Re-issuing on a guessed timer floods the chute with overlapping reversals
         # it can't follow (it stalls in place); waiting for a real stop gives clean
@@ -199,6 +222,13 @@ class _ChuteRandomMotion(_SweepMotion):
                 self._go(now)
         except Exception:
             pass
+
+    def stop(self) -> None:
+        if self._native:
+            try:
+                self._chute.chute_encoder.stop_random_stress()
+            except Exception:
+                pass
 
 
 class _PulsedMotion(_SweepMotion):
@@ -440,6 +470,10 @@ def stallguard_sweep(
             pass
         raise HTTPException(status_code=500, detail=f"StallGuard sweep failed: {e}")
     finally:
+        try:
+            motion.stop()
+        except Exception:
+            pass
         try:
             _halt_stepper(target, force=True)
         except Exception:

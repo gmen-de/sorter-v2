@@ -18,7 +18,7 @@
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import ChuteStressTelemetryChart from './ChuteStressTelemetryChart.svelte';
 
-	type StressMode = 'sweep' | 'random';
+	type StressMode = 'sweep' | 'random' | 'acceleration_ramp';
 	type RunStatus =
 		| 'running'
 		| 'paused'
@@ -42,6 +42,8 @@
 		error: string | null;
 		last_target_deg?: number | null;
 		stalled_at_deg?: number | null;
+		current_acceleration?: number | null;
+		highest_clean_acceleration?: number | null;
 	};
 
 	const CHUTE_STRESS_MAX_ANGLE = 345;
@@ -60,6 +62,9 @@
 	let useMaxSpeed = $state(true);
 	let speedOverride = $state(operatingSpeed);
 	let invertDirection = $state(false);
+	let accelStart = $state(2000);
+	let accelStep = $state(1000);
+	let accelMovesPerStep = $state(10);
 
 	let errorMsg = $state<string | null>(null);
 	let statusMsg = $state('');
@@ -155,7 +160,7 @@
 	}
 
 	async function startRun() {
-		if (targetMaxDeg <= 0 || targetMaxDeg > CHUTE_STRESS_MAX_ANGLE) {
+		if (mode !== 'acceleration_ramp' && (targetMaxDeg <= 0 || targetMaxDeg > CHUTE_STRESS_MAX_ANGLE)) {
 			errorMsg = `Target angle must be in (0, ${CHUTE_STRESS_MAX_ANGLE}]`;
 			return;
 		}
@@ -168,7 +173,14 @@
 			target_max_deg: targetMaxDeg,
 			duration_s: durationSec,
 			speed_microsteps_per_sec: effectiveSpeed,
-			invert_direction: invertDirection
+			invert_direction: invertDirection,
+			...(mode === 'acceleration_ramp'
+				? {
+						accel_start_microsteps_per_second_sq: accelStart,
+						accel_step_microsteps_per_second_sq: accelStep,
+						accel_moves_per_step: accelMovesPerStep
+					}
+				: {})
 		});
 		if (ok) {
 			statusMsg = 'Stress test started.';
@@ -509,7 +521,18 @@
 					['Elapsed', `${formatDuration(activeRun.total_time_s)} of ${formatDuration(activeRun.duration_target_s)}`],
 					['Distance', `${activeRun.total_distance_deg.toFixed(1)}°`],
 					['Last target', activeRun.last_target_deg != null ? `${activeRun.last_target_deg.toFixed(1)}°` : 'None'],
-					['Speed', `${activeRun.speed_microsteps_per_sec} µsteps/s`]
+					['Speed', `${activeRun.speed_microsteps_per_sec} µsteps/s`],
+					...(activeRun.mode === 'acceleration_ramp'
+						? [
+								['Current acceleration', `${activeRun.current_acceleration ?? '?'} µsteps/s²`] as [string, string],
+								[
+									'Highest clean',
+									activeRun.highest_clean_acceleration != null
+										? `${activeRun.highest_clean_acceleration} µsteps/s²`
+										: 'None yet'
+								] as [string, string]
+							]
+						: [])
 				])}
 			</div>
 		{/if}
@@ -523,22 +546,25 @@
 						disabled={active || busy}
 						options={[
 							{ value: 'sweep', label: 'Sweep between home and the target' },
-							{ value: 'random', label: 'Random, from 0° to the target' }
+							{ value: 'random', label: 'Random, from 0° to the target' },
+							{ value: 'acceleration_ramp', label: 'Acceleration ramp, random bins until it fails' }
 						]}
 					/>
 				</Field>
-				<Field label="Target" for="stress-target" help="At most {CHUTE_STRESS_MAX_ANGLE}°.">
-					<Input
-						id="stress-target"
-						type="number"
-						min={1}
-						max={CHUTE_STRESS_MAX_ANGLE}
-						step={1}
-						bind:value={targetMaxDeg}
-						disabled={active || busy}
-						unit="°"
-					/>
-				</Field>
+				{#if mode !== 'acceleration_ramp'}
+					<Field label="Target" for="stress-target" help="At most {CHUTE_STRESS_MAX_ANGLE}°.">
+						<Input
+							id="stress-target"
+							type="number"
+							min={1}
+							max={CHUTE_STRESS_MAX_ANGLE}
+							step={1}
+							bind:value={targetMaxDeg}
+							disabled={active || busy}
+							unit="°"
+						/>
+					</Field>
+				{/if}
 				<Field label="Duration" for="stress-duration">
 					<Input id="stress-duration" type="number" min={1} step={1} bind:value={durationSec} disabled={active || busy} unit="s" />
 				</Field>
@@ -555,12 +581,48 @@
 						/>
 					</Field>
 				{/if}
+				{#if mode === 'acceleration_ramp'}
+					<Field label="Start acceleration" for="stress-accel-start">
+						<Input
+							id="stress-accel-start"
+							type="number"
+							min={1}
+							step={100}
+							bind:value={accelStart}
+							disabled={active || busy}
+							unit="µsteps/s²"
+						/>
+					</Field>
+					<Field label="Step" for="stress-accel-step">
+						<Input
+							id="stress-accel-step"
+							type="number"
+							min={1}
+							step={100}
+							bind:value={accelStep}
+							disabled={active || busy}
+							unit="µsteps/s²"
+						/>
+					</Field>
+					<Field label="Moves per step" for="stress-accel-moves">
+						<Input
+							id="stress-accel-moves"
+							type="number"
+							min={1}
+							step={1}
+							bind:value={accelMovesPerStep}
+							disabled={active || busy}
+						/>
+					</Field>
+				{/if}
 			</div>
 			<div class="flex flex-wrap gap-x-6 gap-y-2">
 				<Checkbox bind:checked={useMaxSpeed} disabled={active || busy}>
 					Use the operating speed ({operatingSpeed} µsteps/s)
 				</Checkbox>
-				<Checkbox bind:checked={invertDirection} disabled={active || busy}>Invert the direction</Checkbox>
+				{#if mode !== 'acceleration_ramp'}
+					<Checkbox bind:checked={invertDirection} disabled={active || busy}>Invert the direction</Checkbox>
+				{/if}
 			</div>
 		</div>
 
@@ -635,7 +697,10 @@
 					['Planned', formatDuration(selectedRun.duration_target_s)],
 					['Ran', formatDuration(selectedRun.total_time_s)],
 					['Distance', `${selectedRun.total_distance_deg.toFixed(1)}°`],
-					['Speed', `${selectedRun.speed_microsteps_per_sec} µsteps/s`]
+					['Speed', `${selectedRun.speed_microsteps_per_sec} µsteps/s`],
+					...(selectedRun.highest_clean_acceleration != null
+						? [['Highest clean acceleration', `${selectedRun.highest_clean_acceleration} µsteps/s²`] as [string, string]]
+						: [])
 				])}
 				{#if selectedRun.error}
 					<p class="mt-2 text-sm text-danger-ink">{selectedRun.error}</p>

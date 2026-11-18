@@ -8,7 +8,7 @@ export type DiscoveredBoard = {
 	logical_steppers: string[];
 	servo_count: number;
 	input_aliases: Record<string, number>;
-	chute_position_sensor: 'endstop' | 'encoder';
+	chute_position_sensor: 'endstop' | 'encoder' | 'encoder_native';
 };
 
 export type WavesharePort = {

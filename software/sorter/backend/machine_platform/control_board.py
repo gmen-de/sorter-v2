@@ -121,7 +121,11 @@ OCTOPUS_DISTRIBUTION_PROFILE = BoardProfile(
     # over a separate command table, not a digital input. See
     # software/firmware/octopus_control_board/README.md.
     input_aliases={},
-    chute_position_sensor="encoder",
+    # Firmware computes the bin angle itself (CHUTE_ENCODER.TARGET_BIN) —
+    # see subsystems/distribution/chute.py's _moveToBinNative(). machine.toml's
+    # [chute] chute_position_sensor can still override back to "encoder" to
+    # fall back to the Python-side angle math this replaces.
+    chute_position_sensor="encoder_native",
 )
 
 GENERIC_PROFILE = BoardProfile(

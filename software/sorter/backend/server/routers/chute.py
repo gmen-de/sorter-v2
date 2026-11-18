@@ -41,11 +41,13 @@ class ChuteHardwareSettingsPayload(BaseModel):
     operating_speed_microsteps_per_second: Optional[int] = None
     position_check: Optional[bool] = None
     position_check_every: Optional[int] = None
-    # "endstop" or "encoder" — takes effect on the next hardware start (same
-    # as home_pin_channel/endstop_active_high today).
+    # "endstop", "encoder" or "encoder_native" — takes effect on the next
+    # hardware start (same as home_pin_channel/endstop_active_high today).
     chute_position_sensor: Optional[str] = None
-    # Nominal, not bench-calibrated — only meaningful in "encoder" mode.
+    # Nominal, not bench-calibrated — only meaningful in "encoder"/"encoder_native" mode.
     encoder_counts_per_revolution: Optional[int] = None
+    # Only meaningful in "encoder_native" mode — see DEFAULT_HOME_CORRECTION_USTEPS.
+    home_correction_usteps: Optional[int] = None
 
 
 class ChuteAimingSettingsPayload(BaseModel):
@@ -109,7 +111,7 @@ def _board_defaults() -> Dict[str, Any]:
         active_high if isinstance(active_high, bool) else DEFAULT_ENDSTOP_ACTIVE_HIGH
     )
     sensor = getattr(chute, "chute_position_sensor", None)
-    if sensor in ("endstop", "encoder"):
+    if sensor in ("endstop", "encoder", "encoder_native"):
         defaults["chute_position_sensor"] = sensor
     return defaults
 
@@ -131,10 +133,11 @@ def _chute_payload(settings: ChuteSettings) -> Dict[str, Any]:
         "home_pin_channel": settings.home_pin_channel,
         "chute_position_sensor": settings.chute_position_sensor,
         "encoder_counts_per_revolution": settings.encoder_counts_per_revolution,
+        "home_correction_usteps": settings.home_correction_usteps,
         # Encoder-mode boards have no dead wedge (see Chute.angleForVirtualBin) —
         # the full circle is reachable, so the UI's max shouldn't be capped
         # at the endstop-only mechanical limit.
-        "max_angle_deg": 360 if settings.chute_position_sensor == "encoder" else CHUTE_MAX_ANGLE,
+        "max_angle_deg": 360 if settings.chute_position_sensor in ("encoder", "encoder_native") else CHUTE_MAX_ANGLE,
     }
 
 
@@ -176,6 +179,14 @@ def _live_chute_status() -> Dict[str, Any]:
             "stepper_stopped": None,
             "digital_inputs": [],
             "home_pin_channel": None,
+            "encoder_count_at_index": None,
+            "encoder_raw_sensor_a": None,
+            "encoder_raw_sensor_b": None,
+            "homing_active": None,
+            "homing_failed": None,
+            "tmc_sg_result": None,
+            "tmc_drv_status": None,
+            "stall_latched": None,
         }
 
     interfaces = getattr(irl, "interfaces", {})
@@ -204,12 +215,30 @@ def _live_chute_status() -> Dict[str, Any]:
     except Exception:
         pass
 
-    if sensor_mode == "encoder":
+    if sensor_mode in ("encoder", "encoder_native"):
         try:
             status["encoder_count"] = int(chute.encoder_count)
             status["encoder_index_synced"] = bool(chute.encoder_synced)
         except Exception as e:
             status["encoder_error"] = str(e)
+        encoder = getattr(chute, "chute_encoder", None)
+        if encoder is not None:
+            try:
+                status["encoder_count_at_index"] = int(encoder.get_count_at_index())
+            except Exception as e:
+                status["encoder_count_at_index_error"] = str(e)
+            try:
+                sensor_a, sensor_b = encoder.get_raw_state()
+                status["encoder_raw_sensor_a"] = sensor_a
+                status["encoder_raw_sensor_b"] = sensor_b
+            except Exception as e:
+                status["encoder_raw_state_error"] = str(e)
+            try:
+                homing_status = encoder.get_homing_status()
+                status["homing_active"] = homing_status.get("active")
+                status["homing_failed"] = homing_status.get("failed")
+            except Exception as e:
+                status["homing_status_error"] = str(e)
     else:
         try:
             status["raw_endstop_high"] = bool(chute.home_pin.value)
@@ -240,6 +269,19 @@ def _live_chute_status() -> Dict[str, Any]:
         status["stepper_stopped"] = bool(stepper.stopped)
     except Exception as e:
         status["stepper_stopped_error"] = str(e)
+
+    try:
+        import tmc_telemetry
+        sg_result = tmc_telemetry.safeReadRegister(stepper, tmc_telemetry.REG_SG_RESULT)
+        drv_status_raw = tmc_telemetry.safeReadRegister(stepper, tmc_telemetry.REG_DRV_STATUS)
+        status["tmc_sg_result"] = sg_result
+        status["tmc_drv_status"] = tmc_telemetry.decodeDrvStatus(drv_status_raw) if drv_status_raw is not None else None
+    except Exception as e:
+        status["tmc_error"] = str(e)
+    try:
+        status["stall_latched"] = bool(stepper.read_stall_latched())
+    except Exception as e:
+        status["stall_latched_error"] = str(e)
 
     if distribution_board is not None:
         try:

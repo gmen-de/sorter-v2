@@ -21,11 +21,14 @@ router = APIRouter()
 
 
 class StartStressTestRequest(BaseModel):
-    mode: str = Field(..., description="'sweep' or 'random'")
+    mode: str = Field(..., description="'sweep', 'random' or 'acceleration_ramp'")
     target_max_deg: float = Field(..., gt=0, le=CHUTE_MAX_ANGLE_LIMIT_DEG)
     duration_s: float = Field(..., gt=0)
     speed_microsteps_per_sec: int = Field(..., gt=0)
     invert_direction: bool = False
+    accel_start_microsteps_per_second_sq: int = Field(2000, gt=0, description="acceleration_ramp mode only")
+    accel_step_microsteps_per_second_sq: int = Field(1000, gt=0, description="acceleration_ramp mode only")
+    accel_moves_per_step: int = Field(10, gt=0, description="acceleration_ramp mode only")
 
 
 class StressTestStateResponse(BaseModel):
@@ -93,6 +96,9 @@ def startStressTest(payload: StartStressTestRequest) -> StressTestStateResponse:
             duration_s=float(payload.duration_s),
             speed_microsteps_per_sec=int(payload.speed_microsteps_per_sec),
             invert_direction=bool(payload.invert_direction),
+            accel_start_microsteps_per_second_sq=int(payload.accel_start_microsteps_per_second_sq),
+            accel_step_microsteps_per_second_sq=int(payload.accel_step_microsteps_per_second_sq),
+            accel_moves_per_step=int(payload.accel_moves_per_step),
         )
         state = runner.start(params)
     except ValueError as e:

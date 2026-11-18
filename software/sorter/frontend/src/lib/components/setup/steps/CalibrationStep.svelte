@@ -12,7 +12,7 @@
 
 	type ChuteLiveStatus = {
 		live_available: boolean;
-		chute_position_sensor?: 'endstop' | 'encoder';
+		chute_position_sensor?: 'endstop' | 'encoder' | 'encoder_native';
 		endstop_triggered: boolean | null;
 		raw_endstop_high: boolean | null;
 		endstop_active_high: boolean | null;
@@ -67,6 +67,10 @@
 		home_pin_channel: null
 	});
 	const chuteSensorMode = $derived(chuteLive.chute_position_sensor ?? 'endstop');
+	// "encoder" and "encoder_native" are the same magnet-ring hardware, just a
+	// different backend routing detail (see subsystems/distribution/chute.py) -
+	// not something this calibration UI needs to distinguish.
+	const chuteHasEncoder = $derived(chuteSensorMode === 'encoder' || chuteSensorMode === 'encoder_native');
 
 	function currentBackendBaseUrl(): string {
 		return (
@@ -293,7 +297,7 @@
 		</Alert>
 	{/if}
 
-	{#if chuteSensorMode === 'encoder'}
+	{#if chuteHasEncoder}
 		<ChuteEncoderPanel
 			connected={chuteLive.live_available}
 			encoderCount={chuteLive.encoder_count ?? null}

@@ -21,6 +21,7 @@ _STATE_KEY_BIN_LAYOUT = "bin_layout"
 _STATE_KEY_BIN_CATEGORIES = "bin_categories"
 _STATE_KEY_NOT_IN_INVENTORY_BINS = "not_in_inventory_bins"
 _STATE_KEY_SERVO_CHANNEL_CALIBRATION = "servo_channel_calibration"
+_STATE_KEY_CHUTE_BIN_CORRECTIONS = "chute_bin_corrections"
 
 _BIN_LAYOUT_COLUMNS = (
     "id, name, profile_id, profile_source, layout_json, created_at, updated_at, is_active"
@@ -193,6 +194,26 @@ def set_servo_channel_angle(channel_id: Any, which: str, angle: int | None) -> N
     entry[which] = angle
     calibration[key] = entry
     _write(_STATE_KEY_SERVO_CHANNEL_CALIBRATION, calibration)
+
+
+def get_chute_bin_corrections() -> dict[str, int]:
+    """Per-bin chute fine-tune corrections, in microsteps, keyed
+    "layer:section:bin" — encoder_native mode only (see chute.py's
+    getBinCorrection()/TARGET_BIN's correction_usteps). Mirrors
+    get_servo_channel_calibration()'s shape/storage pattern."""
+    value = _read(_STATE_KEY_CHUTE_BIN_CORRECTIONS)
+    return value if isinstance(value, dict) else {}
+
+
+def set_chute_bin_correction(layer_index: int, section_index: int, bin_index: int, correction_usteps: int | None) -> None:
+    # correction_usteps None clears it back to the default (0)
+    corrections = get_chute_bin_corrections()
+    key = f"{layer_index}:{section_index}:{bin_index}"
+    if correction_usteps is None:
+        corrections.pop(key, None)
+    else:
+        corrections[key] = int(correction_usteps)
+    _write(_STATE_KEY_CHUTE_BIN_CORRECTIONS, corrections)
 
 
 def _bin_layout_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:

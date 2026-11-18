@@ -130,7 +130,55 @@ static const uint32_t CHUTE_AUTO_HOME_TIMEOUT_MS = 15000; // matches chute.py's 
 // the closed loop to the visually-confirmed-correct count - supersedes
 // the older ~9 deg/197-usteps figure, which was referenced to a different
 // physical mark (a drilled bolt hole) and never matched this tape mark.
-static const int32_t CHUTE_HOME_OFFSET_USTEPS = 215; // 198 + 17 usteps forward, fine-tuned against the UI's live position readout 2026-11-16
+static const int32_t CHUTE_HOME_OFFSET_USTEPS_DEFAULT = 215; // 198 + 17 usteps forward, fine-tuned against the UI's live position readout 2026-11-16
+// Backend-overridable via CHUTE_ENCODER.SET_HOME_CORRECTION (RAM only, lost
+// on reset — re-sent by the backend at hardware init and on settings
+// change, same as chute_aiming_* below) so this no longer needs a recompile
+// to tune.
+static int32_t chute_home_offset_usteps = CHUTE_HOME_OFFSET_USTEPS_DEFAULT;
+
+// Chute bin-aiming geometry (CHUTE_ENCODER.SET_AIMING) — the section split
+// subsystems/distribution/chute.py's setAimingCalibration() already manages
+// for every other board; mirrored here, backend-pushed, so TARGET_BIN (see
+// below) can compute a bin's angle without the backend doing degree/gear-
+// ratio math in Python for this board. Degrees are fixed-point centidegrees
+// (degrees*100) to keep the wire protocol all-integer, matching every other
+// command in this table. RAM only, lost on reset like the home offset
+// above — chute_aiming_set gates TARGET_BIN refusing to compute a bin angle
+// from zeroed defaults after a reset the backend hasn't noticed yet.
+static uint8_t chute_aiming_num_sections = 6;
+static int32_t chute_aiming_section_width_centideg = 5175; // 51.75 deg, matches chute.py's default
+static int32_t chute_aiming_first_offset_centideg = 825;   // 8.25 deg, matches chute.py's default
+static bool chute_aiming_set = false;
+
+// CHUTE_ENCODER.START_RANDOM_STRESS/STOP_RANDOM_STRESS: an autonomous
+// bounce-between-random-positions loop for StallGuard load-sweep testing
+// (server/routers/stallguard.py's "chute_random" profile) - the backend
+// used to pick each target in Python and poll until stopped; now it hands
+// the firmware a range once and only polls SG_RESULT/CS_ACTUAL/TSTEP (the
+// actual telemetry it needs) while this runs the moves itself. See
+// update_chute_random_stress().
+static bool chute_random_stress_active = false;
+static int32_t chute_random_stress_min_usteps = 0;
+static int32_t chute_random_stress_max_usteps = 0;
+static int32_t chute_random_stress_min_delta_usteps = 0;
+static uint32_t chute_random_stress_move_count = 0;
+// A hand-rolled xorshift32, not Arduino's random()/randomSeed(): those go
+// through newlib's rand()/srand(), which on this toolchain's newlib-nano
+// pulls in the stdio _REENT init chain (_write_r etc.) at LINK time even
+// though nothing here ever calls printf - bench-confirmed 2026-11-18 as an
+// "undefined reference to _write" link failure the moment random() was
+// first used anywhere in this firmware. Good enough for load-variety
+// testing; not meant to be statistically rigorous.
+static uint32_t chute_random_stress_rng_state = 1;
+static uint32_t chute_random_stress_next() {
+    uint32_t x = chute_random_stress_rng_state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    chute_random_stress_rng_state = x;
+    return x;
+}
 
 static bool chute_auto_homing_active = false;  // still seeking the index gap
 static bool chute_auto_homing_stopping = false; // index seen, braking to a full stop
@@ -164,7 +212,7 @@ static void update_chute_auto_home() {
     }
     if (chute_auto_homing_stopping) {
         if (steppers[CHUTE_STEPPER_CHANNEL].isStopped()) {
-            steppers[CHUTE_STEPPER_CHANNEL].moveSteps(CHUTE_HOME_OFFSET_USTEPS);
+            steppers[CHUTE_STEPPER_CHANNEL].moveSteps(chute_home_offset_usteps);
             chute_auto_homing_stopping = false;
             chute_auto_homing_correcting = true;
         }
@@ -323,6 +371,30 @@ static void update_chute_step_move() {
     if (!chute_step_move_active) return;
     if (!steppers[CHUTE_STEPPER_CHANNEL].isStopped()) return;
     chute_step_move_active = false;
+}
+
+static void update_chute_random_stress() {
+    if (!chute_random_stress_active) return;
+    if (chute_step_move_active) return;  // still on its way to the last target
+    if (!chute_auto_homed) {
+        // A reset or an invalidated home reference (see
+        // CHUTE_ENCODER.CLEAR_HOMED) mid-run must not keep bouncing off a
+        // now-meaningless zero.
+        chute_random_stress_active = false;
+        return;
+    }
+    int32_t current = steppers[CHUTE_STEPPER_CHANNEL].getPosition();
+    int32_t span = chute_random_stress_max_usteps - chute_random_stress_min_usteps;
+    int32_t target = chute_random_stress_min_usteps;
+    for (int attempt = 0; attempt < 20; attempt++) {
+        target = chute_random_stress_min_usteps +
+                 (span > 0 ? (int32_t)(chute_random_stress_next() % ((uint32_t)span + 1)) : 0);
+        int32_t delta = target - current;
+        if (delta < 0) delta = -delta;
+        if (delta >= chute_random_stress_min_delta_usteps) break;
+    }
+    start_chute_move_to_step_position(target);
+    chute_random_stress_move_count++;
 }
 
 // ---------------------------------------------------------------------------
@@ -910,6 +982,79 @@ void CMDH_chute_move_to_step_position(const BusMessage* msg, BusMessage* resp) {
     resp->payload_length = 1;
 }
 
+void CMDH_chute_set_home_correction(const BusMessage* msg, BusMessage* resp) {
+    int32_t correction_usteps;
+    memcpy(&correction_usteps, msg->payload, sizeof(correction_usteps));
+    chute_home_offset_usteps = correction_usteps;
+    resp->payload_length = 0;
+}
+
+void CMDH_chute_set_aiming(const BusMessage* msg, BusMessage* resp) {
+    uint8_t num_sections = msg->payload[0];
+    int32_t section_width_centideg, first_offset_centideg;
+    memcpy(&section_width_centideg, msg->payload + 1, sizeof(section_width_centideg));
+    memcpy(&first_offset_centideg, msg->payload + 1 + sizeof(section_width_centideg), sizeof(first_offset_centideg));
+    chute_aiming_num_sections = num_sections;
+    chute_aiming_section_width_centideg = section_width_centideg;
+    chute_aiming_first_offset_centideg = first_offset_centideg;
+    chute_aiming_set = true;
+    resp->payload_length = 0;
+}
+
+void CMDH_chute_target_bin(const BusMessage* msg, BusMessage* resp) {
+    if (refuseMoveIfNotHomed(resp, "TARGET_BIN")) return;
+    if (!chute_aiming_set) {
+        // SET_AIMING lives in RAM only (see chute_aiming_set's own comment
+        // above) - a boot/reset the backend hasn't caught up to yet must
+        // not silently aim off zeroed geometry.
+        resp->command |= 0x80;
+        resp->payload_length = snprintf(reinterpret_cast<char*>(resp->payload), 246,
+                                         "TARGET_BIN: aiming not set since boot");
+        return;
+    }
+    uint8_t layer = msg->payload[0];
+    (void)layer; // reserved: not yet used by the angle math - see SET_AIMING's comment
+    uint8_t num_bins = msg->payload[1];
+    uint8_t bin_index = msg->payload[2];
+    int32_t correction_usteps;
+    memcpy(&correction_usteps, msg->payload + 3, sizeof(correction_usteps));
+    uint32_t max_speed_usteps_per_sec;
+    memcpy(&max_speed_usteps_per_sec, msg->payload + 7, sizeof(max_speed_usteps_per_sec));
+    // Speed travels WITH the request instead of a separate STEPPER.
+    // SET_SPEED_LIMITS write beforehand (2026-11-18): that call set shared,
+    // persistent state on the stepper object - any other tool touching the
+    // same stepper (the jog panel, the stress test, a StallGuard sweep)
+    // between two TARGET_BIN calls would otherwise silently change the
+    // speed a production move runs at. Min speed is fixed (matches
+    // chute.py's MIN_SPEED_MICROSTEPS_PER_SEC) - only the max varies.
+    steppers[CHUTE_STEPPER_CHANNEL].setSpeedLimits(16, max_speed_usteps_per_sec);
+
+    // Same bin-center formula as chute.py's angleForVirtualBin() - keep the
+    // two in lockstep, same as that function's own docstring already asks
+    // of server/routers/chute.py's _virtual_bin_angle.
+    uint8_t n = chute_aiming_num_sections > 0 ? chute_aiming_num_sections : 1;
+    uint8_t k = (num_bins / n) > 0 ? (num_bins / n) : 1;
+    uint8_t section_index = bin_index / k;
+    uint8_t within_index = bin_index % k;
+
+    double section_width_deg = chute_aiming_section_width_centideg / 100.0;
+    double first_offset_deg = chute_aiming_first_offset_centideg / 100.0;
+    double slot = section_width_deg / (double)k;
+    double angle = first_offset_deg + section_index * (360.0 / (double)n) + (within_index + 0.5) * slot;
+    double angle_norm = fmod(angle, 360.0);
+    if (angle_norm < 0) angle_norm += 360.0;
+
+    int32_t target_position =
+        (int32_t)lround(angle_norm / 360.0 * CHUTE_STEP_USTEPS_PER_REV) + correction_usteps;
+    start_chute_move_to_step_position(target_position);
+
+    // Echo the resolved absolute step target back - cheap, and lets the
+    // backend cross-check its own expectation against what firmware
+    // actually computed (same idea as LEARN echoing the gate it assigned).
+    memcpy(resp->payload, &target_position, sizeof(target_position));
+    resp->payload_length = sizeof(target_position);
+}
+
 void CMDH_chute_start_homing(const BusMessage* msg, BusMessage* resp) {
     // A re-home that touches only the chute stepper - unlike the generic
     // INIT command, this does NOT call initialize_hardware() (which would
@@ -919,6 +1064,49 @@ void CMDH_chute_start_homing(const BusMessage* msg, BusMessage* resp) {
     // UI's homing button was using INIT and clobbering unrelated state.
     (void)msg;
     start_chute_auto_home();
+    resp->payload_length = 0;
+}
+
+void CMDH_chute_clear_homed(const BusMessage* msg, BusMessage* resp) {
+    // Firmware is the one true owner of "homed" (chute_auto_homed) -
+    // refuseMoveIfNotHomed() is what every move already checks. A stall or
+    // any other event that invalidates the stepper's position must clear
+    // THIS flag, not just a Python-side shadow copy of it (see
+    // chute.py's markUnhomed()) - otherwise the firmware would keep
+    // believing it's homed and accept moves off a now-meaningless zero.
+    // Does not start homing itself - the next move attempt does that
+    // automatically via refuseMoveIfNotHomed(), same as after a fresh boot.
+    (void)msg;
+    chute_auto_homed = false;
+    resp->payload_length = 0;
+}
+
+void CMDH_chute_start_random_stress(const BusMessage* msg, BusMessage* resp) {
+    if (refuseMoveIfNotHomed(resp, "START_RANDOM_STRESS")) return;
+    int32_t min_usteps, max_usteps, min_delta_usteps;
+    memcpy(&min_usteps, msg->payload, sizeof(min_usteps));
+    memcpy(&max_usteps, msg->payload + 4, sizeof(max_usteps));
+    memcpy(&min_delta_usteps, msg->payload + 8, sizeof(min_delta_usteps));
+    if (max_usteps < min_usteps) {
+        resp->command |= 0x80;
+        resp->payload_length = snprintf(reinterpret_cast<char*>(resp->payload), 246,
+                                         "START_RANDOM_STRESS: max_usteps < min_usteps");
+        return;
+    }
+    chute_random_stress_min_usteps = min_usteps;
+    chute_random_stress_max_usteps = max_usteps;
+    chute_random_stress_min_delta_usteps = min_delta_usteps;
+    chute_random_stress_move_count = 0;
+    chute_random_stress_active = true;
+    resp->payload_length = 0;
+}
+
+void CMDH_chute_stop_random_stress(const BusMessage* msg, BusMessage* resp) {
+    // Stops picking NEW targets; does not abort a move already in flight -
+    // it's left to coast to a natural stop, same as the backend's own old
+    // Python-driven loop just not re-triggering.
+    (void)msg;
+    chute_random_stress_active = false;
     resp->payload_length = 0;
 }
 
@@ -934,6 +1122,12 @@ const struct CommandTable chuteEncoderCmdTable = {
         {"MOVE_TO_COUNT", "i", "?", 4, VAL_chute_encoder_channel, CMDH_chute_move_to_count},
         {"MOVE_TO_STEP_POS", "i", "?", 4, VAL_chute_encoder_channel, CMDH_chute_move_to_step_position},
         {"START_HOMING", "", "", 0, VAL_chute_encoder_channel, CMDH_chute_start_homing},
+        {"SET_HOME_CORRECTION", "i", "", 4, VAL_chute_encoder_channel, CMDH_chute_set_home_correction},
+        {"SET_AIMING", "Bii", "", 9, VAL_chute_encoder_channel, CMDH_chute_set_aiming},
+        {"TARGET_BIN", "BBBiI", "i", 11, VAL_chute_encoder_channel, CMDH_chute_target_bin},
+        {"CLEAR_HOMED", "", "", 0, VAL_chute_encoder_channel, CMDH_chute_clear_homed},
+        {"START_RANDOM_STRESS", "iii", "", 12, VAL_chute_encoder_channel, CMDH_chute_start_random_stress},
+        {"STOP_RANDOM_STRESS", "", "", 0, VAL_chute_encoder_channel, CMDH_chute_stop_random_stress},
     }}};
 
 // Table 4 (SERVO) is intentionally absent (nullptr) — servos are out of
@@ -971,6 +1165,12 @@ static void transmit(const char* data, int length) {
 static BusMessageProcessor* msg_processor;
 
 void setup() {
+    // Seeds CHUTE_ENCODER.START_RANDOM_STRESS's target picker (see
+    // chute_random_stress_next() below). Not security-sensitive - just
+    // needs to not replay the same sequence every boot, and micros() at
+    // this point already reflects boot-to-boot jitter (crystal startup,
+    // USB enumeration, ...). Must be non-zero for xorshift32 to work.
+    chute_random_stress_rng_state = micros() | 1;
     Serial.begin(576000); // Cosmetic for USB-CDC, matches the backend's configured baud
 
     // Discard stale bytes from the USB-CDC RX queue before trusting it.
@@ -1026,6 +1226,7 @@ void loop() {
     update_chute_auto_home();
     update_chute_move();
     update_chute_step_move();
+    update_chute_random_stress();
     while (Serial.available() > 0) {
         char c = (char)Serial.read();
         msg_processor->processIncomingData(c);

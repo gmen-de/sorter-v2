@@ -792,8 +792,11 @@ def cameraDeviceSettingsToDict(
     return parseCameraDeviceSettings(settings)
 
 
-def mkStepperConfig(default_steps_per_second: int = 2000) -> StepperConfig:
-    return StepperConfig(default_steps_per_second)
+def mkStepperConfig(
+    default_steps_per_second: int = 2000,
+    acceleration_microsteps_per_second_sq: int = FIRMWARE_DEFAULT_ACCELERATION_MICROSTEPS_PER_SECOND_SQ,
+) -> StepperConfig:
+    return StepperConfig(default_steps_per_second, acceleration_microsteps_per_second_sq)
 
 
 def cameraSourceForRole(cameras: object, role: str) -> int | str | None:
@@ -918,7 +921,9 @@ def mkIRLConfig(machine_params: dict[str, object] | None = None) -> IRLConfig:
 
     irl_config.carousel_stepper = mkStepperConfig(default_steps_per_second=4000)
     irl_config.c_channel_4_rotor_stepper = irl_config.carousel_stepper
-    irl_config.chute_stepper = mkStepperConfig(default_steps_per_second=3000)
+    irl_config.chute_stepper = mkStepperConfig(
+        default_steps_per_second=3000, acceleration_microsteps_per_second_sq=5000
+    )
     irl_config.c_channel_1_rotor_stepper = mkStepperConfig(default_steps_per_second=4000)
     irl_config.c_channel_2_rotor_stepper = mkStepperConfig(default_steps_per_second=4000)
     irl_config.c_channel_3_rotor_stepper = mkStepperConfig(default_steps_per_second=4000)
@@ -1164,12 +1169,12 @@ def _bindHardware(irl_interface: IRLInterface, config: IRLConfig, gc: GlobalConf
     )
     chute_home_pin = None
     chute_encoder = None
-    if chute_settings.chute_position_sensor == "encoder":
+    if chute_settings.chute_position_sensor in ("encoder", "encoder_native"):
         chute_encoder = distribution_board.chute_encoder
         if chute_encoder is None:
             raise RuntimeError(
-                'chute.chute_position_sensor is "encoder" but this control board has no chute encoder '
-                "(only Octopus-family boards do — check machine.toml's [chute] section)."
+                f'chute.chute_position_sensor is "{chute_settings.chute_position_sensor}" but this control '
+                "board has no chute encoder (only Octopus-family boards do — check machine.toml's [chute] section)."
             )
     else:
         chute_home_pin = distribution_board.get_input(chute_settings.home_pin_channel)
@@ -1191,5 +1196,9 @@ def _bindHardware(irl_interface: IRLInterface, config: IRLConfig, gc: GlobalConf
         position_check_every=chute_settings.position_check_every,
         chute_encoder=chute_encoder,
         encoder_counts_per_revolution=chute_settings.encoder_counts_per_revolution,
+        chute_position_sensor_mode=(
+            "encoder_native" if chute_settings.chute_position_sensor == "encoder_native" else None
+        ),
+        home_correction_usteps=chute_settings.home_correction_usteps,
     )
     gc.logger.info(f"Chute configured: {chute_settings.describe()}")

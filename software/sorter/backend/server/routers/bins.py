@@ -28,8 +28,10 @@ from bin_contents import (
 )
 from bin_layout_store import (
     get_bin_categories,
+    get_chute_bin_corrections,
     get_not_in_inventory_bins,
     set_bin_categories,
+    set_chute_bin_correction,
     set_not_in_inventory_bins,
 )
 from irl.bin_layout import (
@@ -556,6 +558,7 @@ def get_bins_layout() -> Dict[str, Any]:
     pillar_width_deg = float(chute_cfg["pillar_width_deg"])
     usable_per_section = 60.0 - pillar_width_deg
 
+    chute_corrections = get_chute_bin_corrections()
     layers_out = []
     for layer_idx, layer in enumerate(layout_config.layers):
         sections = layer.sections
@@ -572,6 +575,10 @@ def get_bins_layout() -> Dict[str, Any]:
                     "global_index": global_bin,
                     "size": bin_size,
                     "angle": round(angle, 2),
+                    # encoder_native mode only — see chute.py's getBinCorrection().
+                    "chute_correction_usteps": chute_corrections.get(
+                        f"{layer_idx}:{section_idx}:{bin_idx}", 0
+                    ),
                 })
                 global_bin += 1
         max_per_bin = getattr(layer, "max_pieces_per_bin", None)
@@ -727,6 +734,30 @@ def move_to_bin(payload: MoveToBinPayload) -> Dict[str, Any]:
         "layer_index": payload.layer_index,
         "section_index": payload.section_index,
         "bin_index": payload.bin_index,
+    }
+
+
+class ChuteBinCorrectionPayload(BaseModel):
+    layer_index: int
+    section_index: int
+    bin_index: int
+    correction_usteps: Optional[int] = None  # None clears it back to 0
+
+
+@router.post("/api/bins/chute-correction")
+def set_chute_bin_correction_route(payload: ChuteBinCorrectionPayload) -> Dict[str, Any]:
+    """Per-bin chute fine-tune correction, in microsteps - encoder_native mode
+    only (see chute.py's getBinCorrection()/TARGET_BIN's correction_usteps).
+    None clears the override back to 0."""
+    set_chute_bin_correction(
+        payload.layer_index, payload.section_index, payload.bin_index, payload.correction_usteps
+    )
+    return {
+        "ok": True,
+        "layer_index": payload.layer_index,
+        "section_index": payload.section_index,
+        "bin_index": payload.bin_index,
+        "correction_usteps": payload.correction_usteps or 0,
     }
 
 

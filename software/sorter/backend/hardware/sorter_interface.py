@@ -69,6 +69,12 @@ class InterfaceCommandCode(BaseCommandCode):
     CHUTE_ENCODER_MOVE_TO_COUNT = 0x56  # payload: int32 target count; closed-loop, shortest-path (<=180 deg)
     CHUTE_ENCODER_MOVE_TO_STEP_POS = 0x57  # payload: int32 target usteps (stepper's own position); open-loop, shortest-path
     CHUTE_ENCODER_START_HOMING = 0x58  # no payload; re-homes the chute only (unlike INIT, leaves every other stepper/output alone)
+    CHUTE_ENCODER_SET_HOME_CORRECTION = 0x59  # payload: int32 microstep offset, overrides the firmware's built-in home-offset default
+    CHUTE_ENCODER_SET_AIMING = 0x5A  # payload: uint8 num_sections, int32 section_width_centideg, int32 first_offset_centideg
+    CHUTE_ENCODER_TARGET_BIN = 0x5B  # payload: uint8 layer, uint8 num_bins, uint8 bin_index, int32 correction_usteps, uint32 max_speed_usteps_per_sec; response: int32 resolved target usteps
+    CHUTE_ENCODER_CLEAR_HOMED = 0x5C  # no payload; firmware-authoritative "not homed" - see ChuteEncoder.clear_homed()
+    CHUTE_ENCODER_START_RANDOM_STRESS = 0x5D  # payload: int32 min_usteps, int32 max_usteps, int32 min_delta_usteps
+    CHUTE_ENCODER_STOP_RANDOM_STRESS = 0x5E  # no payload
 
 
 class DigitalInputPin:
@@ -176,6 +182,84 @@ class ChuteEncoder:
             "active": bool(obs.get("chute_homing_active")),
             "failed": bool(obs.get("chute_homing_failed")),
         }
+
+    def set_home_correction(self, correction_usteps: int) -> None:
+        """Override the firmware's built-in home-offset default (the fixed
+        microstep move from the encoder's index gap to the mechanically
+        calibrated zero) without a recompile. RAM only - lost on reset, so
+        the caller re-sends this at hardware init and whenever the setting
+        changes, same as set_aiming()."""
+        payload = struct.pack("<i", correction_usteps)
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_SET_HOME_CORRECTION, self._channel, payload)
+
+    def set_aiming(self, num_sections: int, section_width_deg: float, first_section_offset_deg: float) -> None:
+        """Push the bin-aiming geometry subsystems/distribution/chute.py's
+        setAimingCalibration() already manages for every other board, so the
+        firmware can compute a bin's target angle itself (see a future
+        target_bin()). Degrees go over the wire as fixed-point centidegrees
+        to keep the protocol all-integer, matching every other command in
+        this table. RAM only - lost on reset; re-send at hardware init and
+        whenever the setting changes."""
+        payload = struct.pack(
+            "<Bii",
+            num_sections,
+            round(section_width_deg * 100),
+            round(first_section_offset_deg * 100),
+        )
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_SET_AIMING, self._channel, payload)
+
+    def target_bin(
+        self, layer: int, num_bins: int, bin_index: int, correction_usteps: int, max_speed_usteps_per_sec: int
+    ) -> int:
+        """Ask the firmware to compute a bin's target angle itself (from the
+        geometry set_aiming() already pushed) and start the move there via
+        the same open-loop step-position path move_to_step_pos() uses.
+        `layer` is accepted but not yet used by the firmware's angle math -
+        reserved for when servo/gate control also lands on this board.
+        `bin_index` is flat across the whole layer (0..num_bins-1), matching
+        chute_debug_ui.py's own bin-wheel convention
+        (divmod(bin_index, num_bins // num_sections)). `max_speed_usteps_per_sec`
+        travels with this one request instead of a separate
+        STEPPER.SET_SPEED_LIMITS write beforehand - that would leave shared,
+        persistent state on the stepper object that some other tool (the jog
+        panel, the stress test, a StallGuard sweep) could clobber between
+        two calls; min speed is fixed firmware-side to match chute.py's
+        MIN_SPEED_MICROSTEPS_PER_SEC. Refused (NACK, raises MCUBusError) if
+        the chute hasn't been homed since boot/reset, or if set_aiming() was
+        never sent this boot. Returns the resolved absolute step-position
+        target the firmware actually moved to, echoed back for cross-
+        checking against the caller's own expectation."""
+        payload = struct.pack(
+            "<BBBiI", layer, num_bins, bin_index, correction_usteps, max_speed_usteps_per_sec
+        )
+        resp = self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_TARGET_BIN, self._channel, payload)
+        return struct.unpack("<i", resp.payload)[0]
+
+    def clear_homed(self) -> None:
+        """Tell the firmware itself - not just a Python-side shadow copy -
+        that its "homed" belief (chute_auto_homed) is no longer trustworthy.
+        The firmware is the one true owner of this flag (every move already
+        checks it via refuseMoveIfNotHomed()); this does not start homing by
+        itself - the next move attempt does that automatically, same as
+        after a fresh boot. See Chute.markUnhomed()."""
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_CLEAR_HOMED, self._channel, b"")
+
+    def start_random_stress(self, min_usteps: int, max_usteps: int, min_delta_usteps: int) -> None:
+        """Hand the firmware a range once; it autonomously bounces between
+        random positions within [min_usteps, max_usteps] (each at least
+        min_delta_usteps from the last) until stop_random_stress() - for
+        StallGuard load-sweep testing (server/routers/stallguard.py's
+        "chute_random" profile). The backend only needs to keep polling
+        SG_RESULT/CS_ACTUAL/TSTEP for its telemetry chart; it no longer
+        picks or sends each target itself. Refused (NACK, raises
+        MCUBusError) if the chute hasn't been homed since boot/reset."""
+        payload = struct.pack("<iii", min_usteps, max_usteps, min_delta_usteps)
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_START_RANDOM_STRESS, self._channel, payload)
+
+    def stop_random_stress(self) -> None:
+        """Stop picking new targets. Does not abort a move already in
+        flight - it's left to coast to a natural stop."""
+        self._dev.send_command(InterfaceCommandCode.CHUTE_ENCODER_STOP_RANDOM_STRESS, self._channel, b"")
 
 
 # Duty is a uint16 on the wire. The firmware wraps its PWM counter at 65534 so

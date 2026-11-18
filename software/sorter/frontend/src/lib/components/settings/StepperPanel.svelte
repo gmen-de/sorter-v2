@@ -130,7 +130,11 @@
 	let chuteFirstBinCenter = $state(8.25);
 	let chutePillarWidthDeg = $state(8.25);
 	let chuteOperatingSpeed = $state(3000);
-	let chuteSensorMode = $state<'endstop' | 'encoder'>('endstop');
+	let chuteSensorMode = $state<'endstop' | 'encoder' | 'encoder_native'>('endstop');
+	// "encoder" and "encoder_native" are the same magnet-ring hardware, just a
+	// different backend routing detail (see subsystems/distribution/chute.py) -
+	// not something this panel needs to distinguish.
+	const chuteHasEncoder = $derived(chuteSensorMode === 'encoder' || chuteSensorMode === 'encoder_native');
 	let chuteEncoderCount = $state<number | null>(null);
 	let chuteEncoderIndexSynced = $state<boolean | null>(null);
 	let chuteEncoderCountsPerRevolution = $state(144);
@@ -293,8 +297,10 @@
 				? payload.stepper_position_degrees
 				: null;
 		chuteHomed = typeof payload?.homed === 'boolean' ? payload.homed : null;
-		if (typeof payload?.chute_position_sensor === 'string') {
-			chuteSensorMode = payload.chute_position_sensor === 'encoder' ? 'encoder' : 'endstop';
+		if (payload?.chute_position_sensor === 'encoder' || payload?.chute_position_sensor === 'encoder_native') {
+			chuteSensorMode = payload.chute_position_sensor;
+		} else if (typeof payload?.chute_position_sensor === 'string') {
+			chuteSensorMode = 'endstop';
 		}
 		chuteEncoderCount =
 			typeof payload?.encoder_count === 'number' && Number.isFinite(payload.encoder_count)
@@ -320,7 +326,10 @@
 					chuteOperatingSpeed = Number(
 						payload?.operating_speed_microsteps_per_second ?? chuteOperatingSpeed
 					);
-					chuteSensorMode = payload?.chute_position_sensor === 'encoder' ? 'encoder' : 'endstop';
+					chuteSensorMode =
+						payload?.chute_position_sensor === 'encoder' || payload?.chute_position_sensor === 'encoder_native'
+							? payload.chute_position_sensor
+							: 'endstop';
 					chuteEncoderCountsPerRevolution = Number(
 						payload?.encoder_counts_per_revolution ?? chuteEncoderCountsPerRevolution
 					);
@@ -871,7 +880,7 @@
 				{/if}
 				{#if hasEndstop}
 					<p class="mt-1 text-sm text-ink-muted">
-						{isChute && chuteSensorMode === 'encoder'
+						{isChute && chuteHasEncoder
 							? 'Homing finds the magnet-ring index slowly.'
 							: 'Homing finds the endstop slowly.'} Cancel stops every stepper, in case the wrong motor
 						moves.
@@ -978,7 +987,7 @@
 			{/snippet}
 		</Panel>
 
-		{#if chuteSensorMode === 'encoder'}
+		{#if chuteHasEncoder}
 			<ChuteEncoderPanel
 				connected={true}
 				encoderCount={chuteEncoderCount}
