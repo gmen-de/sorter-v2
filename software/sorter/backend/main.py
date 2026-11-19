@@ -876,6 +876,12 @@ def main() -> None:
     elif DISABLE_STALLGUARD:
         gc.logger.info("StallGuard monitor not started (DISABLE_STALLGUARD=1).")
 
+    # FAN5 CPU cooling: cools the Orange Pi itself, not sorting hardware, so
+    # this starts regardless of _noPowerModeActive/sorting-hardware state.
+    import cpu_fan_control
+
+    cpu_fan_control.start(gc)
+
     last_frame_record = time.time()
     last_lifetime_flush = time.time()
     last_main_loop_started = time.perf_counter()

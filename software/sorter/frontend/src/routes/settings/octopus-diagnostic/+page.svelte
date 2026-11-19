@@ -27,9 +27,19 @@
 	type Tab = 'chute' | 'steppers' | 'leds' | 'fans';
 	let tab = $state<Tab>('chute');
 
-	type Fan = { index: number; duty_percent: number };
+	type Fan = { index: number; duty_percent: number; auto?: boolean };
+	type CpuInfo = {
+		temp_c: number | null;
+		throttle_c: number;
+		fan_off_below_c: number;
+		fan_on_at_or_above_c: number;
+		fan_on: boolean | null;
+		auto_fan_index: number;
+		min_switch_interval_s: number;
+	};
 	let fansAvailable = $state(false);
 	let fans = $state<Fan[]>([]);
+	let cpu = $state<CpuInfo | null>(null);
 	let fansLoading = $state(true);
 	let savingFan = $state<number | null>(null);
 
@@ -107,18 +117,24 @@
 		}
 	}
 
+	let fansInFlight = false;
 	async function loadFans() {
-		fansLoading = true;
+		if (fansInFlight) return;
+		fansInFlight = true;
 		try {
 			const res = await fetch(`${backendBase()}/api/fans`);
 			if (!res.ok) throw new Error(await res.text());
 			const data = await res.json();
 			fansAvailable = Boolean(data?.available);
 			fans = Array.isArray(data?.fans) ? data.fans : [];
+			cpu = data?.cpu ?? null;
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to load the fans';
+			// Only surface the error on the initial load - a transient poll
+			// failure should keep showing the last good reading.
+			if (fansLoading) errorMsg = e.message ?? 'Failed to load the fans';
 		} finally {
 			fansLoading = false;
+			fansInFlight = false;
 		}
 	}
 
@@ -194,6 +210,7 @@
 		if (pollHandle !== null) return;
 		pollHandle = setInterval(() => {
 			if (tab === 'chute') void loadLive();
+			else if (tab === 'fans') void loadFans();
 		}, POLL_MS);
 	}
 	function stopPolling() {
@@ -313,6 +330,29 @@
 		</Panel>
 	</div>
 {:else if tab === 'fans'}
+	<Panel
+		title="Orange Pi CPU"
+		description="FAN{cpu?.auto_fan_index ?? 5} is reserved for cooling the Orange Pi's own SoC - target {cpu?.fan_on_at_or_above_c ??
+			55}°C, off again at {cpu?.fan_off_below_c ?? 50}°C, and it won't switch again within {cpu?.min_switch_interval_s ??
+			60}s of its last change, so it doesn't chatter. The chip itself only throttles at {cpu?.throttle_c ?? 85}°C."
+	>
+		<div class="grid grid-cols-2 divide-x divide-line sm:grid-cols-4">
+			<Stat
+				label="CPU temperature"
+				value={cpu?.temp_c ?? '--'}
+				unit={cpu?.temp_c != null ? '°C' : undefined}
+				tone={cpu?.temp_c != null && cpu.fan_on_at_or_above_c != null && cpu.temp_c >= cpu.fan_on_at_or_above_c
+					? 'warning'
+					: undefined}
+			/>
+			<Stat
+				label="FAN{cpu?.auto_fan_index ?? 5}"
+				value={cpu?.fan_on === null || cpu?.fan_on === undefined ? '--' : cpu.fan_on ? 'On' : 'Off'}
+			/>
+			<Stat label="On / off at" value={cpu ? `${cpu.fan_on_at_or_above_c} / ${cpu.fan_off_below_c}` : '--'} unit="°C" />
+			<Stat label="Min. between switches" value={cpu?.min_switch_interval_s ?? '--'} unit="s" />
+		</div>
+	</Panel>
 	<Panel title="Fan headers" description="The board's 6 fan headers (FAN0-FAN5). Duty shown is the last value this backend set, not a live read from the board.">
 		{#if fansLoading}
 			<div class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">Loading the fans</div>
@@ -326,27 +366,39 @@
 					<div class="flex flex-col gap-2 rounded-control bg-well p-3">
 						<div class="flex items-center justify-between text-sm">
 							<span class="font-medium text-ink">FAN{fan.index}</span>
-							<span class="num text-ink-muted">{fan.duty_percent}%</span>
+							{#if fan.auto}
+								<Badge tone={fan.duty_percent > 0 ? 'success' : undefined}>Auto</Badge>
+							{:else}
+								<span class="num text-ink-muted">{fan.duty_percent}%</span>
+							{/if}
 						</div>
-						<input
-							type="range"
-							min="0"
-							max="100"
-							step="1"
-							value={fan.duty_percent}
-							disabled={savingFan === fan.index}
-							oninput={(e) => (fan.duty_percent = Number(e.currentTarget.value))}
-							onchange={(e) => void setFan(fan.index, Number(e.currentTarget.value))}
-							class="accent-primary"
-						/>
-						<div class="flex gap-2">
-							<Button size="sm" disabled={savingFan === fan.index} onclick={() => void setFan(fan.index, 0)}>
-								Off
-							</Button>
-							<Button size="sm" disabled={savingFan === fan.index} onclick={() => void setFan(fan.index, 100)}>
-								Full
-							</Button>
-						</div>
+						{#if fan.auto}
+							<div class="text-sm text-ink-muted">
+								Controlled by CPU temperature (see the Orange Pi panel above) - {fan.duty_percent > 0
+									? 'currently on'
+									: 'currently off'}.
+							</div>
+						{:else}
+							<input
+								type="range"
+								min="0"
+								max="100"
+								step="1"
+								value={fan.duty_percent}
+								disabled={savingFan === fan.index}
+								oninput={(e) => (fan.duty_percent = Number(e.currentTarget.value))}
+								onchange={(e) => void setFan(fan.index, Number(e.currentTarget.value))}
+								class="accent-primary"
+							/>
+							<div class="flex gap-2">
+								<Button size="sm" disabled={savingFan === fan.index} onclick={() => void setFan(fan.index, 0)}>
+									Off
+								</Button>
+								<Button size="sm" disabled={savingFan === fan.index} onclick={() => void setFan(fan.index, 100)}>
+									Full
+								</Button>
+							</div>
+						{/if}
 					</div>
 				{/each}
 			</div>
