@@ -4,12 +4,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote
 
 import requests
+
+log = logging.getLogger(__name__)
+
+# Model files are tens of MB over a connection a machine doesn't fully
+# control (home/office network, Hive's storage backend) - a dropped
+# connection mid-stream (IncompleteRead/ChunkedEncodingError) is common
+# enough that failing outright on the first blip makes large models
+# nearly undownloadable. Retried attempts restart from scratch (no Range/
+# resume support) since the whole file is a few tens of MB at most.
+_DOWNLOAD_RETRIES = 4
+_DOWNLOAD_RETRY_BACKOFF_S = 2.0
 
 
 class HiveError(Exception):
@@ -292,6 +305,34 @@ class HiveClient:
         )
 
     def _download(
+        self,
+        path: str,
+        dest_path: Path,
+        on_progress: Callable[[int, int], None] | None,
+        expected_sha256: str | None,
+    ) -> str:
+        last_exc: requests.exceptions.RequestException | None = None
+        for attempt in range(_DOWNLOAD_RETRIES):
+            try:
+                return self._download_attempt(path, dest_path, on_progress, expected_sha256)
+            except requests.exceptions.RequestException as exc:
+                last_exc = exc
+                if attempt + 1 >= _DOWNLOAD_RETRIES:
+                    break
+                delay = _DOWNLOAD_RETRY_BACKOFF_S * (2**attempt)
+                log.warning(
+                    "download of %s dropped (attempt %d/%d): %s - retrying in %.0fs",
+                    path,
+                    attempt + 1,
+                    _DOWNLOAD_RETRIES,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+        assert last_exc is not None
+        raise last_exc
+
+    def _download_attempt(
         self,
         path: str,
         dest_path: Path,
