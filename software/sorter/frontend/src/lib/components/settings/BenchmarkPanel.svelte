@@ -220,7 +220,11 @@
 				const target = pickRandomBin();
 				if (target === null) throw new Error('No bins are configured.');
 				const t0 = performance.now();
-				await moveToBinAndWait(target.layer, target.section, target.bin);
+				// skipServo=false: let /bins/move-to manage gates itself (close
+				// whatever's open, open the target layer) the same way real
+				// sorting does, so each run's time reflects chute + gate
+				// switching together, not just the chute alone.
+				await moveToBinAndWait(target.layer, target.section, target.bin, false);
 				randomTimesMs = [...randomTimesMs, performance.now() - t0];
 				randomProgress = i + 1;
 			}
