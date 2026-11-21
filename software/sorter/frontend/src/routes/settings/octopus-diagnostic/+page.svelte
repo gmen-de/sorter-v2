@@ -13,6 +13,7 @@
 	import ChannelLedSection from '$lib/components/settings/ChannelLedSection.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import BinLayoutViz from '../chute-aiming/BinLayoutViz.svelte';
+	import BenchmarkPanel from '$lib/components/settings/BenchmarkPanel.svelte';
 
 	// Everything on the Octopus board in one place: the chute's live encoder/
 	// driver readout + bin wheel (the settings-page equivalent of
@@ -24,7 +25,7 @@
 	const manager = getMachinesContext();
 	const POLL_MS = 400;
 
-	type Tab = 'chute' | 'steppers' | 'leds' | 'fans';
+	type Tab = 'chute' | 'steppers' | 'leds' | 'fans' | 'benchmark';
 	let tab = $state<Tab>('chute');
 
 	type Fan = { index: number; duty_percent: number; auto?: boolean };
@@ -252,7 +253,8 @@
 		{ value: 'chute', label: 'Chute' },
 		{ value: 'steppers', label: 'Other steppers' },
 		{ value: 'leds', label: 'LEDs' },
-		{ value: 'fans', label: 'Fans' }
+		{ value: 'fans', label: 'Fans' },
+		{ value: 'benchmark', label: 'Benchmark' }
 	]}
 />
 
@@ -404,4 +406,6 @@
 			</div>
 		{/if}
 	</Panel>
+{:else if tab === 'benchmark'}
+	<BenchmarkPanel />
 {/if}

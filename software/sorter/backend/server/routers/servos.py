@@ -56,6 +56,10 @@ class ServoLayerMovePayload(BaseModel):
     angle: int
 
 
+class ServoLayerGatePayload(BaseModel):
+    state: str  # "open" | "close"
+
+
 class ServoLayerLockPayload(BaseModel):
     which: str  # "open" | "closed"
     angle: Optional[int] = None
@@ -480,6 +484,45 @@ def move_to_layer_servo(layer_index: int, payload: ServoLayerMovePayload) -> Dic
         "layer_index": layer_index,
         "new_angle": angle,
         "feedback": feedback,
+    }
+
+
+@router.post("/api/hardware-config/servo/layers/{layer_index}/set-gate")
+def set_layer_gate(layer_index: int, payload: ServoLayerGatePayload) -> Dict[str, Any]:
+    """Open or close a layer's gate the same way production sorting does
+    (``servo.open()``/``.close()`` on the live object) - backend-agnostic,
+    unlike ``/move-to`` (PCA9685 angle) or the Waveshare BLE gate routes.
+    Built for diagnostics/benchmarking: real sorting never calls this
+    directly, it goes through positioning.py's own door-select logic.
+
+    Timing note: PCA9685's ``open()``/``close()`` return once the move is
+    accepted, not once the servo arrives; the Waveshare BLE bridge blocks
+    until its firmware confirms arrival. ``elapsed_ms`` reflects whichever
+    of those this call actually did - meaningful for BLE, closer to zero
+    for PCA9685.
+    """
+    _ensure_not_homing("set a layer gate")
+    state = payload.state.strip().lower()
+    if state not in {"open", "close"}:
+        raise HTTPException(status_code=400, detail="state must be 'open' or 'close'.")
+
+    servo = _live_servo_for_layer(layer_index)
+    method = getattr(servo, "open" if state == "open" else "close", None)
+    if method is None:
+        raise HTTPException(status_code=500, detail="Servo does not support open/close.")
+
+    started_at = time.monotonic()
+    try:
+        method()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to {state} layer {layer_index + 1}: {e}")
+    elapsed_ms = round((time.monotonic() - started_at) * 1000)
+
+    return {
+        "ok": True,
+        "layer_index": layer_index,
+        "state": state,
+        "elapsed_ms": elapsed_ms,
     }
 
 

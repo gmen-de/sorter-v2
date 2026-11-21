@@ -35,9 +35,10 @@ _LEARN_TIMEOUT_S = 90.0  # calibration steps outward until stall; can take a whi
 _INVENTORY_TIMEOUT_S = 5.0  # how long to wait for the post-connect READY GATES push
 _SCAN_TIMEOUT_S = 5.0
 # Advertised name's fixed prefix — see esp32_ble_servo_bridge/src/main.cpp's
-# bleDeviceName(). Each board appends its own BT MAC's last two bytes (e.g.
-# "SORTER-SERVO-BLE_A7:38") to tell multiple bridges apart in a scan.
-_DEVICE_NAME = "SORTER-SERVO-BLE"
+# bleDeviceName(). Each board appends its own BT MAC's last two bytes and its
+# firmware version (e.g. "SERVO-BLE_A7:38_v1.0.0") to tell multiple bridges
+# apart in a scan and show which ones still need reflashing.
+_DEVICE_NAME = "SERVO-BLE"
 
 
 def scan_devices(timeout: float = _SCAN_TIMEOUT_S) -> list[dict[str, Any]]:

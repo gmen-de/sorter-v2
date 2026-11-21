@@ -28,13 +28,14 @@
 	import Switch from '$lib/components/ui/Switch.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 
-	type ServoBackend = 'pca9685' | 'waveshare';
+	type ServoBackend = 'pca9685' | 'waveshare' | 'waveshare_ble';
+	type BleGateState = 'open' | 'closed' | 'blocked' | 'unknown' | 'error' | undefined;
 
 	type LayerDraft = {
 		layerIndex: number; // 0-based, matches backend layer/servo index
 		label: string;
 		enabled: boolean;
-		channel: string; // PCA channel id as string ('' = unassigned)
+		channel: string; // PCA channel id, or BLE gate id, as string ('' = unassigned)
 		// The channel as last loaded from the backend; null for a layer added here.
 		savedChannel: string | null;
 		invert: boolean;
@@ -49,6 +50,9 @@
 		busy: boolean;
 		lockStatus: 'idle' | 'saving' | 'saved' | 'error';
 		lockError: string;
+		settleBaseMs: number | null;
+		settleAdjustMs: string;
+		settleTotalMs: number | null;
 	};
 
 	const manager = getMachinesContext();
@@ -59,6 +63,10 @@
 	let errorMsg = $state<string | null>(null);
 	let statusMsg = $state('');
 	let backend = $state<ServoBackend>('pca9685');
+	// Only meaningful for waveshare_ble (the bridge board's BLE address) -
+	// save_servo_hardware_config requires it on every save for that backend,
+	// so it has to round-trip even though this page never edits it itself.
+	let device = $state('');
 	let layers = $state<LayerDraft[]>([]);
 	let channelChoices = $state<number[]>([]);
 	let allowedCounts = $state<number[]>([6, 12, 18, 30]);
@@ -66,6 +74,33 @@
 	// Channel, invert and the speeds: set once when the machine is built, so they
 	// stay out of the way of calibrating.
 	let advanced = $derived(userConfig.servoAdvanced);
+
+	// Waveshare BLE: each layer's "channel" field (reused as-is) holds a gate
+	// number instead of a PCA9685 channel - invert and the angle-degree nudge/
+	// lock controls below don't apply (the bridge firmware finds and keeps its
+	// own open/closed limits; see esp32_ble_servo_bridge). This block is the
+	// live bridge/gate state for the BLE-specific controls further down.
+	let bleConnected = $state(false);
+	let bleStatusLoading = $state(false);
+	let bleLastError = $state<string | null>(null);
+	let gateStateByGate = $state<Record<number, BleGateState>>({});
+	let gateBusyByGate = $state<Record<number, string>>({});
+	// Per-gate calibrated flag, derived from the firmware's own "ERR
+	// UNCALIBRATED" response text (cmdOpenClose/cmdStatus in
+	// esp32_ble_servo_bridge) rather than the PCA9685-only open/closed-angle
+	// fields - those stay null for BLE gates, which otherwise left the top
+	// badge stuck on "Needs calibrating" forever even after a real calibrate.
+	let gateCalibratedByGate = $state<Record<number, boolean>>({});
+
+	function noteGateRaw(gate: number, raw: string) {
+		if (raw.includes('UNCALIBRATED')) {
+			gateCalibratedByGate = { ...gateCalibratedByGate, [gate]: false };
+		} else if (!raw.includes('OFFLINE')) {
+			// OPEN/CLOSED/BLOCKED/UNKNOWN all require calibrated limits to be
+			// reported at all - "OFFLINE" alone says nothing either way.
+			gateCalibratedByGate = { ...gateCalibratedByGate, [gate]: true };
+		}
+	}
 
 	// Signature of everything the "Save servo layers" button persists (layer
 	// add/remove, channel, invert, bin count, max/bin, active). Captured at load
@@ -75,7 +110,14 @@
 	let savedSignature = $state('');
 	function layerSignature(list: LayerDraft[]): string {
 		return JSON.stringify(
-			list.map((l) => [l.enabled, l.channel, l.invert, l.binCount, l.maxPiecesPerBin.trim()])
+			list.map((l) => [
+				l.enabled,
+				l.channel,
+				l.invert,
+				l.binCount,
+				l.maxPiecesPerBin.trim(),
+				l.settleAdjustMs.trim()
+			])
 		);
 	}
 	let dirty = $derived(layerSignature(layers) !== savedSignature);
@@ -139,13 +181,17 @@
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
 			const servo = payload?.servo ?? {};
-			backend = servo.backend === 'waveshare' ? 'waveshare' : 'pca9685';
+			backend =
+				servo.backend === 'waveshare' || servo.backend === 'waveshare_ble'
+					? servo.backend
+					: 'pca9685';
 			globalOpenAngle = typeof servo.open_angle === 'number' ? servo.open_angle : null;
 			globalClosedAngle = typeof servo.closed_angle === 'number' ? servo.closed_angle : null;
 			openSpeed = typeof servo.open_speed === 'number' ? servo.open_speed : null;
 			closeSpeed = typeof servo.close_speed === 'number' ? servo.close_speed : null;
 			homingSpeed = typeof servo.homing_speed === 'number' ? servo.homing_speed : null;
 			port = typeof servo.port === 'string' ? servo.port : null;
+			device = typeof servo.device === 'string' ? servo.device : '';
 			channelChoices = Array.isArray(servo.available_channel_ids)
 				? servo.available_channel_ids
 						.map((value: any) => Number(value))
@@ -191,17 +237,140 @@
 					liveChannel: typeof sl.servo_live_channel === 'number' ? sl.servo_live_channel : null,
 					busy: false,
 					lockStatus: 'idle',
-					lockError: ''
+					lockError: '',
+					settleBaseMs: typeof sl.settle_base_ms === 'number' ? sl.settle_base_ms : null,
+					settleAdjustMs:
+						typeof sl.settle_adjust_ms === 'number' && sl.settle_adjust_ms !== 0
+							? String(sl.settle_adjust_ms)
+							: '',
+					settleTotalMs: typeof sl.settle_total_ms === 'number' ? sl.settle_total_ms : null
 				});
 			}
 			layers = next;
 			savedSignature = layerSignature(next);
 			if (selectedIndex !== null && selectedIndex >= layers.length) selectedIndex = null;
+			if (backend === 'waveshare_ble') await loadBleStatus();
 		} catch (e: any) {
 			errorMsg = e.message ?? 'Failed to load servo layers';
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function loadBleStatus() {
+		bleStatusLoading = true;
+		try {
+			const res = await fetch(`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/status`);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			bleConnected = Boolean(payload?.connected);
+			bleLastError = typeof payload?.last_error === 'string' ? payload.last_error : null;
+		} catch (e: any) {
+			bleLastError = e?.message ?? 'Failed to read bridge status.';
+			bleConnected = false;
+		} finally {
+			bleStatusLoading = false;
+		}
+		// Known-open/closed state per assigned gate, so the page shows what the
+		// bridge currently reports rather than "untested" until the operator
+		// presses a button.
+		await Promise.all(
+			layers
+				.filter((l) => layerHasChannel(l))
+				.map(async (l) => {
+					const gate = Number(l.channel);
+					try {
+						const res = await fetch(
+							`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/gates/${gate}/status`
+						);
+						if (!res.ok) return;
+						const payload = await res.json();
+						const state = String(payload?.state ?? '').toLowerCase();
+						gateStateByGate = {
+							...gateStateByGate,
+							[gate]: (['open', 'closed', 'blocked'].includes(state) ? state : 'unknown') as BleGateState
+						};
+						if (typeof payload?.raw === 'string') noteGateRaw(gate, payload.raw);
+					} catch {
+						// Leave this gate's state as whatever it was - a single failed
+						// poll shouldn't blank out an otherwise-working page.
+					}
+				})
+		);
+	}
+
+	function setGateBusy(gate: number, kind: string | null) {
+		if (kind === null) {
+			const next = { ...gateBusyByGate };
+			delete next[gate];
+			gateBusyByGate = next;
+		} else {
+			gateBusyByGate = { ...gateBusyByGate, [gate]: kind };
+		}
+	}
+
+	async function moveBleGate(gate: number, position: 'open' | 'close') {
+		setGateBusy(gate, position === 'open' ? 'opening' : 'closing');
+		bleLastError = null;
+		try {
+			const res = await fetch(
+				`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/gates/${gate}/move`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ position })
+				}
+			);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			const state = String(payload?.state ?? '').toLowerCase();
+			gateStateByGate = {
+				...gateStateByGate,
+				[gate]: (['open', 'closed', 'blocked'].includes(state) ? state : 'unknown') as BleGateState
+			};
+			if (typeof payload?.raw === 'string') noteGateRaw(gate, payload.raw);
+		} catch (e: any) {
+			bleLastError = e?.message ?? `Failed to move gate ${gate}.`;
+			gateStateByGate = { ...gateStateByGate, [gate]: 'error' };
+		} finally {
+			setGateBusy(gate, null);
+		}
+	}
+
+	async function calibrateBleGate(gate: number) {
+		setGateBusy(gate, 'calibrating');
+		bleLastError = null;
+		statusMsg = '';
+		try {
+			const res = await fetch(
+				`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/gates/${gate}/calibrate`,
+				{ method: 'POST' }
+			);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			if (typeof payload?.raw === 'string') noteGateRaw(gate, payload.raw);
+			statusMsg = payload?.message ?? `Gate ${gate} calibrated.`;
+		} catch (e: any) {
+			bleLastError = e?.message ?? `Failed to calibrate gate ${gate}.`;
+		} finally {
+			setGateBusy(gate, null);
+		}
+	}
+
+	function bleBadgeTone(state: BleGateState): 'neutral' | 'success' | 'info' | 'danger' {
+		if (state === 'open') return 'success';
+		if (state === 'closed') return 'info';
+		if (state === 'blocked' || state === 'error') return 'danger';
+		return 'neutral';
+	}
+
+	function bleBadgeLabel(state: BleGateState): string {
+		if (state === 'open') return 'Open';
+		if (state === 'closed') return 'Closed';
+		if (state === 'blocked') return 'Blocked';
+		if (state === 'error') return 'Error';
+		if (state === 'unknown') return 'Unknown';
+		return 'Untested';
 	}
 
 	function setLayer(layerIndex: number, patch: Partial<LayerDraft>) {
@@ -356,12 +525,22 @@
 					}
 					maxPieces = parsed;
 				}
+				const settleTrimmed = layer.settleAdjustMs.trim();
+				let settleAdjust = 0;
+				if (settleTrimmed.length > 0) {
+					const parsedSettle = Number(settleTrimmed);
+					if (!Number.isInteger(parsedSettle)) {
+						throw new Error(`${layer.label}'s settle adjustment must be a whole number of milliseconds.`);
+					}
+					settleAdjust = parsedSettle;
+				}
 				return {
 					bin_count: Number(layer.binCount),
 					enabled: layer.enabled,
 					servo_open_angle: layer.openAngle,
 					servo_closed_angle: layer.closedAngle,
-					max_pieces_per_bin: maxPieces
+					max_pieces_per_bin: maxPieces,
+					settle_adjust_ms: settleAdjust
 				};
 			});
 
@@ -379,7 +558,8 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					backend: 'pca9685',
+					backend,
+					device: backend === 'waveshare_ble' ? device.trim() : null,
 					open_angle: globalOpenAngle,
 					closed_angle: globalClosedAngle,
 					open_speed: openSpeed,
@@ -436,7 +616,10 @@
 				liveChannel: null,
 				busy: false,
 				lockStatus: 'idle',
-				lockError: ''
+				lockError: '',
+				settleBaseMs: null,
+				settleAdjustMs: '',
+				settleTotalMs: null
 			}
 		];
 	}
@@ -557,12 +740,21 @@
 
 	<Panel title="Layers" flush>
 		{#snippet actions()}
-			<Switch
-				checked={advanced}
-				labelledby="storage-layers-advanced"
-				onchange={(on) => userConfig.setServoAdvanced(on)}
-			/>
-			<span id="storage-layers-advanced" class="text-sm text-ink">Advanced</span>
+			{#if backend === 'waveshare_ble'}
+				<Badge tone={bleConnected ? 'success' : 'neutral'} dot>
+					{bleConnected ? 'Connected' : 'Not connected'}
+				</Badge>
+				<Button size="sm" loading={bleStatusLoading} onclick={() => void loadBleStatus()}>
+					Rescan
+				</Button>
+			{:else}
+				<Switch
+					checked={advanced}
+					labelledby="storage-layers-advanced"
+					onchange={(on) => userConfig.setServoAdvanced(on)}
+				/>
+				<span id="storage-layers-advanced" class="text-sm text-ink">Advanced</span>
+			{/if}
 			<Button size="sm" icon={Plus} disabled={loading || saving} onclick={addLayer}
 				>Add a layer</Button
 			>
@@ -580,7 +772,10 @@
 
 		<div class="divide-y divide-line">
 			{#each layers as layer (layer.layerIndex)}
-				{@const calibrated = layerIsCalibrated(layer)}
+				{@const calibrated =
+					backend === 'waveshare_ble'
+						? layerHasChannel(layer) && gateCalibratedByGate[Number(layer.channel)] === true
+						: layerIsCalibrated(layer)}
 				{@const selected = selectedIndex === layer.layerIndex}
 				{@const idle = loading || saving || layer.busy}
 				{@const canMove = layerCanMove(layer)}
@@ -667,7 +862,46 @@
 								class="w-24"
 							/>
 						</Field>
-						{#if advanced}
+						<Field
+							label="Settle adjust"
+							for="layer-{layer.layerIndex}-settle-adjust"
+							info={`Computed wait after a drop: ${layer.settleBaseMs ?? '--'}ms. Adjustment applies on top; total: ${layer.settleTotalMs ?? '--'}ms.`}
+						>
+							<div class="flex items-center gap-1">
+								<Input
+									id="layer-{layer.layerIndex}-settle-adjust"
+									type="number"
+									size="sm"
+									step={10}
+									placeholder="0"
+									value={layer.settleAdjustMs}
+									disabled={loading || saving}
+									oninput={(e) =>
+										setLayer(layer.layerIndex, {
+											settleAdjustMs: (e.currentTarget as HTMLInputElement).value
+										})}
+									class="w-20"
+								/>
+								<span class="text-sm text-ink-muted">ms</span>
+							</div>
+						</Field>
+						{#if backend === 'waveshare_ble'}
+							<Field label="Gate" for="layer-{layer.layerIndex}-gate">
+								<div class="w-28">
+									<Select
+										id="layer-{layer.layerIndex}-gate"
+										size="sm"
+										value={layer.channel}
+										disabled={loading || saving}
+										onchange={(channel) => setLayer(layer.layerIndex, { channel })}
+										options={[
+											{ value: '', label: 'None' },
+											...channelChoices.map((c) => ({ value: String(c), label: `Gate ${c}` }))
+										]}
+									/>
+								</div>
+							</Field>
+						{:else if advanced}
 							<Field
 								label="Channel"
 								for="layer-{layer.layerIndex}-channel"
@@ -702,87 +936,128 @@
 						{/if}
 					</div>
 
-					<div class="flex flex-col gap-3 rounded-item bg-well p-3">
-						<div class="flex flex-wrap items-center gap-x-8 gap-y-4">
-							<div class="flex flex-col gap-1.5">
-								<span class="text-sm font-medium text-ink">Flap</span>
-								<div
-									role="group"
-									aria-label="Move the flap of {layer.label}"
-									class="flex h-(--size-control-sm) items-stretch divide-x divide-line-strong overflow-hidden rounded-button border border-line-strong bg-field"
-								>
-									<button
-										type="button"
-										aria-label="Move toward a lower angle"
-										disabled={idle || !canMove}
-										onpointerdown={(e) => startHold(e, layer.layerIndex, -1)}
-										onpointerup={stopHold}
-										onpointerleave={stopHold}
-										onpointercancel={stopHold}
-										onclick={(e) => keyboardClick(e, layer.layerIndex, -1)}
-										class="flex w-(--size-control-sm) items-center justify-center text-ink transition-colors hover:bg-hover focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45"
-									>
-										<ChevronLeft size={16} />
-									</button>
-									<span class="num flex min-w-16 items-center justify-center px-2 text-sm text-ink">
-										{layer.currentAngle === null ? 'Unknown' : `${layer.currentAngle}°`}
-									</span>
-									<button
-										type="button"
-										aria-label="Move toward a higher angle"
-										disabled={idle || !canMove}
-										onpointerdown={(e) => startHold(e, layer.layerIndex, 1)}
-										onpointerup={stopHold}
-										onpointerleave={stopHold}
-										onpointercancel={stopHold}
-										onclick={(e) => keyboardClick(e, layer.layerIndex, 1)}
-										class="flex w-(--size-control-sm) items-center justify-center text-ink transition-colors hover:bg-hover focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45"
-									>
-										<ChevronRight size={16} />
-									</button>
-								</div>
+					{#if backend === 'waveshare_ble'}
+						{@const gate = layerHasChannel(layer) ? Number(layer.channel) : null}
+						<div class="flex flex-col gap-3 rounded-item bg-well p-3">
+							<div class="flex flex-wrap items-center gap-3">
+								{#if gate === null}
+									<p class="text-sm text-ink-muted">No gate assigned.</p>
+								{:else}
+									<Badge tone={bleBadgeTone(gateStateByGate[gate])}>
+										{bleBadgeLabel(gateStateByGate[gate])}
+									</Badge>
+									<div class="ml-auto flex items-center gap-2">
+										<Button
+											size="sm"
+											loading={gateBusyByGate[gate] === 'opening'}
+											disabled={Boolean(gateBusyByGate[gate])}
+											onclick={() => moveBleGate(gate, 'open')}
+										>
+											Open
+										</Button>
+										<Button
+											size="sm"
+											loading={gateBusyByGate[gate] === 'closing'}
+											disabled={Boolean(gateBusyByGate[gate])}
+											onclick={() => moveBleGate(gate, 'close')}
+										>
+											Close
+										</Button>
+										<Button
+											size="sm"
+											loading={gateBusyByGate[gate] === 'calibrating'}
+											disabled={Boolean(gateBusyByGate[gate])}
+											onclick={() => calibrateBleGate(gate)}
+										>
+											Calibrate
+										</Button>
+									</div>
+								{/if}
 							</div>
-							{@render flapStep(layer, 'open', canMove, idle)}
-							{@render flapStep(layer, 'closed', canMove, idle)}
-							{#if layer.openAngle !== null || layer.closedAngle !== null}
-								<Button
-									variant="ghost"
-									size="sm"
-									icon={Eraser}
-									class="ml-auto self-end"
-									disabled={idle || !canMove}
-									onclick={() => clearAngles(layer.layerIndex)}
-								>
-									Start over
-								</Button>
+						</div>
+					{:else}
+						<div class="flex flex-col gap-3 rounded-item bg-well p-3">
+							<div class="flex flex-wrap items-center gap-x-8 gap-y-4">
+								<div class="flex flex-col gap-1.5">
+									<span class="text-sm font-medium text-ink">Flap</span>
+									<div
+										role="group"
+										aria-label="Move the flap of {layer.label}"
+										class="flex h-(--size-control-sm) items-stretch divide-x divide-line-strong overflow-hidden rounded-button border border-line-strong bg-field"
+									>
+										<button
+											type="button"
+											aria-label="Move toward a lower angle"
+											disabled={idle || !canMove}
+											onpointerdown={(e) => startHold(e, layer.layerIndex, -1)}
+											onpointerup={stopHold}
+											onpointerleave={stopHold}
+											onpointercancel={stopHold}
+											onclick={(e) => keyboardClick(e, layer.layerIndex, -1)}
+											class="flex w-(--size-control-sm) items-center justify-center text-ink transition-colors hover:bg-hover focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45"
+										>
+											<ChevronLeft size={16} />
+										</button>
+										<span class="num flex min-w-16 items-center justify-center px-2 text-sm text-ink">
+											{layer.currentAngle === null ? 'Unknown' : `${layer.currentAngle}°`}
+										</span>
+										<button
+											type="button"
+											aria-label="Move toward a higher angle"
+											disabled={idle || !canMove}
+											onpointerdown={(e) => startHold(e, layer.layerIndex, 1)}
+											onpointerup={stopHold}
+											onpointerleave={stopHold}
+											onpointercancel={stopHold}
+											onclick={(e) => keyboardClick(e, layer.layerIndex, 1)}
+											class="flex w-(--size-control-sm) items-center justify-center text-ink transition-colors hover:bg-hover focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45"
+										>
+											<ChevronRight size={16} />
+										</button>
+									</div>
+								</div>
+								{@render flapStep(layer, 'open', canMove, idle)}
+								{@render flapStep(layer, 'closed', canMove, idle)}
+								{#if layer.openAngle !== null || layer.closedAngle !== null}
+									<Button
+										variant="ghost"
+										size="sm"
+										icon={Eraser}
+										class="ml-auto self-end"
+										disabled={idle || !canMove}
+										onclick={() => clearAngles(layer.layerIndex)}
+									>
+										Start over
+									</Button>
+								{/if}
+							</div>
+
+							{#if hint || step || layer.lockStatus !== 'idle'}
+								<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+									{#if hint}
+										<p class="text-sm text-ink-muted">{hint}</p>
+									{:else if step === 'open'}
+										<p class="text-sm text-ink">
+											Move the flap until it lies flat in the chute wall, then lock it open.
+										</p>
+									{:else if step === 'closed'}
+										<p class="text-sm text-ink">
+											Now move the flap until it crosses the chute, then lock it closed.
+										</p>
+									{/if}
+									{#if layer.lockStatus === 'saving'}
+										<span class="flex items-center gap-1.5 text-sm text-ink-muted"
+											><Spinner size={12} /> Saving</span
+										>
+									{:else if layer.lockStatus === 'saved'}
+										<span class="text-sm text-success-ink">Saved</span>
+									{:else if layer.lockStatus === 'error'}
+										<span class="text-sm text-danger-ink" title={layer.lockError}>Not saved</span>
+									{/if}
+								</div>
 							{/if}
 						</div>
-
-						{#if hint || step || layer.lockStatus !== 'idle'}
-							<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-								{#if hint}
-									<p class="text-sm text-ink-muted">{hint}</p>
-								{:else if step === 'open'}
-									<p class="text-sm text-ink">
-										Move the flap until it lies flat in the chute wall, then lock it open.
-									</p>
-								{:else if step === 'closed'}
-									<p class="text-sm text-ink">
-										Now move the flap until it crosses the chute, then lock it closed.
-									</p>
-								{/if}
-								{#if layer.lockStatus === 'saving'}
-									<span class="flex items-center gap-1.5 text-sm text-ink-muted"
-										><Spinner size={12} /> Saving</span
-									>
-								{:else if layer.lockStatus === 'saved'}
-									<span class="text-sm text-success-ink">Saved</span>
-								{:else if layer.lockStatus === 'error'}
-									<span class="text-sm text-danger-ink" title={layer.lockError}>Not saved</span>
-								{/if}
-							</div>
-						{/if}
-					</div>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -808,7 +1083,7 @@
 		{/snippet}
 	</Panel>
 
-	{#if advanced}
+	{#if advanced && backend !== 'waveshare_ble'}
 		<ServoSpeedSettings
 			bind:openSpeed
 			bind:closeSpeed
@@ -820,6 +1095,8 @@
 
 {#if errorMsg}
 	<Alert tone="danger">{errorMsg}</Alert>
+{:else if bleLastError}
+	<Alert tone="danger">{bleLastError}</Alert>
 {:else if statusMsg}
 	<p class="text-sm text-ink-muted">{statusMsg}</p>
 {/if}

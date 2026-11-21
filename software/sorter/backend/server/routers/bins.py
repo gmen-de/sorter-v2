@@ -79,6 +79,11 @@ class MoveToBinPayload(BaseModel):
     layer_index: int
     section_index: int
     bin_index: int
+    # Diagnostics/benchmarking (see octopus-diagnostic's benchmark tab) drive
+    # gates independently of the target bin's own layer - skip the normal
+    # close-everything/open-target-layer side effect so a caller's own gate
+    # moves aren't immediately undone or duplicated by this endpoint's own.
+    skip_servo: bool = False
 
 
 class MoveToSectionPayload(BaseModel):
@@ -709,23 +714,25 @@ def move_to_bin(payload: MoveToBinPayload) -> Dict[str, Any]:
     if target_angle is None:
         raise HTTPException(status_code=400, detail="Bin is unreachable (angle out of range).")
 
-    # Close all servos first, then open the target layer
-    for i, servo in enumerate(servos):
-        try:
-            if hasattr(servo, "isOpen") and servo.isOpen():
-                servo.close()
-        except Exception:
-            pass
+    if not payload.skip_servo:
+        # Close all servos first, then open the target layer
+        for i, servo in enumerate(servos):
+            try:
+                if hasattr(servo, "isOpen") and servo.isOpen():
+                    servo.close()
+            except Exception:
+                pass
 
     estimated_ms = _chute_move(chute.moveToBin, address)
 
-    # Open the target layer servo
-    target_servo = servos[payload.layer_index]
-    try:
-        if hasattr(target_servo, "open"):
-            target_servo.open()
-    except Exception:
-        pass
+    if not payload.skip_servo:
+        # Open the target layer servo
+        target_servo = servos[payload.layer_index]
+        try:
+            if hasattr(target_servo, "open"):
+                target_servo.open()
+        except Exception:
+            pass
 
     return {
         "ok": True,

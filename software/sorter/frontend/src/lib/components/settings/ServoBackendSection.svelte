@@ -235,7 +235,7 @@
 								onclick={() => pickDevice(found.address)}
 							>
 								<span class="font-mono">{found.address}</span>
-								<span class="text-ink-muted">{found.name || '(unnamed)'}{found.is_sorter_servo ? ' — SORTER-SERVO-BLE' : ''}</span>
+								<span class="text-ink-muted">{found.name || '(unnamed)'}{found.is_sorter_servo ? ' — SERVO-BLE' : ''}</span>
 								<span class="text-ink-muted">{found.rssi ?? ''} dBm</span>
 							</button>
 						{/each}

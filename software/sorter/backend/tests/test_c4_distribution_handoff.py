@@ -31,7 +31,7 @@ from subsystems.classification_channel.two_piece.flow import (
 from subsystems.distribution.idle import Idle
 from subsystems.distribution.positioning import Positioning
 from subsystems.distribution.ready import Ready
-from subsystems.distribution.sending import CHUTE_SETTLE_MS, Sending
+from subsystems.distribution.sending import FALLBACK_SETTLE_MS, Sending
 from subsystems.distribution.states import DistributionState
 from subsystems.shared_variables import SharedVariables
 
@@ -226,7 +226,7 @@ def test_sending_does_not_record_an_already_committed_piece_again() -> None:
     sending = Sending(SimpleNamespace(), gc, shared, queue.Queue())  # type: ignore[arg-type]
 
     assert sending.step() is None
-    sending.start_time = time.time() - (CHUTE_SETTLE_MS / 1000.0) - 5.0
+    sending.start_time = time.time() - (FALLBACK_SETTLE_MS / 1000.0) - 5.0
 
     assert sending.step() == DistributionState.IDLE
     assert gc.run_recorder.pieces == []
@@ -260,7 +260,7 @@ def test_incident_hold_release_does_not_double_count_and_aims_again() -> None:
 
     sending = Sending(SimpleNamespace(), gc, shared, queue.Queue())  # type: ignore[arg-type]
     assert sending.step() is None
-    sending.start_time = time.time() - (CHUTE_SETTLE_MS / 1000.0) - 5.0
+    sending.start_time = time.time() - (FALLBACK_SETTLE_MS / 1000.0) - 5.0
     assert sending.step() == DistributionState.IDLE
     assert gc.run_recorder.pieces == []
 
@@ -394,7 +394,7 @@ def test_phantom_ahead_then_real_eject_does_not_wedge_distribution() -> None:
     assert ready.step() == DistributionState.SENDING
     sending = Sending(SimpleNamespace(), gc, shared, queue.Queue())  # type: ignore[arg-type]
     assert sending.step() is None
-    sending.start_time = time.time() - (CHUTE_SETTLE_MS / 1000.0) - 5.0
+    sending.start_time = time.time() - (FALLBACK_SETTLE_MS / 1000.0) - 5.0
     assert sending.step() == DistributionState.IDLE
     assert gc.run_recorder.pieces == [obj45]
 

@@ -27,6 +27,10 @@ class LayerConfig:
     # servo_closed_angle above are DEPRECATED (kept only for the one-time
     # migration that seeds the per-channel store) and are no longer the source.
     servo_channel_id: int | None = None
+    # Operator fine-tune on top of the physics-computed chute-settle wait for
+    # this layer (subsystems/distribution/sending.py's chuteSettleMsForLayer),
+    # positive or negative. 0 = use the computed value as-is.
+    settle_adjust_ms: int = 0
 
     def __post_init__(self) -> None:
         n = len(self.sections)
@@ -107,6 +111,7 @@ class Layer:
     enabled: bool = True
     max_pieces_per_bin: int | None = None
     max_dimension_mm: float | None = None
+    settle_adjust_ms: int = 0
 
 
 @dataclass
@@ -208,6 +213,7 @@ def _parseLayersDict(data: dict) -> BinLayoutConfig | None:
             if isinstance(section_enabled_raw, list)
             else None
         )
+        settle_adjust = layer_data.get("settle_adjust_ms")
         layers.append(LayerConfig(
             sections=sections,
             enabled=enabled,
@@ -217,6 +223,7 @@ def _parseLayersDict(data: dict) -> BinLayoutConfig | None:
             max_pieces_per_bin=max_per_bin if isinstance(max_per_bin, int) and max_per_bin > 0 else None,
             max_dimension_mm=max_dimension,
             section_enabled=section_enabled,
+            settle_adjust_ms=int(settle_adjust) if isinstance(settle_adjust, int) and not isinstance(settle_adjust, bool) else 0,
         ))
     return BinLayoutConfig(layers=layers) if layers else None
 
@@ -310,6 +317,7 @@ def saveBinLayout(config: BinLayoutConfig) -> None:
                 "max_pieces_per_bin": layer.max_pieces_per_bin,
                 "max_dimension_mm": layer.max_dimension_mm,
                 "section_enabled": layer.section_enabled,
+                "settle_adjust_ms": layer.settle_adjust_ms,
             }
             for layer in config.layers
         ]
@@ -363,6 +371,7 @@ def mkLayoutFromConfig(config: BinLayoutConfig) -> DistributionLayout:
             enabled=layer_config.enabled,
             max_pieces_per_bin=layer_config.max_pieces_per_bin,
             max_dimension_mm=layer_config.max_dimension_mm,
+            settle_adjust_ms=layer_config.settle_adjust_ms,
         ))
     return DistributionLayout(layers=layers)
 
