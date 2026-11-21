@@ -2,6 +2,7 @@
 	// The profile this machine sorts with now: which one and which version, what
 	// it sorts into, and a notice when Hive has a newer version of it.
 	import Boxes from '@lucide/svelte/icons/boxes';
+	import { _ } from 'svelte-i18n';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -27,11 +28,18 @@
 	const name = $derived(syncState?.profile_name ?? localProfile?.name ?? metadata?.name ?? null);
 	const from = $derived.by(() => {
 		if (syncState?.source === 'local') {
-			return `Saved on this machine as ${syncState.local_filename ?? 'a file'}`;
+			return $_('components.profiles.activeProfilePanel.savedAsFile', {
+				values: {
+					filename:
+						syncState.local_filename ?? $_('components.profiles.activeProfilePanel.aFile')
+				}
+			});
 		}
 		const target = syncState?.target_name;
 		if (!target) return null;
-		return /hive/i.test(target) ? `From ${target}` : `From Hive, ${target}`;
+		return /hive/i.test(target)
+			? $_('components.profiles.activeProfilePanel.fromTarget', { values: { target } })
+			: $_('components.profiles.activeProfilePanel.fromHiveTarget', { values: { target } });
 	});
 	const applied = $derived(
 		formatRelativeTime(syncState?.applied_at ?? localProfile?.updated_at ?? null)
@@ -40,12 +48,20 @@
 	const sorts = $derived.by(() => {
 		if (!metadata) return null;
 		const count = Object.keys(metadata.categories ?? {}).length;
-		const bins = `${whole(count)} ${count === 1 ? 'category' : 'categories'}`;
+		const categoryWord =
+			count === 1
+				? $_('components.profiles.activeProfilePanel.category')
+				: $_('components.profiles.activeProfilePanel.categories');
+		const bins = `${whole(count)} ${categoryWord}`;
 		const { sorted, total_parts: total } = metadata.stats ?? {};
 		if (sorted == null || total == null) return `${bins}.`;
 		return sorted === total
-			? `${bins}; all ${whole(total)} known parts are sorted.`
-			: `${bins}; ${whole(sorted)} of ${whole(total)} known parts are sorted, the rest go to Everything else.`;
+			? $_('components.profiles.activeProfilePanel.allSorted', {
+					values: { bins, total: whole(total) }
+				})
+			: $_('components.profiles.activeProfilePanel.partialSorted', {
+					values: { bins, sorted: whole(sorted), total: whole(total) }
+				});
 	});
 
 	function whole(n: number) {
@@ -53,14 +69,21 @@
 	}
 </script>
 
-<Panel title="On this machine" description="The profile this machine sorts with now.">
+<Panel
+	title={$_('components.profiles.activeProfilePanel.panelTitle')}
+	description={$_('components.profiles.activeProfilePanel.panelDescription')}
+>
 	{#snippet actions()}
-		<Button size="sm" icon={Boxes} onclick={onOpenBins}>See its categories</Button>
+		<Button size="sm" icon={Boxes} onclick={onOpenBins}
+			>{$_('components.profiles.activeProfilePanel.seeCategories')}</Button
+		>
 	{/snippet}
 	<div class="flex flex-col gap-3">
 		<div>
 			<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-				<span class="text-base font-semibold text-ink">{name ?? 'A profile with no name'}</span>
+				<span class="text-base font-semibold text-ink"
+					>{name ?? $_('components.profiles.activeProfilePanel.noName')}</span
+				>
 				{#if syncState?.version_number}
 					<Badge
 						>v{syncState.version_number}{syncState.version_label
@@ -70,16 +93,29 @@
 				{/if}
 			</div>
 			<p class="mt-0.5 text-sm text-ink-muted">
-				{[from, applied && `applied ${applied}`].filter(Boolean).join(', ')}
+				{[
+					from,
+					applied &&
+						$_('components.profiles.activeProfilePanel.appliedAt', { values: { applied } })
+				]
+					.filter(Boolean)
+					.join(', ')}
 			</p>
 			{#if sorts}<p class="mt-0.5 text-sm text-ink-muted">{sorts}</p>{/if}
 		</div>
 
 		{#if update}
-			<Alert tone="info" title="v{update.latest} is on Hive; this machine runs v{update.current}">
-				The bins keep what is in them.
+			<Alert
+				tone="info"
+				title={$_('components.profiles.activeProfilePanel.updateAlertTitle', {
+					values: { latest: update.latest, current: update.current }
+				})}
+			>
+				{$_('components.profiles.activeProfilePanel.updateAlertBody')}
 				{#snippet actions()}
-					<Button variant="primary" size="sm" loading={updating} onclick={onUpdate}>Update</Button>
+					<Button variant="primary" size="sm" loading={updating} onclick={onUpdate}
+						>{$_('components.profiles.activeProfilePanel.updateButton')}</Button
+					>
 				{/snippet}
 			</Alert>
 		{/if}

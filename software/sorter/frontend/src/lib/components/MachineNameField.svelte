@@ -4,6 +4,7 @@
 	// machine already has for itself and offers another roll, so the three stay
 	// one behaviour rather than three that drift.
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import Shuffle from '@lucide/svelte/icons/shuffle';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -50,7 +51,7 @@
 			variant="ghost"
 			size="sm"
 			icon={Shuffle}
-			label="Suggest another name"
+			label={$_('components.machineNameField.suggestAnotherName')}
 			onclick={() => void fill(true)}
 		/>
 	{/snippet}

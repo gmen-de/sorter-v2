@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { getMachinesContext, getMachineContext } from '$lib/machines/context';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -73,7 +74,7 @@
 			data = await res.json();
 			error = null;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load';
+			error = e instanceof Error ? e.message : $_('routes.dashboard.sets.loadFailedFallback');
 		}
 	}
 
@@ -96,32 +97,41 @@
 	const is_set_based = $derived(data?.is_set_based ?? false);
 
 	function colorLabel(part: SetPart): string {
-		return part.color_name ?? (String(part.color_id) === '-1' ? 'Any color' : String(part.color_id));
+		return (
+			part.color_name ??
+			(String(part.color_id) === '-1' ? $_('routes.dashboard.sets.anyColor') : String(part.color_id))
+		);
 	}
 </script>
 
-<svelte:head><title>Sorter - Set progress</title></svelte:head>
+<svelte:head><title>{$_('routes.dashboard.sets.pageTitle')}</title></svelte:head>
 
 <AppShell>
 	<div class="mx-auto flex w-full max-w-[1500px] flex-col gap-(--gap-panels) px-4 py-6 sm:px-6">
-		<PageHeader title="Set progress" description="How many of each set's parts the sorter has found so far.">
+		<PageHeader title={$_('routes.dashboard.sets.title')} description={$_('routes.dashboard.sets.description')}>
 			{#snippet actions()}
-				<Button icon={Printer} href="/dashboard/sets/checklist">Checklist</Button>
+				<Button icon={Printer} href="/dashboard/sets/checklist">{$_('routes.dashboard.sets.checklistButton')}</Button>
 			{/snippet}
 		</PageHeader>
 
 		{#if error}<Alert tone="danger">{error}</Alert>{/if}
 
 		{#if !is_set_based}
-			<EmptyState title="The active sorting profile is not set-based">
-				Assign a set-based profile to track progress.
+			<EmptyState title={$_('routes.dashboard.sets.notSetBasedTitle')}>
+				{$_('routes.dashboard.sets.notSetBasedBody')}
 			</EmptyState>
 		{:else if progress}
 			<Panel
-				title="Overall progress"
-				description="{progress.overall_found} / {progress.overall_needed} parts ({progress.overall_pct}%)"
+				title={$_('routes.dashboard.sets.overallProgressTitle')}
+				description={$_('routes.dashboard.sets.overallProgressSummary', {
+					values: {
+						found: progress.overall_found,
+						needed: progress.overall_needed,
+						pct: progress.overall_pct
+					}
+				})}
 			>
-				<ProgressBar value={progress.overall_pct} label="Overall progress" />
+				<ProgressBar value={progress.overall_pct} label={$_('routes.dashboard.sets.overallProgressTitle')} />
 			</Panel>
 
 			<div class="grid grid-cols-1 gap-(--gap-panels) md:grid-cols-2 xl:grid-cols-3">
@@ -155,12 +165,16 @@
 								<span class="mt-2 block">
 									<ProgressBar
 										value={Math.min(set_progress.pct, 100)}
-										label="Progress of {set_progress.name || set_progress.set_num}"
+										label={$_('routes.dashboard.sets.progressOfLabel', {
+											values: { name: set_progress.name || set_progress.set_num }
+										})}
 										tone={set_progress.pct >= 100 ? 'success' : 'primary'}
 									/>
 								</span>
 								<span class="mt-2 block text-sm {missing_parts.length > 0 ? 'text-ink-muted' : 'text-success-ink'}">
-									{missing_parts.length > 0 ? `${missing_parts.length} parts still missing` : 'Complete'}
+									{missing_parts.length > 0
+										? $_('routes.dashboard.sets.partsStillMissing', { values: { count: missing_parts.length } })
+										: $_('routes.dashboard.sets.completeLabel')}
 								</span>
 							</span>
 						</button>
@@ -170,10 +184,10 @@
 								<table class="data-table">
 									<thead>
 										<tr>
-											<th>Part</th>
-											<th>Color</th>
-											<th class="num">Found</th>
-											<th class="num">Needed</th>
+											<th>{$_('routes.dashboard.sets.colHeaderPart')}</th>
+											<th>{$_('routes.dashboard.sets.colHeaderColor')}</th>
+											<th class="num">{$_('routes.dashboard.sets.colHeaderFound')}</th>
+											<th class="num">{$_('routes.dashboard.sets.colHeaderNeeded')}</th>
 										</tr>
 									</thead>
 									<tbody>
@@ -198,7 +212,7 @@
 		{:else}
 			<p class="flex items-center justify-center gap-2 py-12 text-sm text-ink-muted">
 				<Spinner size={16} />
-				Loading the set progress
+				{$_('routes.dashboard.sets.loadingSetProgress')}
 			</p>
 		{/if}
 	</div>

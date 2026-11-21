@@ -1,0 +1,440 @@
+{
+	"routes": {
+		"settings": {
+			"layout": {
+				"hotkeyFailed": "{label} hotkey failed.",
+				"settingsNavLabel": "Settings",
+				"settingsPageLabel": "Settings page"
+			},
+			"index": {
+				"pageTitle": "Sorter - Settings",
+				"title": "General",
+				"description": "This machine's name, its keys and the setup wizard.",
+				"openRouter": {
+					"title": "OpenRouter",
+					"description": "The key used for cloud-assisted detection."
+				}
+			},
+			"station": {
+				"pageTitle": "Sorter - {label}"
+			},
+			"chuteAiming": {
+				"page": {
+					"pageTitle": "Sorter - Chute aiming",
+					"title": "Chute aiming",
+					"description": "If the chute points at the wrong bin, run the calibration below. Otherwise the defaults are already right and you can leave this page.",
+					"loadError": "Failed to load chute aiming settings",
+					"saveError": "Failed to save parameters",
+					"homeError": "Failed to home the chute",
+					"cancelHomeError": "Failed to cancel homing",
+					"jogError": "Chute move failed",
+					"deriveError": "Failed to derive aiming geometry",
+					"lockInError": "Failed to lock in calibration",
+					"deleteError": "Failed to delete calibration",
+					"testAimError": "Test aim failed",
+					"homedStatus": "Chute homed to its endstop.",
+					"homingCanceledStatus": "Chute homing canceled.",
+					"manualEditLabel": "Manual edit",
+					"testAimStatus": "Aiming at {binCount}-bin section {section}, bin {bin} ({angle}°).",
+					"jogPad": {
+						"jogLabel": "Jog the chute",
+						"now": "Now",
+						"keyboardHint": "The arrow keys work too: up and down move {fine}°, left and right {coarse}°. Hold one to repeat.",
+						"binsInSectionLabel": "Bins in this section",
+						"binsInSectionHelp": "How many bins the section you are measuring has. More is more accurate; 3 or 5 is best."
+					},
+					"steps": {
+						"home": "Home the chute",
+						"firstBin": "Aim at the first bin of a section",
+						"lastBin": "Aim at the last bin of that section",
+						"lockIn": "Lock it in"
+					},
+					"editFooter": {
+						"useDefaults": "Use the defaults",
+						"cancel": "Cancel",
+						"save": "Save"
+					},
+					"activeParams": {
+						"title": "Active aiming parameters",
+						"editByHand": "Edit by hand",
+						"sections": "Sections",
+						"sectionWidth": "Section width",
+						"offsetFromHome": "Offset from home",
+						"pitch": "Pitch",
+						"pillar": "Pillar",
+						"editWarning": "The calibration sets these. Only change them by hand if you know exactly what they mean.",
+						"sectionsFieldLabel": "Sections (N)",
+						"sectionWidthFieldLabel": "Section width (W)",
+						"offsetFieldLabel": "Offset (θ₀)"
+					},
+					"calibration": {
+						"title": "Run the calibration",
+						"description": "It finds two numbers: the width of a section in degrees, and the offset of the first section from home. From those the machine works out where every bin sits and which ones each layout can reach.",
+						"startOver": "Start over",
+						"travelWarning": "Every step here moves the chute. It hits a hard stop at home and can never cross it, so it has about {deg}° of travel. Always home first.",
+						"step1": {
+							"description": "Sets 0° at the home switch.",
+							"chuteAngle": "Chute angle",
+							"motorAngle": "Motor angle",
+							"endstop": "Endstop",
+							"triggered": "Triggered",
+							"open": "Open",
+							"homeAgain": "Home again",
+							"homeButton": "Home the chute",
+							"cancel": "Cancel",
+							"homedBadge": "Homed."
+						},
+						"step2": {
+							"locked": "Home the chute first.",
+							"description": "Pick any layer, and a section you can see whole with more than 2 bins; 3 or 5 is best, and more bins is more accurate. Set its bin count, then jog until the chute points straight into the first bin, and capture.",
+							"captureButton": "Capture the first bin",
+							"captured": "Captured {deg}°"
+						},
+						"step3": {
+							"locked": "Capture the first bin first.",
+							"description": "Jog until the chute points straight into the last bin of the same section, then capture. It sits at a higher angle than the first bin.",
+							"captureButton": "Capture the last bin",
+							"captured": "Captured {deg}°"
+						},
+						"step4": {
+							"orderWrong": "The last bin must be at a higher angle than the first. Capture the last bin again, jogging so the angle goes up.",
+							"sectionWidth": "Section width",
+							"offsetFromHome": "Offset from home",
+							"pillar": "Pillar",
+							"labelFieldLabel": "Label",
+							"labelFieldHelp": "Optional.",
+							"labelPlaceholder": "After moving the home switch",
+							"locked": "Capture both bins to work out the geometry and lock it in.",
+							"lockInButton": "Work it out and lock it in"
+						}
+					},
+					"saved": {
+						"title": "Saved calibrations",
+						"empty": "None yet. Run the calibration above to save one.",
+						"fallbackLabel": "Calibration",
+						"activeBadge": "Active",
+						"lockIn": "Lock in",
+						"delete": "Delete"
+					},
+					"reachable": {
+						"title": "Reachable bins by layout",
+						"description": "Chute travel 0 to {max}°, with a {wedge}° no-go wedge at home.",
+						"explanation": "Each layout shows where the chute points for that many bins a section. Bins crossed out in red fall in the wedge between the end of travel ({max}°) and home (0°), which is what loses bins whenever home does not land on a pillar. Click a reachable bin to test-aim at it.",
+						"selectedLabel": "The {binCount}-bin layout, section {section}, bin {bin}:",
+						"testAimButton": "Test aim at this bin",
+						"prompt": "Click a bin in any layout to choose it, then test-aim."
+					}
+				},
+				"binLayoutViz": {
+					"binsASection": "{count, plural, one {# bin a section} other {# bins a section}}",
+					"allReachable": "All {total} reachable",
+					"someUnreachable": "{count} of {total} unreachable",
+					"ariaLabel": "{count}-bin layout",
+					"binTooltip": "Section {section}, bin {bin} → {angle}°",
+					"unreachableSuffix": ", unreachable: {reason}",
+					"wedgeWarning": "{count, plural, one {# bin falls} other {# bins fall}} in the {deg}° no-go wedge by home."
+				}
+			},
+			"chute": {
+				"page": {
+					"pageTitle": "Sorter - Chute",
+					"title": "Chute",
+					"description": "Move the chute's stepper by hand, home it, and set its driver.",
+					"stepperLabel": "Chute stepper"
+				},
+				"stallguard": {
+					"pageTitle": "Sorter - Chute StallGuard",
+					"title": "Chute StallGuard",
+					"description": "Stop the machine when the chute stalls. Tune it by hand in the steps, or let it tune itself.",
+					"motorLabel": "the chute"
+				}
+			},
+			"classificationChannel": {
+				"stallguard": {
+					"pageTitle": "Sorter - Classification channel StallGuard",
+					"title": "Classification channel StallGuard",
+					"description": "Stop the machine when the classification channel's stepper stalls. Follow the steps to tune how sensitive it is.",
+					"motorLabel": "the classification channel stepper"
+				}
+			},
+			"controlBoard": {
+				"pageTitle": "Sorter - Control board",
+				"title": "Control board",
+				"description": "The machine's control boards and their firmware."
+			},
+			"cycleTime": {
+				"pageTitle": "Sorter - Cycle time",
+				"title": "Cycle time",
+				"description": "Where each piece's seconds go on the classification channel: its own work, and its waits for the feeder.",
+				"timeSpanLabel": "Time span",
+				"stats": {
+					"piecesPerMinute": "Pieces a minute",
+					"perPiece": "Per piece, on average",
+					"medianHint": "Median {value}",
+					"c4Work": "C4's own work",
+					"waitingForFeeder": "Waiting for the feeder",
+					"waitingHint": "Median {median}, {pct} in waits over 4 s"
+				},
+				"fedHint": {
+					"pieces": "{count} pieces",
+					"piecesWithHeld": "{count} pieces, {held} during stops",
+					"keptUp": "{value} while the hopper kept up"
+				},
+				"phases": {
+					"confirm": "Landing confirmed",
+					"photos": "Photos",
+					"headReady": "Waiting for the piece ahead (classified, chute aimed)",
+					"turn": "Turn (eject the piece ahead, stage this one)",
+					"total": "All of C4's own work"
+				},
+				"c4Panel": {
+					"title": "C4's own work",
+					"description": "From the moment a piece lands until C4 asks for the next one.",
+					"columns": {
+						"phase": "Phase",
+						"median": "Median",
+						"average": "Average",
+						"slowest": "Slowest 10%"
+					}
+				},
+				"waitPanel": {
+					"title": "Waiting for the feeder",
+					"description": "Each wait, by where C3's next piece was when C4 asked. Moving is the share of the wait C3 (or the chute) was turning.",
+					"columns": {
+						"when": "When C4 asked",
+						"asks": "Asks",
+						"median": "Median",
+						"average": "Average",
+						"totalSeconds": "Seconds in all",
+						"c3Moving": "C3 moving",
+						"chuteMoving": "Chute moving"
+					}
+				},
+				"longestWaits": {
+					"title": "Longest waits",
+					"description": "Waits over 4 s, longest first.",
+					"columns": {
+						"when": "When",
+						"wait": "Wait",
+						"c3NextPiece": "C3's next piece",
+						"onC3": "On C3",
+						"onC2": "On C2",
+						"c3Moving": "C3 moving",
+						"chuteMoving": "Chute moving"
+					},
+					"empty": "No waits over 4 s.",
+					"where": {
+						"degFromEdge": "{deg}° from C3's edge",
+						"onlyOutOfView": "Only out of view on C3",
+						"noneOnC3SomeOnC2": "None on C3, some on C2",
+						"noneOnC3OrC2": "None on C3 or C2"
+					}
+				},
+				"heldPieces": {
+					"title": "Pieces C2 or C3 could not move",
+					"description": "Its channel turned under it and it stayed put, so the channel next to it was turned. After three turns the feeder gives up and sorts around it.",
+					"columns": {
+						"when": "When",
+						"where": "Where",
+						"heldFor": "Held for",
+						"turns": "Turns",
+						"outcome": "How it ended"
+					},
+					"empty": "None.",
+					"landingArea": "landing area",
+					"exit": "exit",
+					"outcomes": {
+						"freed": "Moved again",
+						"gone": "Left the channel",
+						"stopped": "Sorting stopped first"
+					},
+					"gaveUpSuffix": ", after the feeder gave up on it"
+				}
+			},
+			"data": {
+				"index": {
+					"pageTitle": "Sorter - Data",
+					"title": "Data",
+					"description": "What this sorter shares with each Hive, how it captures samples, and what it keeps here.",
+					"sampleCapture": {
+						"title": "Sample capture",
+						"description": "Camera frames taken while the machine sorts, to train detection. Changes nothing about sorting."
+					}
+				},
+				"training": {
+					"page": {
+						"modeColor": "Color",
+						"noBinLabel": "None (route by the profile)",
+						"loadError": "Couldn't load training mode: {error}",
+						"pageTitle": "Sorter - Training runs",
+						"title": "Training runs",
+						"description": "Runs that label every piece the machine sees with the colors you feed it, for training color recognition. The machine sorts as usual, and the runs go to Hive with the pieces.",
+						"loading": "Loading",
+						"collectingBadge": "Collecting",
+						"excludedBadge": "Excluded",
+						"trainingMode": {
+							"panelTitle": "Training mode",
+							"label": "Training mode",
+							"help": "While it is on, the dashboard shows the training run in place of Recent pieces. Turning it off ends the run."
+						},
+						"mode": {
+							"label": "Mode",
+							"help": "What a run labels its pieces with."
+						},
+						"bin": {
+							"label": "Bin",
+							"help": "Every piece goes to this bin while training mode is on, and the chute stays there. None: pieces go where the sorting profile sends them.",
+							"defaultText": "None",
+							"defaultHelp": "Route pieces by the sorting profile again."
+						},
+						"color": {
+							"label": "Color",
+							"help": "The color being fed. Picking another while a run is open starts a new segment of it, at once."
+						},
+						"run": {
+							"label": "Run",
+							"collectingHelp": "Collecting since {since}: {pieces} pieces in {segments, plural, one {# segment} other {# segments}}.",
+							"idleHelp": "A run collects every piece the machine sees until you end it, across pauses."
+						},
+						"runs": {
+							"title": "Runs",
+							"description": "Newest first. Open a run to see its pieces and exclude any that are wrong.",
+							"empty": "No runs yet. Pick a color and start one above.",
+							"columns": {
+								"started": "Started",
+								"duration": "Duration",
+								"colors": "Colors",
+								"pieces": "Pieces",
+								"labeled": "Labeled",
+								"excluded": "Excluded"
+							}
+						}
+					}
+				},
+				"trainingDetail": {
+					"filters": {
+						"all": "All",
+						"disagree": "Disagrees with the machine",
+						"excluded": "Excluded"
+					},
+					"empty": {
+						"all": "No pieces yet.",
+						"disagree": "No piece disagrees with the machine.",
+						"excluded": "No piece is excluded."
+					},
+					"loadError": "Couldn't load the run: {error}",
+					"loadMoreError": "Couldn't load more pieces: {error}",
+					"pageTitle": "Sorter - Training run",
+					"titleWithRun": "Run from {when}",
+					"title": "Training run",
+					"description": "Every piece the machine saw during this run, labeled with the color of its segment. Click a piece to exclude it, and again to bring it back.",
+					"backButton": "Back to training runs",
+					"endRunButton": "End run",
+					"includeRunButton": "Include run",
+					"excludeRunButton": "Exclude run",
+					"collectingBadge": "Collecting",
+					"excludedBadge": "Excluded",
+					"runSummaryOngoing": "{from} to now. {segments, plural, one {# segment} other {# segments}}, {pieces} pieces, {labeled} labeled, {excludedCount} excluded.",
+					"runSummaryEnded": "{from} to {to}, {duration}. {segments, plural, one {# segment} other {# segments}}, {pieces} pieces, {labeled} labeled, {excludedCount} excluded.",
+					"piecesPanelTitle": "Pieces",
+					"filterLabel": "Which pieces",
+					"loadingPieces": "Loading the pieces",
+					"piecesGroupLabel": "The run's pieces",
+					"shownOfTotal": "{shown} of {total}",
+					"loadMoreButton": "Load more"
+				},
+				"uploads": {
+					"pageTitle": "Sorter - Uploads",
+					"title": "Uploads",
+					"description": "What this sorter has sent to a Hive, what is waiting to go, and what will never be sent.",
+					"ranges": {
+						"h24": "24 hours",
+						"d7": "7 days"
+					},
+					"loadError": "Couldn't load the upload numbers: {error}",
+					"hiveSelectLabel": "Hive",
+					"unreachableHint": "Unreachable",
+					"timeShownLabel": "Time shown",
+					"loading": "Loading",
+					"noHive": {
+						"title": "No Hive is connected",
+						"description": "Connect this sorter to a Hive and its uploads are counted here.",
+						"button": "Go to Hive settings"
+					},
+					"unreachableAlert": {
+						"title": "{name} can't be reached",
+						"body": "Nothing is being sent to it. What is waiting stays on this machine until it answers."
+					},
+					"stats": {
+						"uploaded": "Uploaded",
+						"uploadedHint": "{count} items",
+						"waitingNow": "Waiting now",
+						"waitingNowHint": "items to upload",
+						"notUploaded": "Not uploaded",
+						"notUploadedNone": "None",
+						"heldBack": "Held back",
+						"heldBackHint": "By the upload budget"
+					},
+					"budgetLine": "Uploads wait for room under a limit of {budget}.",
+					"notUploadedExplainer": "Not uploaded is what was skipped to keep up, or deleted here before it was sent.",
+					"budgetText": "{megabytes} MB and {files, plural, one {# file} other {# files}} a minute",
+					"uploadedPanel": {
+						"title": "Uploaded",
+						"description": "Bytes sent to {name} each hour, by kind. Point at an hour for its numbers.",
+						"chartLabel": "Bytes uploaded to {name} each hour",
+						"totalLabel": "uploaded",
+						"empty": "Nothing was uploaded in this time."
+					},
+					"waitingPanel": {
+						"title": "Waiting to upload",
+						"description": "Items waiting at the end of each hour. A mark along the bottom is an hour when some were skipped or deleted before they could be sent.",
+						"chartLabel": "Items waiting to upload to {name}",
+						"totalLabel": "waiting",
+						"flagLabel": "Hours with items not uploaded",
+						"empty": "Nothing was waiting in this time."
+					},
+					"byKindPanel": {
+						"title": "By kind",
+						"description": "Counted over the time shown.",
+						"columns": {
+							"kind": "Kind",
+							"lastUpload": "Last upload",
+							"uploaded": "Uploaded",
+							"size": "Size",
+							"waitingNow": "Waiting now",
+							"notUploaded": "Not uploaded"
+						},
+						"offBadge": "Off for this Hive",
+						"never": "Never"
+					},
+					"notes": {
+						"itemsSent": "Items sent",
+						"notUploaded": "Not uploaded",
+						"heldBackByBudget": "Held back by the budget"
+					}
+				}
+			},
+			"hive": {
+				"page": {
+					"pageTitle": "Sorter - Hive",
+					"title": "Hive",
+					"description": "Pair this sorter with a Hive, and choose which ones it sends samples to. What each one receives is set in Data."
+				},
+				"models": {
+					"pageTitle": "Sorter - Local models",
+					"title": "Local models",
+					"description": "Which neural-network model the sorter uses for live detection. A new machine downloads Hive's default model for its hardware and uses it on every channel until you choose another one here.",
+					"compatibility": {
+						"title": "Compatibility and speed",
+						"description": "For each model format, which inference backends this machine can run, and how fast they should be on the chosen model."
+					}
+				}
+			},
+			"incidents": {
+				"pageTitle": "Sorter - Incidents",
+				"title": "Incidents",
+				"description": "What the machine does when something goes wrong mid-sort: ignore it, wait for someone, or recover by itself where it can."
+			}
+		}
+	}
+}

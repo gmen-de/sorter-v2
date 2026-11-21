@@ -1,0 +1,73 @@
+{
+	"routes": {
+		"settings": {
+			"appearance": {
+				"pageTitle": "Sorter - Erscheinungsbild",
+				"title": "Erscheinungsbild",
+				"description": "Wie die Seiten des Sorters aussehen."
+			}
+		},
+		"dashboard": {
+			"pageTitle": "Sorter - Dashboard",
+			"cameraLabels": {
+				"feeder": "Zuführung",
+				"cChannel2": "C-Kanal 2",
+				"cChannel3": "C-Kanal 3",
+				"classificationChannel": "Klassifizierungskanal"
+			},
+			"standby": {
+				"title": "Standby",
+				"notHomedBadge": "Nicht referenziert",
+				"simHomeHelp": "Sim-Referenzfahrt führt die normale Wiederherstellung aus und überspringt nur die physische Referenzfahrt.",
+				"homeHelp": "Referenzfahrt startet die Hardware und fährt jede Achse auf ihren Nullpunkt.",
+				"simHomeButton": "Sim-Referenzfahrt",
+				"homeButton": "Referenzfahrt"
+			},
+			"homing": {
+				"title": "Referenzfahrt läuft",
+				"fallbackStep": "Hardware wird gestartet"
+			},
+			"error": {
+				"fallbackTitle": "Hardwarefehler",
+				"stoppedBadge": "Gestoppt",
+				"retryButton": "Erneut versuchen"
+			},
+			"trainingData": {
+				"title": "Trainingsdaten",
+				"badge": "Trainingsmodus"
+			},
+			"recentPieces": {
+				"title": "Letzte Teile"
+			},
+			"runtime": {
+				"title": "Laufzeit",
+				"timeSpanLabel": "Zeitraum"
+			},
+			"noMachine": {
+				"title": "Keine Maschine ausgewählt",
+				"description": "Verbinde dich in den Einstellungen mit einer Maschine."
+			}
+		}
+	},
+	"components": {
+		"settings": {
+			"appearanceSection": {
+				"panelTitle": "Erscheinungsbild",
+				"theme": {
+					"label": "Thema",
+					"help": "Gilt sofort, nur für diesen Browser.",
+					"light": "Hell",
+					"dark": "Dunkel"
+				},
+				"language": {
+					"label": "Sprache",
+					"help": "Gilt sofort, nur für diesen Browser."
+				},
+				"themeColor": {
+					"title": "Themenfarbe",
+					"description": "Die LEGO-Farbe von Schaltflächen, Fokusringen und der aktuellen Seite, auf jedem Browser, der mit dieser Maschine verbunden ist. Gilt sofort."
+				}
+			}
+		}
+	}
+}

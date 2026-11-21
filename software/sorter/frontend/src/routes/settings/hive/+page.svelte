@@ -1,12 +1,13 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import HiveSection from '$lib/components/settings/HiveSection.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 </script>
 
-<svelte:head><title>Sorter - Hive</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.hive.page.pageTitle')}</title></svelte:head>
 
 <PageHeader
-	title="Hive"
-	description="Pair this sorter with a Hive, and choose which ones it sends samples to. What each one receives is set in Data."
+	title={$_('routes.settings.hive.page.title')}
+	description={$_('routes.settings.hive.page.description')}
 />
 <HiveSection />

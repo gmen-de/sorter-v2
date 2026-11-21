@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import PieceStatusBadge from '$lib/components/PieceStatusBadge.svelte';
 	import PieceThumb from '$lib/components/PieceThumb.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
@@ -92,7 +93,7 @@
 			savedCorrection = correction;
 			return true;
 		} catch (e: unknown) {
-			onError(e instanceof Error ? e.message : 'Failed to save the chute correction');
+			onError(e instanceof Error ? e.message : $_('components.bins.binDetailsModal.saveCorrectionError'));
 			return false;
 		} finally {
 			savingCorrection = false;
@@ -117,7 +118,7 @@
 				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
 			}
 		} catch (e: unknown) {
-			onError(e instanceof Error ? e.message : 'Failed to move the chute');
+			onError(e instanceof Error ? e.message : $_('components.bins.binDetailsModal.moveChuteError'));
 		} finally {
 			movingChute = false;
 		}
@@ -125,7 +126,9 @@
 
 	async function saveAndMove() {
 		if (await saveCorrection(correction)) {
-			onSaved(`Chute correction ${correction} µsteps saved.`);
+			onSaved(
+				$_('components.bins.binDetailsModal.correctionSaved', { values: { correction } })
+			);
 			await moveChuteHere();
 		}
 	}
@@ -170,7 +173,7 @@
 		const loc = categoryLocations()[id];
 		if (!loc) return null;
 		if (detailsBin && loc.globalIndex === detailsBin.bin.global_index) return null;
-		return `Bin ${loc.globalIndex + 1}`;
+		return $_('components.bins.binDetailsModal.binLabel', { values: { n: loc.globalIndex + 1 } });
 	}
 
 	function pickableCategories(): { id: string; name: string }[] {
@@ -220,9 +223,9 @@
 			const data = await res.json();
 			assignSelected = Array.isArray(data.category_ids) ? data.category_ids : assignSelected;
 			assignDropdownOpen = false;
-			onSaved(data?.message ?? 'Bin categories updated.');
+			onSaved(data?.message ?? $_('components.bins.binDetailsModal.categoriesUpdated'));
 		} catch (e: unknown) {
-			onError(e instanceof Error ? e.message : 'Failed to assign categories');
+			onError(e instanceof Error ? e.message : $_('components.bins.binDetailsModal.assignCategoriesError'));
 		} finally {
 			savingAssign = false;
 		}
@@ -236,25 +239,33 @@
 	}
 </script>
 
-<Modal bind:open title={detailsBin ? `Bin ${detailsBin.bin.global_index + 1}` : 'Bin details'} size="lg">
+<Modal
+	bind:open
+	title={detailsBin
+		? $_('components.bins.binDetailsModal.binTitle', { values: { n: detailsBin.bin.global_index + 1 } })
+		: $_('components.bins.binDetailsModal.binDetailsTitle')}
+	size="lg"
+>
 	{#if detailsBin}
 		<div class="flex flex-col gap-4">
 			<dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 				<div>
-					<dt class="label">Layer</dt>
+					<dt class="label">{$_('components.bins.binDetailsModal.layerLabel')}</dt>
 					<dd class="num mt-1 text-base font-medium text-ink">{detailsBin.layerIndex + 1}</dd>
 				</div>
 				<div>
-					<dt class="label">Assigned category</dt>
+					<dt class="label">{$_('components.bins.binDetailsModal.assignedCategoryLabel')}</dt>
 					<dd class="mt-1 text-base font-medium text-ink">
-						{categoryLabel(detailsBin.bin.category_ids) || 'None'}
+						{categoryLabel(detailsBin.bin.category_ids) || $_('components.bins.binDetailsModal.none')}
 					</dd>
 				</div>
 				<div>
-					<dt class="label">Recorded pieces</dt>
+					<dt class="label">{$_('components.bins.binDetailsModal.recordedPiecesLabel')}</dt>
 					<dd class="num mt-1 text-base font-medium text-ink">
 						{detailsBin.contents?.piece_count ?? 0}
-						{(detailsBin.contents?.piece_count ?? 0) === 1 ? 'piece' : 'pieces'}
+						{(detailsBin.contents?.piece_count ?? 0) === 1
+							? $_('components.bins.binDetailsModal.pieceSingular')
+							: $_('components.bins.binDetailsModal.piecePlural')}
 					</dd>
 				</div>
 			</dl>
@@ -266,7 +277,7 @@
 				<div class="flex items-center justify-between gap-3">
 					<h3 class="flex items-center gap-2 text-base font-semibold text-ink">
 						<Tag size={16} />
-						Assign categories
+						{$_('components.bins.binDetailsModal.assignCategories.heading')}
 					</h3>
 					<Button
 						size="sm"
@@ -275,12 +286,11 @@
 						disabled={!assignDirty()}
 						onclick={() => void saveAssignment()}
 					>
-						Save
+						{$_('components.bins.binDetailsModal.assignCategories.saveButton')}
 					</Button>
 				</div>
 				<p class="mt-1 mb-3 text-sm text-ink-muted">
-					Choose one or more categories from your sorting profile to route into this bin. Assigning a
-					category here moves it out of whatever bin it was in before.
+					{$_('components.bins.binDetailsModal.assignCategories.help')}
 				</p>
 
 				<div class="flex flex-wrap items-center gap-2">
@@ -288,28 +298,47 @@
 						{@const elsewhere = assignedElsewhereLabel(id)}
 						<Badge tone="primary">
 							{formatCategoryName(id) || id}
-							{#if elsewhere}<span class="text-ink-muted">(was {elsewhere})</span>{/if}
+							{#if elsewhere}
+								<span class="text-ink-muted">
+									{$_('components.bins.binDetailsModal.assignCategories.wasElsewhere', { values: { elsewhere } })}
+								</span>
+							{/if}
 							<button
 								type="button"
 								class="-mr-1 ml-0.5 rounded-badge p-0.5 hover:bg-hover"
 								onclick={() => removeAssignCategory(id)}
-								aria-label={`Remove ${formatCategoryName(id) || id}`}
+								aria-label={$_('components.bins.binDetailsModal.assignCategories.removeCategory', {
+									values: { name: formatCategoryName(id) || id }
+								})}
 							>
 								<X size={12} />
 							</button>
 						</Badge>
 					{/each}
 
-					<Popover label="Add a category" bind:open={assignDropdownOpen} width="20rem" padded={false}>
+					<Popover
+						label={$_('components.bins.binDetailsModal.assignCategories.addCategory')}
+						bind:open={assignDropdownOpen}
+						width="20rem"
+						padded={false}
+					>
 						{#snippet trigger(props)}
-							<Button {...props} size="sm" icon={Plus}>Add a category</Button>
+							<Button {...props} size="sm" icon={Plus}
+								>{$_('components.bins.binDetailsModal.assignCategories.addCategory')}</Button
+							>
 						{/snippet}
 						<div class="p-2">
-							<Input aria-label="Search categories" placeholder="Search categories…" bind:value={assignSearch} />
+							<Input
+								aria-label={$_('components.bins.binDetailsModal.assignCategories.searchCategoriesAria')}
+								placeholder={$_('components.bins.binDetailsModal.assignCategories.searchCategoriesPlaceholder')}
+								bind:value={assignSearch}
+							/>
 						</div>
 						<div class="max-h-64 overflow-y-auto border-t border-line py-1">
 							{#if availableCategories().length === 0}
-								<p class="px-3 py-2 text-sm text-ink-muted">No categories in the active sorting profile.</p>
+								<p class="px-3 py-2 text-sm text-ink-muted">
+									{$_('components.bins.binDetailsModal.assignCategories.noCategoriesInProfile')}
+								</p>
 							{:else}
 								{#each pickableCategories() as cat (cat.id)}
 									{@const elsewhere = assignedElsewhereLabel(cat.id)}
@@ -325,8 +354,10 @@
 								{#if pickableCategories().length === 0}
 									<p class="px-3 py-2 text-sm text-ink-muted">
 										{assignSearch.trim()
-											? `No categories match “${assignSearch}”.`
-											: 'All categories are already added.'}
+											? $_('components.bins.binDetailsModal.assignCategories.noCategoriesMatch', {
+													values: { query: assignSearch }
+												})
+											: $_('components.bins.binDetailsModal.assignCategories.allCategoriesAdded')}
 									</p>
 								{/if}
 							{/if}
@@ -336,7 +367,7 @@
 
 				{#if assignSelected.length === 0}
 					<p class="mt-3 text-sm text-ink-muted">
-						No categories assigned. Matching pieces fall through to the discard bin.
+						{$_('components.bins.binDetailsModal.assignCategories.noneAssigned')}
 					</p>
 				{/if}
 			</section>
@@ -345,22 +376,21 @@
 				<div class="flex items-center justify-between gap-3">
 					<h3 class="flex items-center gap-2 text-base font-semibold text-ink">
 						<Crosshair size={16} />
-						Chute fine-tuning
+						{$_('components.bins.binDetailsModal.chuteTuning.heading')}
 					</h3>
 					<Button size="sm" loading={movingChute} onclick={() => void moveChuteHere()}>
-						Move the chute here
+						{$_('components.bins.binDetailsModal.chuteTuning.moveHereButton')}
 					</Button>
 				</div>
 				<p class="mt-1 mb-3 text-sm text-ink-muted">
-					Microsteps added to where the board aims for this bin (Octopus only). Positive and negative
-					move it the two ways round; save and move to check where it lands.
+					{$_('components.bins.binDetailsModal.chuteTuning.help')}
 				</p>
 				<div class="flex flex-wrap items-center gap-2">
 					<Button size="sm" onclick={() => nudge(-20)}>-20</Button>
 					<Button size="sm" onclick={() => nudge(-5)}>-5</Button>
 					<div class="w-32">
 						<Input
-							aria-label="Correction in microsteps"
+							aria-label={$_('components.bins.binDetailsModal.chuteTuning.correctionAria')}
 							type="number"
 							step={1}
 							bind:value={correction}
@@ -375,10 +405,11 @@
 							disabled={savedCorrection === 0 && correction === 0}
 							loading={savingCorrection}
 							onclick={async () => {
-								if (await saveCorrection(null)) onSaved('Chute correction reset.');
+								if (await saveCorrection(null))
+									onSaved($_('components.bins.binDetailsModal.chuteTuning.correctionReset'));
 							}}
 						>
-							Reset
+							{$_('components.bins.binDetailsModal.chuteTuning.resetButton')}
 						</Button>
 						<Button
 							size="sm"
@@ -386,12 +417,14 @@
 							loading={savingCorrection || movingChute}
 							onclick={() => void saveAndMove()}
 						>
-							Save and move
+							{$_('components.bins.binDetailsModal.chuteTuning.saveAndMoveButton')}
 						</Button>
 					</div>
 				</div>
 				{#if correction !== savedCorrection}
-					<p class="mt-2 text-sm text-warning-ink">Not saved yet (saved: {savedCorrection} µsteps).</p>
+					<p class="mt-2 text-sm text-warning-ink">
+						{$_('components.bins.binDetailsModal.chuteTuning.notSavedYet', { values: { saved: savedCorrection } })}
+					</p>
 				{/if}
 			</section>
 
@@ -408,13 +441,19 @@
 						<div class="mt-3 flex flex-wrap gap-2">
 							<Badge>
 								{detailsBin.contents?.unique_item_count ?? 0}
-								{(detailsBin.contents?.unique_item_count ?? 0) === 1 ? 'item type' : 'item types'}
+								{(detailsBin.contents?.unique_item_count ?? 0) === 1
+									? $_('components.bins.binDetailsModal.setInfo.itemTypeSingular')
+									: $_('components.bins.binDetailsModal.setInfo.itemTypePlural')}
 							</Badge>
-							<Badge>{detailsBin.contents?.piece_count ?? 0} total pieces</Badge>
+							<Badge>
+								{$_('components.bins.binDetailsModal.setInfo.totalPieces', {
+									values: { count: detailsBin.contents?.piece_count ?? 0 }
+								})}
+							</Badge>
 						</div>
 						<div class="mt-4">
 							<Button onclick={() => openSetChecklist(detailsBin?.bin.category_ids ?? [])}>
-								Open the checklist
+								{$_('components.bins.binDetailsModal.setInfo.openChecklistButton')}
 							</Button>
 						</div>
 					</div>
@@ -422,7 +461,7 @@
 			{/if}
 
 			{#if !detailsBin.contents || detailsBin.contents.items.length === 0}
-				<EmptyState title="No detailed piece records for this bin yet." />
+				<EmptyState title={$_('components.bins.binDetailsModal.noRecordsTitle')} />
 			{:else}
 				<div class="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
 					{#each detailsBin.contents.items as item}
@@ -441,7 +480,9 @@
 									{/if}
 								</div>
 								<div class="mt-1 text-ink-muted">{itemSecondaryText(item)}</div>
-								<div class="mt-1 text-ink-muted">{formatCategoryName(item.category_id) || 'No category'}</div>
+								<div class="mt-1 text-ink-muted">
+									{formatCategoryName(item.category_id) || $_('components.bins.binDetailsModal.noCategory')}
+								</div>
 							</div>
 						</div>
 					{/each}

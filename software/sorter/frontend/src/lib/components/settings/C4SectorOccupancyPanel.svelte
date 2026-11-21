@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase } from '$lib/backend';
 	import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
 	import CheckCircle2 from '@lucide/svelte/icons/circle-check';
@@ -52,11 +53,13 @@
 	const detectionCount = $derived(payload?.detections?.length ?? 0);
 	const phaseText = $derived(
 		payload?.sector_offset_deg === null || payload?.sector_offset_deg === undefined
-			? 'n/a'
+			? $_('components.settings.c4SectorOccupancyPanel.na')
 			: `${payload.sector_offset_deg.toFixed(1)}°`
 	);
 	const frameText = $derived(
-		payload?.frame_resolution ? `${payload.frame_resolution[0]} x ${payload.frame_resolution[1]}` : 'n/a'
+		payload?.frame_resolution
+			? `${payload.frame_resolution[0]} x ${payload.frame_resolution[1]}`
+			: $_('components.settings.c4SectorOccupancyPanel.na')
 	);
 
 	function sectorClass(sector: Sector): string {
@@ -67,10 +70,10 @@
 	}
 
 	function sectorLabel(sector: Sector): string {
-		if (sector.occupied) return 'Occupied';
-		if (sector.state === 'handoff') return 'Handoff';
-		if (sector.state === 'exit') return 'Exit';
-		return 'Free';
+		if (sector.occupied) return $_('components.settings.c4SectorOccupancyPanel.sector.occupied');
+		if (sector.state === 'handoff') return $_('components.settings.c4SectorOccupancyPanel.sector.handoff');
+		if (sector.state === 'exit') return $_('components.settings.c4SectorOccupancyPanel.sector.exit');
+		return $_('components.settings.c4SectorOccupancyPanel.sector.free');
 	}
 
 	async function scan(): Promise<void> {
@@ -88,7 +91,7 @@
 			}
 			payload = data as SectorOccupancyPayload;
 			if (!payload.ok) {
-				error = payload.message ?? 'C4 sector scan failed.';
+				error = payload.message ?? $_('components.settings.c4SectorOccupancyPanel.scanFailed');
 			}
 			lastScan = new Date();
 		} catch (err) {
@@ -103,9 +106,11 @@
 	});
 </script>
 
-<Panel title="C4 sectors" flush>
+<Panel title={$_('components.settings.c4SectorOccupancyPanel.panelTitle')} flush>
 	{#snippet actions()}
-		<Button size="sm" icon={RefreshCw} {loading} onclick={() => scan()}>Scan</Button>
+		<Button size="sm" icon={RefreshCw} {loading} onclick={() => scan()}>
+			{$_('components.settings.c4SectorOccupancyPanel.scan')}
+		</Button>
 	{/snippet}
 	<div class="flex flex-col gap-4 px-(--pad-panel) pb-(--pad-panel)">
 		<div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">
@@ -115,10 +120,12 @@
 				{:else}
 					<AlertTriangle size={14} class="text-warning-ink" />
 				{/if}
-				Phase {phaseText}
+				{$_('components.settings.c4SectorOccupancyPanel.phase', { values: { value: phaseText } })}
 			</span>
 			<span>{frameText}</span>
-			<span class="num">{occupiedCount} of 5 occupied</span>
+			<span class="num">
+				{$_('components.settings.c4SectorOccupancyPanel.occupiedSummary', { values: { count: occupiedCount, total: 5 } })}
+			</span>
 			{#if lastScan}<span class="num">{lastScan.toLocaleTimeString()}</span>{/if}
 		</div>
 		{#if error}<Alert tone="warning">{error}</Alert>{/if}
@@ -130,13 +137,13 @@
 						<span>{sectorLabel(sector)}</span>
 					</div>
 					<div class="num mt-3 grid gap-0.5 text-ink-muted">
-						<span>Detections {sector.detection_count}</span>
-						<span>Confidence {sector.max_confidence.toFixed(2)}</span>
+						<span>{$_('components.settings.c4SectorOccupancyPanel.detections')} {sector.detection_count}</span>
+						<span>{$_('components.settings.c4SectorOccupancyPanel.confidence')} {sector.max_confidence.toFixed(2)}</span>
 					</div>
 				</div>
 			{/each}
 			{#if sectors.length === 0}
-				{#each Array.from({ length: 5 }) as _, index (index)}
+				{#each Array.from({ length: 5 }) as _unused, index (index)}
 					<div class="min-h-24 rounded-control bg-well px-3 py-2 text-sm font-medium text-ink-muted">
 						S{index + 1}
 					</div>
@@ -145,12 +152,21 @@
 		</div>
 	</div>
 	{#if payload}
-		{@const sectorName = (i: number | null | undefined) => (i == null ? 'None' : `S${i + 1}`)}
+		{@const sectorName = (i: number | null | undefined) =>
+			i == null ? $_('components.settings.c4SectorOccupancyPanel.none') : `S${i + 1}`}
 		<div class="grid grid-cols-2 gap-px border-t border-line bg-line sm:grid-cols-4">
-			<div class="bg-surface"><Stat label="Candidates" value={candidateCount} /></div>
-			<div class="bg-surface"><Stat label="Detections" value={detectionCount} /></div>
-			<div class="bg-surface"><Stat label="Handoff" value={sectorName(payload.handoff_sector)} /></div>
-			<div class="bg-surface"><Stat label="Exit" value={sectorName(payload.exit_sector)} /></div>
+			<div class="bg-surface">
+				<Stat label={$_('components.settings.c4SectorOccupancyPanel.stat.candidates')} value={candidateCount} />
+			</div>
+			<div class="bg-surface">
+				<Stat label={$_('components.settings.c4SectorOccupancyPanel.stat.detections')} value={detectionCount} />
+			</div>
+			<div class="bg-surface">
+				<Stat label={$_('components.settings.c4SectorOccupancyPanel.stat.handoff')} value={sectorName(payload.handoff_sector)} />
+			</div>
+			<div class="bg-surface">
+				<Stat label={$_('components.settings.c4SectorOccupancyPanel.stat.exit')} value={sectorName(payload.exit_sector)} />
+			</div>
 		</div>
 	{/if}
 </Panel>

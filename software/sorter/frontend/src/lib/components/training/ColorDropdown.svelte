@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import ColorChoice, { type LikelyColor } from '$lib/components/ui/ColorChoice.svelte';
 	import Popover from '$lib/components/ui/Popover.svelte';
@@ -78,13 +79,13 @@
 </script>
 
 <span class="inline-flex max-w-full min-w-0 flex-col gap-1">
-	<Popover label="The color being fed" bind:open width="26rem">
+	<Popover label={$_('components.training.colorDropdown.popoverLabel')} bind:open width="26rem">
 		{#snippet trigger(props)}
 			<Button {...props} size="sm" loading={saving} class="max-w-full">
 				{#if training.config.colors.length > 0}
 					<RunColors colors={training.config.colors} class="min-w-0 overflow-hidden" />
 				{:else}
-					Pick a color
+					{$_('components.training.colorDropdown.pickColor')}
 				{/if}
 				<ChevronDown size={14} class="shrink-0 text-ink-muted" />
 			</Button>
@@ -92,18 +93,18 @@
 		<div class="max-h-[min(32rem,70vh)] overflow-y-auto">
 			{#if palette === null}
 				<p class="flex items-center gap-2 text-sm text-ink-muted">
-					<Spinner size={14} /> Loading the colors
+					<Spinner size={14} /> {$_('components.training.colorDropdown.loadingColors')}
 				</p>
 			{:else if palette.length === 0}
 				<p class="text-sm text-ink-muted">
-					The color list has not loaded: the machine has not reached Hive yet.
+					{$_('components.training.colorDropdown.noColorsLoaded')}
 				</p>
 			{:else}
 				<ColorChoice
 					{palette}
 					likely={offered}
 					{value}
-					note="Used lately first, then the commonest"
+					note={$_('components.training.colorDropdown.noteUsedLately')}
 					disabled={saving}
 					onpick={pick}
 				/>

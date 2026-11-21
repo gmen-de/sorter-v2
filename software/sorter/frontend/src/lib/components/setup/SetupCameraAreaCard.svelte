@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Check from '@lucide/svelte/icons/check';
 	import Circle from '@lucide/svelte/icons/circle';
 	import CameraFeed from '$lib/components/CameraFeed.svelte';
@@ -23,7 +24,7 @@
 		description,
 		required = false,
 		selectedKey = '__none__',
-		selectedLabel = 'No camera selected',
+		selectedLabel = $_('components.setup.setupCameraAreaCard.defaultSelectedLabel'),
 		choices = [],
 		onSelect,
 		zoneReviewed = false,
@@ -88,7 +89,7 @@
 
 <!-- One camera role: its picture, and the three things it needs. -->
 <Panel title={label} {description} flush>
-	{#snippet actions()}<Badge>{required ? 'Required' : 'Optional'}</Badge>{/snippet}
+	{#snippet actions()}<Badge>{required ? $_('components.setup.setupCameraAreaCard.badge.required') : $_('components.setup.setupCameraAreaCard.badge.optional')}</Badge>{/snippet}
 	{#if selectedSource !== null}
 		<CameraFeed camera={role} label={selectedLabel} header={false} />
 	{:else if others.length > 0}
@@ -99,33 +100,47 @@
 		</div>
 	{:else}
 		<div class="flex aspect-video flex-col items-center justify-center gap-1 bg-well px-6 text-center text-sm">
-			<span class="font-medium text-ink">No camera chosen yet</span>
-			<span class="text-ink-muted">Refresh the cameras to find them, then choose one here.</span>
+			<span class="font-medium text-ink">{$_('components.setup.setupCameraAreaCard.empty.title')}</span>
+			<span class="text-ink-muted">{$_('components.setup.setupCameraAreaCard.empty.description')}</span>
 		</div>
 	{/if}
 	<ul class="divide-y divide-line">
 		{@render need(
 			selectedSource !== null,
-			selectedSource !== null ? 'Camera chosen' : 'No camera chosen',
-			'Change',
+			selectedSource !== null
+				? $_('components.setup.setupCameraAreaCard.status.cameraChosen')
+				: $_('components.setup.setupCameraAreaCard.status.noCameraChosen'),
+			$_('components.setup.setupCameraAreaCard.actions.change'),
 			() => (changingCamera = true)
 		)}
-		{@render need(zoneReviewed, zoneReviewed ? 'Zone reviewed' : 'Zone not reviewed', 'Review', () =>
-			onOpenZoneEditor?.(role)
+		{@render need(
+			zoneReviewed,
+			zoneReviewed
+				? $_('components.setup.setupCameraAreaCard.status.zoneReviewed')
+				: $_('components.setup.setupCameraAreaCard.status.zoneNotReviewed'),
+			$_('components.setup.setupCameraAreaCard.actions.review'),
+			() => onOpenZoneEditor?.(role)
 		)}
-		{@render need(pictureTuned, pictureTuned ? 'Picture tuned' : 'Picture not tuned', 'Tune', () =>
-			onOpenPictureSettings?.(role)
+		{@render need(
+			pictureTuned,
+			pictureTuned
+				? $_('components.setup.setupCameraAreaCard.status.pictureTuned')
+				: $_('components.setup.setupCameraAreaCard.status.pictureNotTuned'),
+			$_('components.setup.setupCameraAreaCard.actions.tune'),
+			() => onOpenPictureSettings?.(role)
 		)}
 	</ul>
 </Panel>
 
 <Modal
 	open={changingCamera && selectedSource !== null}
-	title="Change the camera"
+	title={$_('components.setup.setupCameraAreaCard.modal.title')}
 	size="lg"
 	onclose={() => (changingCamera = false)}
 >
-	<p class="mb-4 text-ink-muted">Pick a different live source for {label}.</p>
+	<p class="mb-4 text-ink-muted">
+		{$_('components.setup.setupCameraAreaCard.modal.pickSource', { values: { label } })}
+	</p>
 	<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 		{#each others as option (option.key)}
 			<div class="aspect-4/3 flex">
@@ -149,8 +164,10 @@
 				changingCamera = false;
 			}}
 		>
-			Clear the camera
+			{$_('components.setup.setupCameraAreaCard.modal.clear')}
 		</Button>
-		<Button variant="ghost" onclick={() => (changingCamera = false)}>Close</Button>
+		<Button variant="ghost" onclick={() => (changingCamera = false)}
+			>{$_('components.setup.setupCameraAreaCard.modal.close')}</Button
+		>
 	{/snippet}
 </Modal>

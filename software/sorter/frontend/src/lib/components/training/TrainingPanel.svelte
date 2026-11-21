@@ -8,6 +8,7 @@
 	With no run open, the last run in one line.
 -->
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { fetchLegoColors } from '$lib/pieces/colors';
 	import {
@@ -106,22 +107,31 @@
 		<ColorDropdown {base} {training} onsaved={onchange} />
 		<span class="min-w-0 flex-1 text-sm text-ink-muted">
 			{#if run}
-				Run: <span class="num text-ink">{run.pieces.toLocaleString()}</span>
-				{run.pieces === 1 ? 'piece' : 'pieces'} since
+				{$_('components.training.trainingPanel.runLabel')} <span class="num text-ink"
+					>{run.pieces.toLocaleString()}</span
+				>
+				{run.pieces === 1
+					? $_('components.training.trainingPanel.piece')
+					: $_('components.training.trainingPanel.pieces')} {$_(
+					'components.training.trainingPanel.sinceLabel'
+				)}
 				<span class="num">{formatTime(run.started_at)}</span>
 			{:else}
-				No run
+				{$_('components.training.trainingPanel.noRun')}
 			{/if}
 		</span>
 		<span class="flex items-start gap-2">
 			<RunButton {base} {training} {onchange} />
-			<Button size="sm" variant="ghost" href="/settings/data/training">All runs</Button>
+			<Button size="sm" variant="ghost" href="/settings/data/training"
+				>{$_('components.training.trainingPanel.allRunsButton')}</Button
+			>
 		</span>
 	</div>
 
 	{#if fixedBin}
 		<p class="shrink-0 truncate border-b border-line px-3 py-1.5 text-sm text-ink-muted">
-			All pieces to: <span class="text-ink">{binLabel(fixedBin, bins)}</span>
+			{$_('components.training.trainingPanel.fixedBinPrefix')}
+			<span class="text-ink">{binLabel(fixedBin, bins)}</span>
 		</p>
 	{/if}
 	{#if error}
@@ -134,15 +144,20 @@
 				<PieceFeed {pieces} segments={run.segments} {base} lead ontoggle={toggle} />
 			{/if}
 			{#if pieces.length === 0}
-				<p class="px-3 py-2.5 text-sm text-ink-muted">No pieces yet.</p>
+				<p class="px-3 py-2.5 text-sm text-ink-muted">
+					{$_('components.training.trainingPanel.noPiecesYet')}
+				</p>
 			{/if}
 		{:else if lastRun}
 			<p class="px-3 py-2.5 text-sm text-ink-muted">
-				Last run:
+				{$_('components.training.trainingPanel.lastRunLabel')}
 				<a href="/settings/data/training/{lastRun.id}" class="text-primary-ink hover:underline">
 					<span class="num">{lastRun.pieces.toLocaleString()}</span>
-					{lastRun.pieces === 1 ? 'piece' : 'pieces'},
-					<span class="num">{lastRun.excluded_pieces.toLocaleString()}</span> excluded, from
+					{lastRun.pieces === 1
+						? $_('components.training.trainingPanel.piece')
+						: $_('components.training.trainingPanel.pieces')},
+					<span class="num">{lastRun.excluded_pieces.toLocaleString()}</span>
+					{$_('components.training.trainingPanel.excludedFromLabel')}
 					<span class="num">{formatTime(lastRun.started_at)}</span>
 				</a>
 			</p>

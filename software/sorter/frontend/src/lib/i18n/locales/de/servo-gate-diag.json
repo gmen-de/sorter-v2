@@ -1,0 +1,51 @@
+{
+	"components": {
+		"settings": {
+			"servoGateDiagPanel": {
+				"panelTitle": "Klappen-Test",
+				"panelDescription": "Steuert die Klappen der Waveshare-BLE-Bridge direkt an, um Öffnen/Schließen/Kalibrieren zu testen - unabhängig von der normalen Layer-Klappen-Zuordnung des Sorters.",
+				"notWaveshareBle": "Diagnose ist nur für das Waveshare-BLE-Backend verfügbar. Oben in den Einstellungen dorthin wechseln, um das zu nutzen.",
+				"deviceMissing": "Es ist noch keine BLE-Geräteadresse gespeichert. Oben in den Einstellungen erst eine festlegen.",
+				"badge": {
+					"connected": "Verbunden",
+					"notConnected": "Nicht verbunden"
+				},
+				"rescan": "Erneut suchen",
+				"gatesPanel": {
+					"title": "Bekannte Klappen",
+					"description": "{count} Klappe(n) auf dem Bus erreichbar.",
+					"emptyHint": "Noch keine Klappen gefunden. Erneut suchen drücken, oder unten Nächsten Servo lernen, falls noch keine eingerichtet wurden."
+				},
+				"gateLabel": "Klappe {gate}",
+				"gateState": {
+					"open": "Offen",
+					"closed": "Geschlossen",
+					"blocked": "Blockiert",
+					"unknown": "Unbekannt",
+					"error": "Fehler",
+					"untested": "Ungetestet"
+				},
+				"buttons": {
+					"open": "Öffnen",
+					"close": "Schließen",
+					"calibrate": "Kalibrieren",
+					"learnNext": "Nächsten Servo lernen",
+					"factoryResetAll": "Alle zurücksetzen"
+				},
+				"footerHint": "Nächsten Servo lernen übernimmt den nächsten Servo mit Werks-ID und kalibriert ihn. Alle zurücksetzen setzt jeden erreichbaren Servo zurück auf ID 1, damit die Einrichtung neu beginnen kann.",
+				"errors": {
+					"statusFailed": "Bridge-Status konnte nicht gelesen werden.",
+					"moveGateFailed": "Klappe {gate} konnte nicht bewegt werden.",
+					"calibrateGateFailed": "Klappe {gate} konnte nicht kalibriert werden.",
+					"learnFailed": "LEARN fehlgeschlagen.",
+					"resetFailed": "Werksreset fehlgeschlagen."
+				},
+				"status": {
+					"gateCalibrated": "Klappe {gate} kalibriert.",
+					"servoLearned": "Servo gelernt.",
+					"servosReset": "Servos zurückgesetzt."
+				}
+			}
+		}
+	}
+}

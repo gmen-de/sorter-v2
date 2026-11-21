@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachinesContext } from '$lib/machines/context';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -32,8 +33,7 @@
 	};
 
 	type JitterPreset = {
-		name: string;
-		blurb: string;
+		id: string;
 		amplitudeDeg: number;
 		cycles: number;
 		speed: number;
@@ -47,20 +47,20 @@
 	// travel, medium strength, medium length. The others are variants around it:
 	// travel = amplitude, length = cycles, strength = speed + accel.
 	const PRESETS: JitterPreset[] = [
-		{ name: 'Heavy stuck', blurb: 'Reference: medium everything, the one that worked', amplitudeDeg: 6, cycles: 12, speed: 5000, acceleration: 100000 },
-		{ name: 'Quick stuck', blurb: 'Same force & travel, shorter', amplitudeDeg: 6, cycles: 6, speed: 5000, acceleration: 100000 },
-		{ name: 'Brief stuck', blurb: 'Same force & travel, very short burst', amplitudeDeg: 6, cycles: 3, speed: 5000, acceleration: 100000 },
-		{ name: 'Sharp & short', blurb: 'Stronger jerk, shorter', amplitudeDeg: 6, cycles: 6, speed: 6500, acceleration: 180000 },
-		{ name: 'Hard snap', blurb: 'Max jerk, tiny burst', amplitudeDeg: 6, cycles: 3, speed: 7000, acceleration: 220000 },
-		{ name: 'Soft & long', blurb: 'Softer but longer', amplitudeDeg: 5, cycles: 30, speed: 3500, acceleration: 55000 },
-		{ name: 'Gentle marathon', blurb: 'Very soft, very long', amplitudeDeg: 4, cycles: 50, speed: 3000, acceleration: 45000 },
-		{ name: 'Big travel', blurb: 'More throw, medium length', amplitudeDeg: 9, cycles: 12, speed: 5000, acceleration: 110000 },
-		{ name: 'Big & brief', blurb: 'Big throw, short', amplitudeDeg: 9, cycles: 5, speed: 6000, acceleration: 150000 },
-		{ name: 'Big & hard', blurb: 'Big throw, strong jerk', amplitudeDeg: 9, cycles: 8, speed: 6500, acceleration: 200000 },
-		{ name: 'Max shake', blurb: 'Largest throw, strong', amplitudeDeg: 13, cycles: 12, speed: 6500, acceleration: 190000 },
-		{ name: 'Wide & soft', blurb: 'Big throw but gentle, long', amplitudeDeg: 9, cycles: 16, speed: 3500, acceleration: 55000 },
-		{ name: 'Fast buzz', blurb: 'Medium throw, fast & long', amplitudeDeg: 6, cycles: 24, speed: 6000, acceleration: 150000 },
-		{ name: 'Strong & long', blurb: 'Strong and persistent', amplitudeDeg: 8, cycles: 30, speed: 6000, acceleration: 140000 }
+		{ id: 'heavyStuck', amplitudeDeg: 6, cycles: 12, speed: 5000, acceleration: 100000 },
+		{ id: 'quickStuck', amplitudeDeg: 6, cycles: 6, speed: 5000, acceleration: 100000 },
+		{ id: 'briefStuck', amplitudeDeg: 6, cycles: 3, speed: 5000, acceleration: 100000 },
+		{ id: 'sharpShort', amplitudeDeg: 6, cycles: 6, speed: 6500, acceleration: 180000 },
+		{ id: 'hardSnap', amplitudeDeg: 6, cycles: 3, speed: 7000, acceleration: 220000 },
+		{ id: 'softLong', amplitudeDeg: 5, cycles: 30, speed: 3500, acceleration: 55000 },
+		{ id: 'gentleMarathon', amplitudeDeg: 4, cycles: 50, speed: 3000, acceleration: 45000 },
+		{ id: 'bigTravel', amplitudeDeg: 9, cycles: 12, speed: 5000, acceleration: 110000 },
+		{ id: 'bigBrief', amplitudeDeg: 9, cycles: 5, speed: 6000, acceleration: 150000 },
+		{ id: 'bigHard', amplitudeDeg: 9, cycles: 8, speed: 6500, acceleration: 200000 },
+		{ id: 'maxShake', amplitudeDeg: 13, cycles: 12, speed: 6500, acceleration: 190000 },
+		{ id: 'wideSoft', amplitudeDeg: 9, cycles: 16, speed: 3500, acceleration: 55000 },
+		{ id: 'fastBuzz', amplitudeDeg: 6, cycles: 24, speed: 6000, acceleration: 150000 },
+		{ id: 'strongLong', amplitudeDeg: 8, cycles: 30, speed: 6000, acceleration: 140000 }
 	];
 
 	const STORAGE_KEY = 'jitter-test:settings';
@@ -108,7 +108,7 @@
 		} catch {
 			/* fall through */
 		}
-		return `Request failed with status ${res.status}`;
+		return $_('routes.settings.jitterTest.status.requestFailed', { values: { status: res.status } });
 	}
 
 	async function runJitter() {
@@ -130,7 +130,15 @@
 				throw new Error(await readError(res));
 			}
 			const payload = await res.json();
-			statusMsg = `Jittering ${stepperLabels[settings.stepper]}: ${payload.cycles} cycles of ±${settings.amplitudeDeg}° motor (~${payload.estimated_duration_s}s, ${payload.amplitude_microsteps} µsteps/stroke).`;
+			statusMsg = $_('routes.settings.jitterTest.status.jittering', {
+				values: {
+					stepper: stepperLabels[settings.stepper],
+					cycles: payload.cycles,
+					amplitude: settings.amplitudeDeg,
+					duration: payload.estimated_duration_s,
+					microsteps: payload.amplitude_microsteps
+				}
+			});
 		} catch (e) {
 			errorMsg = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -146,7 +154,7 @@
 				{ method: 'POST' }
 			);
 			if (!res.ok) throw new Error(await readError(res));
-			statusMsg = `Stopped ${stepperLabels[settings.stepper]}.`;
+			statusMsg = $_('routes.settings.jitterTest.status.stopped', { values: { stepper: stepperLabels[settings.stepper] } });
 		} catch (e) {
 			errorMsg = e instanceof Error ? e.message : String(e);
 		}
@@ -167,17 +175,17 @@
 	}
 </script>
 
-<svelte:head><title>Sorter - Jitter test</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.jitterTest.pageTitle')}</title></svelte:head>
 
 <PageHeader
-	title="Jitter test"
-	description="A short, sharp back-and-forth on a stepper that breaks static friction: enough to nudge a stuck piece off a C channel without a violent shake. It runs on the firmware's real-time core and ends where it started."
+	title={$_('routes.settings.jitterTest.title')}
+	description={$_('routes.settings.jitterTest.description')}
 />
 
-<Panel title="Motor">
+<Panel title={$_('routes.settings.jitterTest.motor.panelTitle')}>
 	<div class="max-w-64">
 		<Select
-			label="Motor"
+			label={$_('routes.settings.jitterTest.motor.label')}
 			bind:value={settings.stepper}
 			options={STEPPERS.map((key) => ({ value: key, label: stepperLabels[key] }))}
 		/>
@@ -185,14 +193,14 @@
 </Panel>
 
 <Panel
-	title="Presets"
-	description="A preset fills in the settings below; then press Jitter. Amplitudes are at the motor: the rotor moves about {gearRatio.toFixed(1)} times less."
+	title={$_('routes.settings.jitterTest.presets.panelTitle')}
+	description={$_('routes.settings.jitterTest.presets.description', { values: { gearRatio: gearRatio.toFixed(1) } })}
 	flush
 >
 	<div
 		class="grid grid-cols-1 gap-px border-t border-line bg-line sm:grid-cols-3 sm:[&>:last-child:nth-child(3n+1)]:col-span-3 sm:[&>:last-child:nth-child(3n+2)]:col-span-2"
 	>
-		{#each PRESETS as p (p.name)}
+		{#each PRESETS as p (p.id)}
 			{@const selected =
 				settings.amplitudeDeg === p.amplitudeDeg &&
 				settings.cycles === p.cycles &&
@@ -205,8 +213,10 @@
 						? 'bg-primary-soft'
 						: 'hover:bg-well'}"
 				>
-					<span class="text-sm font-medium {selected ? 'text-primary-ink' : 'text-ink'}">{p.name}</span>
-					<span class="text-sm text-ink-muted">{p.blurb}</span>
+					<span class="text-sm font-medium {selected ? 'text-primary-ink' : 'text-ink'}">
+						{$_(`routes.settings.jitterTest.presets.items.${p.id}.name`)}
+					</span>
+					<span class="text-sm text-ink-muted">{$_(`routes.settings.jitterTest.presets.items.${p.id}.blurb`)}</span>
 					<span class="num text-sm text-ink-muted">
 						±{p.amplitudeDeg}°, {p.cycles} cycles, {p.speed} µsteps/s, {(p.acceleration / 1000).toFixed(0)}k
 					</span>
@@ -216,29 +226,43 @@
 	</div>
 </Panel>
 
-<Panel title="Settings">
+<Panel title={$_('routes.settings.jitterTest.settingsPanelTitle')}>
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 		<Field
-			label="Amplitude"
+			label={$_('routes.settings.jitterTest.fields.amplitude.label')}
 			for="jitter-amplitude"
-			help="About {outputAmplitudeDeg.toFixed(2)}° at the rotor (gear ratio {gearRatio.toFixed(2)}:1)."
+			help={$_('routes.settings.jitterTest.fields.amplitude.help', { values: { outputAmplitudeDeg: outputAmplitudeDeg.toFixed(2), gearRatio: gearRatio.toFixed(2) } })}
 		>
-			<Input id="jitter-amplitude" type="number" step={0.1} bind:value={settings.amplitudeDeg} unit="° a stroke" />
+			<Input
+				id="jitter-amplitude"
+				type="number"
+				step={0.1}
+				bind:value={settings.amplitudeDeg}
+				unit={$_('routes.settings.jitterTest.fields.amplitude.unit')}
+			/>
 		</Field>
-		<Field label="Cycles" for="jitter-cycles" help="Back-and-forths.">
+		<Field
+			label={$_('routes.settings.jitterTest.fields.cycles.label')}
+			for="jitter-cycles"
+			help={$_('routes.settings.jitterTest.fields.cycles.help')}
+		>
 			<Input id="jitter-cycles" type="number" step={1} bind:value={settings.cycles} />
 		</Field>
-		<Field label="Speed" for="jitter-speed">
+		<Field label={$_('routes.settings.jitterTest.fields.speed.label')} for="jitter-speed">
 			<Input id="jitter-speed" type="number" step={100} bind:value={settings.speed} unit="µsteps/s" />
 		</Field>
-		<Field label="Acceleration" for="jitter-accel" help="Higher is a sharper jerk each stroke.">
+		<Field
+			label={$_('routes.settings.jitterTest.fields.acceleration.label')}
+			for="jitter-accel"
+			help={$_('routes.settings.jitterTest.fields.acceleration.help')}
+		>
 			<Input id="jitter-accel" type="number" step={5000} bind:value={settings.acceleration} unit="µsteps/s²" />
 		</Field>
 	</div>
 	{#snippet footer()}
-		<Button variant="ghost" class="mr-auto" onclick={resetDefaults}>Back to the defaults</Button>
-		<Button variant="danger" onclick={stopStepper}>Stop</Button>
-		<Button variant="primary" loading={busy} onclick={runJitter}>Jitter</Button>
+		<Button variant="ghost" class="mr-auto" onclick={resetDefaults}>{$_('routes.settings.jitterTest.actions.resetDefaults')}</Button>
+		<Button variant="danger" onclick={stopStepper}>{$_('routes.settings.jitterTest.actions.stop')}</Button>
+		<Button variant="primary" loading={busy} onclick={runJitter}>{$_('routes.settings.jitterTest.actions.jitter')}</Button>
 	{/snippet}
 </Panel>
 

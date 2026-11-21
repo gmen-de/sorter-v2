@@ -1,0 +1,73 @@
+{
+	"routes": {
+		"settings": {
+			"appearance": {
+				"pageTitle": "Sorter - Appearance",
+				"title": "Appearance",
+				"description": "How the sorter's pages look."
+			}
+		},
+		"dashboard": {
+			"pageTitle": "Sorter - Dashboard",
+			"cameraLabels": {
+				"feeder": "Feeder",
+				"cChannel2": "C-channel 2",
+				"cChannel3": "C-channel 3",
+				"classificationChannel": "Classification channel"
+			},
+			"standby": {
+				"title": "Standby",
+				"notHomedBadge": "Not homed",
+				"simHomeHelp": "Sim home runs the normal recovery and skips only the physical homing.",
+				"homeHelp": "Home starts the hardware and moves every axis to its zero.",
+				"simHomeButton": "Sim home",
+				"homeButton": "Home"
+			},
+			"homing": {
+				"title": "Homing",
+				"fallbackStep": "Starting the hardware"
+			},
+			"error": {
+				"fallbackTitle": "Hardware error",
+				"stoppedBadge": "Stopped",
+				"retryButton": "Retry"
+			},
+			"trainingData": {
+				"title": "Training data",
+				"badge": "Training mode"
+			},
+			"recentPieces": {
+				"title": "Recent pieces"
+			},
+			"runtime": {
+				"title": "Runtime",
+				"timeSpanLabel": "Time span"
+			},
+			"noMachine": {
+				"title": "No machine selected",
+				"description": "Connect to a machine in Settings."
+			}
+		}
+	},
+	"components": {
+		"settings": {
+			"appearanceSection": {
+				"panelTitle": "Appearance",
+				"theme": {
+					"label": "Theme",
+					"help": "Applies at once, on this browser.",
+					"light": "Light",
+					"dark": "Dark"
+				},
+				"language": {
+					"label": "Language",
+					"help": "Applies at once, on this browser."
+				},
+				"themeColor": {
+					"title": "Theme color",
+					"description": "The LEGO color of buttons, focus rings and the current page, on every browser pointed at this machine. Applies at once."
+				}
+			}
+		}
+	}
+}

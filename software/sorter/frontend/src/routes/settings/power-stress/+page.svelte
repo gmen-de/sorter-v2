@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { onDestroy, onMount } from 'svelte';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -74,9 +75,9 @@
 			const payload = await response.json();
 			if (typeof payload?.detail === 'string') return payload.detail;
 		} catch {
-			return `Request failed with status ${response.status}`;
+			return $_('routes.settings.powerStress.requestFailed', { values: { status: response.status } });
 		}
-		return `Request failed with status ${response.status}`;
+		return $_('routes.settings.powerStress.requestFailed', { values: { status: response.status } });
 	}
 
 	async function loadStatus() {
@@ -187,63 +188,60 @@
 	});
 </script>
 
-<svelte:head><title>Sorter - Power stress test</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.powerStress.pageTitle')}</title></svelte:head>
 
 <PageHeader
-	title="Power stress test"
-	description="The heaviest load the machine can make, for measuring its draw at the wall. It needs a safe home and a pause first."
+	title={$_('routes.settings.powerStress.title')}
+	description={$_('routes.settings.powerStress.description')}
 />
 
 <Alert tone="info">
-	The chute homes before anything moves and stays at or below {chuteMax}°. The lights stay at 100%, every
-	configured vision worker must be running, C1 to C4 ramp their moves, and the servos use their whole 0°
-	to 180°. Each phase's start is stored as an epoch time, to line up with the power meter's readings.
+	{$_('routes.settings.powerStress.alertInfo', { values: { chuteMax } })}
 </Alert>
 
-<Panel title="Sequence" flush>
+<Panel title={$_('routes.settings.powerStress.sequence.panelTitle')} flush>
 	<ol class="grid grid-cols-1 gap-px bg-line sm:grid-cols-3">
 		<li class="bg-surface px-(--pad-panel) py-(--pad-row)">
-			<div class="text-sm font-medium text-ink">1. Steady</div>
+			<div class="text-sm font-medium text-ink">{$_('routes.settings.powerStress.sequence.steady.title')}</div>
 			<p class="mt-0.5 text-sm text-ink-muted">
-				The four channel steppers run without stopping, the chute sweeps from home to its limit, and
-				the servos sweep end to end.
+				{$_('routes.settings.powerStress.sequence.steady.description')}
 			</p>
 		</li>
 		<li class="bg-surface px-(--pad-panel) py-(--pad-row)">
-			<div class="text-sm font-medium text-ink">2. Random</div>
+			<div class="text-sm font-medium text-ink">{$_('routes.settings.powerStress.sequence.random.title')}</div>
 			<p class="mt-0.5 text-sm text-ink-muted">
-				The steppers brake and burst either way, and the chute and the servos go to random targets.
+				{$_('routes.settings.powerStress.sequence.random.description')}
 			</p>
 		</li>
 		<li class="bg-surface px-(--pad-panel) py-(--pad-row)">
-			<div class="text-sm font-medium text-ink">3. Mixed</div>
+			<div class="text-sm font-medium text-ink">{$_('routes.settings.powerStress.sequence.mixed.title')}</div>
 			<p class="mt-0.5 text-sm text-ink-muted">
-				Short stretches mix steady and bursting steppers while the chute and the servos alternate.
+				{$_('routes.settings.powerStress.sequence.mixed.description')}
 			</p>
 		</li>
 	</ol>
 </Panel>
 
-<Panel title="Settings">
+<Panel title={$_('routes.settings.powerStress.settings.panelTitle')}>
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-		<Field label="Moving time" for="stress-minutes">
+		<Field label={$_('routes.settings.powerStress.settings.movingTime')} for="stress-minutes">
 			<Input id="stress-minutes" type="number" bind:value={durationMinutes} disabled={active} unit="min" />
 		</Field>
-		<Field label="C1 to C4 top speed" for="stress-stepper-speed">
+		<Field label={$_('routes.settings.powerStress.settings.stepperTopSpeed')} for="stress-stepper-speed">
 			<Input id="stress-stepper-speed" type="number" bind:value={stepperSpeed} disabled={active} unit="µsteps/s" />
 		</Field>
-		<Field label="Chute speed" for="stress-chute-speed">
+		<Field label={$_('routes.settings.powerStress.settings.chuteSpeed')} for="stress-chute-speed">
 			<Input id="stress-chute-speed" type="number" bind:value={chuteSpeed} disabled={active} unit="µsteps/s" />
 		</Field>
-		<Field label="Chute limit" for="stress-chute-max">
+		<Field label={$_('routes.settings.powerStress.settings.chuteLimit')} for="stress-chute-max">
 			<Input id="stress-chute-max" type="number" bind:value={chuteMax} disabled={active} unit="°" />
 		</Field>
 	</div>
 	{#snippet footer()}
 		{#if active}
-			<Button variant="danger" loading={busy} onclick={stopTest}>Stop safely</Button>
+			<Button variant="danger" loading={busy} onclick={stopTest}>{$_('routes.settings.powerStress.settings.stopSafely')}</Button>
 		{:else}
-			<Button variant="primary" loading={busy} onclick={startTest}>Start the power stress test</Button>
+			<Button variant="primary" loading={busy} onclick={startTest}>{$_('routes.settings.powerStress.settings.start')}</Button>
 		{/if}
 	{/snippet}
 </Panel>
@@ -253,35 +251,37 @@
 {/if}
 
 {#if run}
-	<Panel title="This run" flush>
+	<Panel title={$_('routes.settings.powerStress.thisRun.panelTitle')} flush>
 		{#snippet actions()}
-			<Button size="sm" onclick={() => run && downloadRun(run.id)}>Download the JSON</Button>
+			<Button size="sm" onclick={() => run && downloadRun(run.id)}>{$_('routes.settings.powerStress.thisRun.downloadJson')}</Button>
 		{/snippet}
 		<div class="flex flex-col gap-3 px-(--pad-panel) pb-4">
 			<div class="flex flex-wrap items-center gap-2">
 				<Badge tone={run.status === 'running' ? 'primary' : 'neutral'} dot>{run.status}</Badge>
 				<span class="num text-sm text-ink-muted">
-					{run.current_phase ?? 'Finished'}{run.current_segment ? `, part ${run.current_segment}` : ''},
-					{formatDuration(run.total_time_s)} of {formatDuration(run.duration_target_s)}
+					{run.current_phase ?? $_('routes.settings.powerStress.thisRun.finished')}{run.current_segment
+						? $_('routes.settings.powerStress.thisRun.part', { values: { n: run.current_segment } })
+						: ''},
+					{formatDuration(run.total_time_s)} {$_('routes.settings.powerStress.thisRun.of')} {formatDuration(run.duration_target_s)}
 				</span>
 			</div>
-			<ProgressBar label="Progress" value={progressPercent} />
+			<ProgressBar label={$_('routes.settings.powerStress.thisRun.progress')} value={progressPercent} />
 			{#if run.error}
 				<Alert tone="danger">{run.error}</Alert>
 			{/if}
 		</div>
 		{#if run.hardware}
 			<div class="grid grid-cols-2 gap-px border-t border-line bg-line sm:grid-cols-4">
-				<div class="bg-surface"><Stat label="Steppers" value={run.hardware.steppers.length} /></div>
-				<div class="bg-surface"><Stat label="Servos" value={run.hardware.servo_count} /></div>
-				<div class="bg-surface"><Stat label="Light outputs" value={run.hardware.led_output_count} /></div>
-				<div class="bg-surface"><Stat label="Vision workers" value={run.hardware.perception_workers_alive} /></div>
+				<div class="bg-surface"><Stat label={$_('routes.settings.powerStress.thisRun.steppers')} value={run.hardware.steppers.length} /></div>
+				<div class="bg-surface"><Stat label={$_('routes.settings.powerStress.thisRun.servos')} value={run.hardware.servo_count} /></div>
+				<div class="bg-surface"><Stat label={$_('routes.settings.powerStress.thisRun.lightOutputs')} value={run.hardware.led_output_count} /></div>
+				<div class="bg-surface"><Stat label={$_('routes.settings.powerStress.thisRun.visionWorkers')} value={run.hardware.perception_workers_alive} /></div>
 			</div>
 		{/if}
 		{#if run.events?.length}
 			<div class="max-h-72 overflow-auto border-t border-line">
 				<table class="data-table">
-					<thead><tr><th>When</th><th>What</th><th>Phase</th></tr></thead>
+					<thead><tr><th>{$_('routes.settings.powerStress.thisRun.when')}</th><th>{$_('routes.settings.powerStress.thisRun.what')}</th><th>{$_('routes.settings.powerStress.thisRun.phase')}</th></tr></thead>
 					<tbody>
 						{#each [...run.events].reverse() as event (event.id)}
 							<tr>
@@ -297,14 +297,14 @@
 	</Panel>
 {/if}
 
-<Panel title="Past runs" flush>
+<Panel title={$_('routes.settings.powerStress.pastRuns.panelTitle')} flush>
 	{#if runs.length === 0}
-		<p class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">No power stress runs yet.</p>
+		<p class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">{$_('routes.settings.powerStress.pastRuns.none')}</p>
 	{:else}
 		<div class="overflow-x-auto">
 			<table class="data-table">
 				<thead>
-					<tr><th>Started</th><th>Status</th><th class="num">Duration</th><th><span class="sr-only">Download</span></th></tr>
+					<tr><th>{$_('routes.settings.powerStress.pastRuns.started')}</th><th>{$_('routes.settings.powerStress.pastRuns.status')}</th><th class="num">{$_('routes.settings.powerStress.pastRuns.duration')}</th><th><span class="sr-only">{$_('routes.settings.powerStress.pastRuns.downloadSr')}</span></th></tr>
 				</thead>
 				<tbody>
 					{#each runs as item (item.id)}
@@ -313,7 +313,7 @@
 							<td class="capitalize">{item.status}</td>
 							<td class="num">{formatDuration(item.total_time_s)}</td>
 							<td class="text-right">
-								<Button variant="ghost" size="sm" onclick={() => downloadRun(item.id)}>JSON</Button>
+								<Button variant="ghost" size="sm" onclick={() => downloadRun(item.id)}>{$_('routes.settings.powerStress.pastRuns.json')}</Button>
 							</td>
 						</tr>
 					{/each}

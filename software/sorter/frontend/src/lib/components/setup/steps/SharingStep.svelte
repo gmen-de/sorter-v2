@@ -7,24 +7,20 @@
 	All the words of the notice are in the module script below, in one place.
 -->
 <script lang="ts" module>
+	// NOTE: these two are plain exported string constants (not translated) because
+	// routes/setup/+page.svelte imports them as static strings for its WizardStepDefinition
+	// array (title/description: string); that file is owned by a different i18n
+	// migration batch, so changing this export's shape here would require a
+	// coordinated edit there. Flagged for follow-up once that batch lands.
 	export const sharingStepTitle = 'What this sorter shares';
 	export const sharingStepDescription =
 		'What leaves this sorter, and what you can turn off. You can change it any time in Settings > Data.';
 
-	const ALWAYS_TITLE = 'Always';
-	const ALWAYS = [
-		'Piece photos go to Brickognize, which recognizes each part. Only the photo is sent.',
-		'Once an hour a status report goes to basically: the software version, the hardware and how much this sorter has sorted. No pictures and no piece records.'
-	];
-	const WITH_HIVE_TITLE = 'With a Hive connected';
-	const TRAINING =
-		'Pictures and piece records train the recognition models every sorter uses. Keeping them on helps the most.';
-	const DOCS_LABEL = 'Everything that leaves the machine';
 	const DOCS_URL = 'https://docs.basically.website/sorter/what-leaves-the-machine/';
-	const AGREE = 'Agree and continue';
 </script>
 
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import StreamRows from '$lib/components/data/StreamRows.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -77,7 +73,10 @@
 			draft = everyHiveValues(next);
 			loadError = null;
 		} catch (e) {
-			if (from === base) loadError = `Couldn't load what this sorter shares: ${message(e)}`;
+			if (from === base)
+				loadError = $_('components.setup.steps.sharingStep.loadErrorPrefix', {
+					values: { message: message(e) }
+				});
 		}
 	}
 
@@ -113,24 +112,28 @@
 		<Alert tone="danger">
 			{loadError}
 			{#snippet actions()}
-				<Button size="sm" onclick={() => void load(base)}>Try again</Button>
+				<Button size="sm" onclick={() => void load(base)}
+					>{$_('components.setup.steps.sharingStep.tryAgain')}</Button
+				>
 			{/snippet}
 		</Alert>
 	{:else if !sharing}
 		<Panel>
-			<p class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={16} /> Loading</p>
+			<p class="flex items-center gap-2 text-sm text-ink-muted">
+				<Spinner size={16} /> {$_('components.setup.steps.sharingStep.loading')}
+			</p>
 		</Panel>
 	{:else}
 		{@const current = sharing}
-		<Panel title={ALWAYS_TITLE} flush>
+		<Panel title={$_('components.setup.steps.sharingStep.alwaysTitle')} flush>
 			<ul class="divide-y divide-line">
-				{#each ALWAYS as line (line)}
+				{#each [$_('components.setup.steps.sharingStep.always.brickognize'), $_('components.setup.steps.sharingStep.always.statusReport')] as line (line)}
 					<li class="px-(--pad-panel) py-(--pad-row) text-sm text-ink">{line}</li>
 				{/each}
 			</ul>
 		</Panel>
 
-		<Panel title={WITH_HIVE_TITLE} flush>
+		<Panel title={$_('components.setup.steps.sharingStep.withHiveTitle')} flush>
 			<div class="divide-y divide-line">
 				<StreamRows
 					streams={current.streams}
@@ -138,7 +141,9 @@
 					onchange={(stream, on) => (draft = { ...draft, [stream.key]: on })}
 				/>
 			</div>
-			<p class="border-t border-line px-(--pad-panel) py-3 text-sm text-ink-muted">{TRAINING}</p>
+			<p class="border-t border-line px-(--pad-panel) py-3 text-sm text-ink-muted">
+				{$_('components.setup.steps.sharingStep.trainingHint')}
+			</p>
 			{#snippet footer()}
 				<a
 					href={DOCS_URL}
@@ -146,12 +151,16 @@
 					rel="noopener noreferrer"
 					class="mr-auto inline-flex min-w-0 items-center gap-1 text-sm text-primary-ink hover:underline"
 				>
-					{DOCS_LABEL}
+					{$_('components.setup.steps.sharingStep.docsLabel')}
 					<ArrowUpRight size={14} class="shrink-0" />
 				</a>
-				{#if oncancel}<Button variant="ghost" onclick={oncancel}>Cancel</Button>{/if}
+				{#if oncancel}<Button variant="ghost" onclick={oncancel}
+						>{$_('components.setup.steps.sharingStep.cancelButton')}</Button
+					>{/if}
 				<Button variant="primary" loading={saving} onclick={agree}>
-					{needsAgreement ? AGREE : 'Continue'}
+					{needsAgreement
+						? $_('components.setup.steps.sharingStep.agreeButton')
+						: $_('components.setup.steps.sharingStep.continueButton')}
 				</Button>
 			{/snippet}
 		</Panel>

@@ -16,6 +16,7 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Printer from '@lucide/svelte/icons/printer';
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 
 	type SetPart = {
 		part_num: string;
@@ -65,7 +66,7 @@
 			sets = data.progress?.sets ?? [];
 			error = null;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load';
+			error = e instanceof Error ? e.message : $_('routes.dashboard.sets.checklist.loadFailedFallback');
 		} finally {
 			loading = false;
 		}
@@ -87,8 +88,8 @@
 
 	function colorLabel(part: SetPart): string {
 		if (part.color_name) return part.color_name;
-		if (String(part.color_id) === '-1') return 'Any color';
-		return `Color ${part.color_id}`;
+		if (String(part.color_id) === '-1') return $_('routes.dashboard.sets.checklist.anyColor');
+		return $_('routes.dashboard.sets.checklist.colorFallback', { values: { id: part.color_id } });
 	}
 
 	function visibleParts(set: SetProgress): SetPart[] {
@@ -121,7 +122,7 @@
 
 </script>
 
-<svelte:head><title>Parts checklist - Sorter</title></svelte:head>
+<svelte:head><title>{$_('routes.dashboard.sets.checklist.pageTitle')}</title></svelte:head>
 
 <svelte:window onbeforeprint={() => (printing = true)} onafterprint={() => (printing = false)} />
 
@@ -133,21 +134,23 @@
 	>
 		<div class="print:hidden">
 			<PageHeader
-				title="Parts checklist"
-				description="Print this page and walk to your storage to hunt down the parts the sorter hasn't seen yet. Tick off boxes by hand or in the browser."
+				title={$_('routes.dashboard.sets.checklist.title')}
+				description={$_('routes.dashboard.sets.checklist.description')}
 			>
 				{#snippet actions()}
-					<Button icon={ArrowLeft} href="/dashboard/sets">Back to set progress</Button>
+					<Button icon={ArrowLeft} href="/dashboard/sets">{$_('routes.dashboard.sets.checklist.backButton')}</Button>
 					<SegmentedControl
-						label="Which parts to list"
+						label={$_('routes.dashboard.sets.checklist.whichPartsLabel')}
 						value={missingOnly ? 'missing' : 'all'}
 						options={[
-							{ value: 'missing', label: 'Missing only' },
-							{ value: 'all', label: 'All parts' }
+							{ value: 'missing', label: $_('routes.dashboard.sets.checklist.missingOnlyOption') },
+							{ value: 'all', label: $_('routes.dashboard.sets.checklist.allPartsOption') }
 						]}
 						onchange={(v) => (missingOnly = v === 'missing')}
 					/>
-					<Button variant="primary" icon={Printer} onclick={() => window.print()}>Print or save as PDF</Button>
+					<Button variant="primary" icon={Printer} onclick={() => window.print()}>
+						{$_('routes.dashboard.sets.checklist.printButton')}
+					</Button>
 				{/snippet}
 			</PageHeader>
 		</div>
@@ -155,26 +158,33 @@
 		{#if loading}
 			<p class="flex items-center justify-center gap-2 py-12 text-sm text-ink-muted">
 				<Spinner size={16} />
-				Loading the checklist
+				{$_('routes.dashboard.sets.checklist.loadingChecklist')}
 			</p>
 		{:else if error}
-			<Alert tone="danger" title="The checklist did not load">{error}</Alert>
+			<Alert tone="danger" title={$_('routes.dashboard.sets.checklist.checklistFailedTitle')}>{error}</Alert>
 		{:else if sets.length === 0}
-			<EmptyState title="No set-based sorting profile is active">
-				Assign one to start tracking parts.
+			<EmptyState title={$_('routes.dashboard.sets.checklist.noProfileTitle')}>
+				{$_('routes.dashboard.sets.checklist.noProfileBody')}
 			</EmptyState>
 		{:else}
 			<!-- The summary also prints -->
 			<Panel
-				title="Hunt summary"
-				description="{totals.missing} parts still missing, across {totals.missingTypes} unique part and color combinations in {visibleSets.length} of {sets.length} sets."
+				title={$_('routes.dashboard.sets.checklist.huntSummaryTitle')}
+				description={$_('routes.dashboard.sets.checklist.huntSummaryDescription', {
+					values: {
+						missing: totals.missing,
+						missingTypes: totals.missingTypes,
+						visible: visibleSets.length,
+						total: sets.length
+					}
+				})}
 				flush
 				class="print:break-inside-avoid"
 			>
 				<div class="grid grid-cols-3 divide-x divide-line border-t border-line">
-					<Stat label="Found" value={totals.found} tone="success" />
-					<Stat label="Missing" value={totals.missing} tone="danger" />
-					<Stat label="Needed" value={totals.needed} />
+					<Stat label={$_('routes.dashboard.sets.checklist.statFound')} value={totals.found} tone="success" />
+					<Stat label={$_('routes.dashboard.sets.checklist.statMissing')} value={totals.missing} tone="danger" />
+					<Stat label={$_('routes.dashboard.sets.checklist.statNeeded')} value={totals.needed} />
 				</div>
 			</Panel>
 
@@ -198,17 +208,19 @@
 							<div class="flex items-baseline justify-between gap-3">
 								<div class="min-w-0">
 									<div class="num text-sm text-ink-muted">
-										Set {set_progress.set_num}{#if set_progress.year} &middot; {set_progress.year}{/if}
+										{$_('routes.dashboard.sets.checklist.setLabel', { values: { setNum: set_progress.set_num } })}{#if set_progress.year} &middot; {set_progress.year}{/if}
 									</div>
 									<h2 class="truncate text-base font-semibold text-ink">
 										{set_progress.name || set_progress.set_num}
 									</h2>
 								</div>
 								{#if isComplete}
-									<Badge tone="success" dot>Complete</Badge>
+									<Badge tone="success" dot>{$_('routes.dashboard.sets.checklist.completeBadge')}</Badge>
 								{:else}
 									<Badge tone="danger">
-										{setMissing} {setMissing === 1 ? 'part' : 'parts'} missing
+										{setMissing === 1
+											? $_('routes.dashboard.sets.checklist.partMissingSingular', { values: { count: setMissing } })
+											: $_('routes.dashboard.sets.checklist.partMissingPlural', { values: { count: setMissing } })}
 									</Badge>
 								{/if}
 							</div>
@@ -216,7 +228,9 @@
 								<div class="flex-1">
 									<ProgressBar
 										value={setPct}
-										label="Progress of {set_progress.name || set_progress.set_num}"
+										label={$_('routes.dashboard.sets.checklist.progressOfLabel', {
+											values: { name: set_progress.name || set_progress.set_num }
+										})}
 										tone={isComplete ? 'success' : 'primary'}
 									/>
 								</div>
@@ -229,19 +243,21 @@
 
 					{#if parts.length === 0}
 						<p class="px-(--pad-panel) pb-5 text-center text-sm text-ink-muted">
-							{missingOnly ? 'All parts of this set have been sorted.' : 'This set has no parts.'}
+							{missingOnly
+								? $_('routes.dashboard.sets.checklist.allPartsSorted')
+								: $_('routes.dashboard.sets.checklist.noPartsInSet')}
 						</p>
 					{:else}
 						<div class="overflow-x-auto">
 						<table class="data-table">
 							<thead>
 								<tr>
-									<th class="w-10"><span class="sr-only">Done</span></th>
-									<th>Part</th>
-									<th>Color</th>
-									<th class="num">Found</th>
-									<th class="num">Needed</th>
-									<th class="num">Missing</th>
+									<th class="w-10"><span class="sr-only">{$_('routes.dashboard.sets.checklist.colHeaderDone')}</span></th>
+									<th>{$_('routes.dashboard.sets.checklist.colHeaderPart')}</th>
+									<th>{$_('routes.dashboard.sets.checklist.colHeaderColor')}</th>
+									<th class="num">{$_('routes.dashboard.sets.checklist.colHeaderFound')}</th>
+									<th class="num">{$_('routes.dashboard.sets.checklist.colHeaderNeeded')}</th>
+									<th class="num">{$_('routes.dashboard.sets.checklist.colHeaderMissing')}</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -253,7 +269,9 @@
 											<Checkbox
 												checked={partComplete}
 												disabled={partComplete}
-												aria-label="Mark {part.part_num} as found"
+												aria-label={$_('routes.dashboard.sets.checklist.markFoundAriaLabel', {
+													values: { partNum: part.part_num }
+												})}
 											/>
 										</td>
 										<td>
@@ -265,7 +283,7 @@
 										<td class="num text-ink-muted">{part.quantity_needed}</td>
 										<td class="num">
 											{#if partComplete}
-												<span class="text-success-ink">OK</span>
+												<span class="text-success-ink">{$_('routes.dashboard.sets.checklist.okLabel')}</span>
 											{:else}
 												<span class="font-semibold text-danger-ink">{missing}</span>
 											{/if}
@@ -280,8 +298,8 @@
 			{/each}
 
 			{#if visibleSets.length === 0 && missingOnly}
-				<Alert tone="success" title="All clear">
-					Every tracked set is fully sorted. Choose "All parts" to review the completed inventory.
+				<Alert tone="success" title={$_('routes.dashboard.sets.checklist.allClearTitle')}>
+					{$_('routes.dashboard.sets.checklist.allClearBody')}
 				</Alert>
 			{/if}
 		{/if}

@@ -1,0 +1,585 @@
+{
+	"components": {
+		"settings": {
+			"incidentHandlingSection": {
+				"modeNames": {
+					"off": "Off",
+					"manual": "Manual",
+					"automatic": "Automatic"
+				},
+				"defaults": {
+					"description": "Operator review required.",
+					"offLabel": "Disabled",
+					"manualLabel": "Operator reviews"
+				},
+				"errors": {
+					"saveFailed": "Could not save incident mode"
+				},
+				"activeBadge": "Active",
+				"whenHappens": "When {name} happens",
+				"automaticProcedureIntro": "Automatic tries these, in order, and stops as soon as the piece is free:"
+			},
+			"nextcloudSection": {
+				"panelTitle": "Nextcloud",
+				"panelDescription": "Uploads recognized pieces (image + part number + color) to your own Nextcloud, sorted so the data can train a custom model later.",
+				"errors": {
+					"loadFailed": "Failed to load the Nextcloud settings",
+					"saveFailed": "Failed to save the Nextcloud settings",
+					"enterServerUrl": "Enter the Nextcloud server URL first.",
+					"connectFailed": "Failed to connect to Nextcloud",
+					"disconnectFailed": "Failed to disconnect",
+					"loginTimedOut": "The login was not confirmed in time.",
+					"loginFailed": "The Nextcloud login failed."
+				},
+				"connectedAs": "Connected as",
+				"needsReconnect": "Nextcloud needs to be reconnected - it rejected the stored credentials.",
+				"disconnectButton": "Disconnect",
+				"serverUrl": {
+					"label": "Nextcloud server URL",
+					"help": "e.g. https://cloud.example.com"
+				},
+				"connectButton": "Connect to Nextcloud",
+				"connectingHint": "Log in to Nextcloud in the new tab and approve access - this page picks it up automatically.",
+				"uploadingActive": {
+					"label": "Uploading active",
+					"help": "Send recognized pieces to Nextcloud as they come in."
+				},
+				"targetFolder": {
+					"label": "Target folder",
+					"help": "Path in the Nextcloud where the data is stored."
+				},
+				"minConfidence": {
+					"label": "Minimum confidence",
+					"help": "Pieces below this score count as not confidently identified and go in the _unidentified folder. Leave blank for no threshold.",
+					"placeholder": "e.g. 0.8"
+				},
+				"uploadUnidentified": {
+					"label": "Upload unidentified pieces",
+					"help": "Also upload pieces with no confident match, into their own _unidentified folder - often the most valuable future training data."
+				},
+				"saveButton": "Save",
+				"status": {
+					"pending": "Pending:",
+					"lastUpload": "Last upload:",
+					"loading": "Loading status"
+				},
+				"neverLabel": "never"
+			},
+			"pictureSettingsSidebar": {
+				"defaultPrimaryActionLabel": "Save",
+				"noCamera": "Choose a camera to see these changes live.",
+				"errors": {
+					"loadFailed": "Failed to load picture settings",
+					"previewFailed": "Failed to preview camera settings",
+					"saveFailed": "Failed to save camera settings",
+					"resetFailed": "Failed to reset camera settings"
+				},
+				"loadingSettings": "Loading the picture settings",
+				"closeLabel": "Close the picture settings",
+				"resetCameraButton": "Reset the camera to auto",
+				"status": {
+					"cameraSettingsSaved": "Camera settings saved.",
+					"feedOrientationSaved": "Feed orientation saved.",
+					"confirmed": "Picture settings confirmed.",
+					"reverted": "Reverted changes.",
+					"resetUsbAndTransforms": "Reset USB camera controls and feed transforms to sane defaults. Save to apply.",
+					"resetTransforms": "Reset feed transforms to defaults. Save to apply.",
+					"cameraResetDefault": "Camera reset to automatic settings."
+				},
+				"undoLabel": "Undo the changes",
+				"backToDefaultsLabel": "Back to the defaults",
+				"panelTitle": "Picture"
+			},
+			"providerSelect": {
+				"inUseLabel": "{label} (in use)"
+			},
+			"sampleCaptureSection": {
+				"errors": {
+					"loadFailed": "Failed to load sample-capture status.",
+					"saveFailed": "Failed to update sample capture."
+				},
+				"onOffLabels": {
+					"on": "on",
+					"off": "off"
+				},
+				"captureTrainingFrames": {
+					"label": "Capture training frames",
+					"info": "Takes the latest frame from every live camera at the rate below, only while the machine is sorting. Frames are saved to a capped store on this machine and uploaded to Hive in the background. It never changes how the machine sorts."
+				},
+				"annotateOpenRouter": {
+					"label": "Annotate with OpenRouter",
+					"info": "Runs the Gemini (gemini_sam) detector on each frame before it is saved, so samples reach Hive as teacher captures. It makes one OpenRouter call per frame per camera. Off, or with no API key, frames are saved and uploaded raw."
+				},
+				"decayCaptureRate": {
+					"label": "Decay capture rate",
+					"info": "Takes a burst of frames when a run starts, then slows down to a floor over the ramp, with random jitter, so the same rig stops saving near-identical frames forever. Reset decay starts the burst again."
+				},
+				"captureRate": {
+					"label": "Capture rate",
+					"info": "Frames per minute per camera: at most 0.5, one every 2 minutes."
+				},
+				"sampleStoreSize": {
+					"label": "Sample store size",
+					"info": "Keep at most this much on this machine, never more than Hive allows. When it is full, samples every Hive already has are deleted first, then the oldest.",
+					"defaultHelp": "Follow the size Hive sets again."
+				},
+				"followHiveLabel": "Hive ({value} {unit})",
+				"hiveHintLabel": "Hive: {value}",
+				"notInitialized": "The sample collector hasn't started on this machine (no camera service yet).",
+				"droppedQueueFull": "{count} frames dropped since startup because saving could not keep up.",
+				"skippedLowDisk": "{count} frames skipped since startup because the disk was low on space.",
+				"savedSinceStartup": "Saved since startup: {count}",
+				"lastSavedAgo": ", the last one {seconds} s ago",
+				"lastCaptureFailed": "The last capture failed: {message}",
+				"decayDetails": {
+					"sentence": "Every {burst}, slowing to every {floor} over {ramp}.",
+					"sentenceNow": " Now every {current}.",
+					"resetDecayButton": "Reset decay",
+					"graphAriaLabel": "The capture rate falling from the burst rate to the floor over the ramp"
+				},
+				"burstInterval": {
+					"label": "Burst interval",
+					"info": "Seconds between frames per camera right after a reset. Never faster than Hive allows, nor than one every 2 minutes.",
+					"defaultHelp": "Follow the interval Hive sets again."
+				},
+				"floorInterval": {
+					"label": "Floor interval",
+					"info": "Minutes between frames per camera once the decay has settled.",
+					"defaultHelp": "Follow the interval Hive sets again."
+				},
+				"ramp": {
+					"label": "Ramp",
+					"info": "Hours to go from the burst interval to the floor interval.",
+					"defaultHelp": "Follow the ramp Hive sets again."
+				},
+				"jitter": {
+					"label": "Jitter",
+					"info": "Random wobble on each interval so captures aren't perfectly periodic."
+				}
+			},
+			"servoBackendSection": {
+				"errors": {
+					"scanFailed": "Scan failed.",
+					"demoReadFailed": "Could not read demo mode.",
+					"demoChangeFailed": "Could not change demo mode.",
+					"loadFailed": "Failed to reach the servo settings.",
+					"saveFailed": "Save failed."
+				},
+				"savedDefault": "Saved.",
+				"panelTitle": "Servo control",
+				"panelDescription": "Where layer-gate servo commands go: a control board's PCA9685 channels, or the ESP32 BLE gate bridge.",
+				"savingLabel": "Saving",
+				"notSaved": "Not saved",
+				"backendField": {
+					"label": "Backend",
+					"help": "Changing this needs the hardware re-homed afterward."
+				},
+				"backendOptions": {
+					"pca9685": "Control board (PCA9685)",
+					"waveshareBle": "BLE servo (ESP32 gate bridge)"
+				},
+				"bleDeviceField": {
+					"label": "BLE device",
+					"help": "The BLE address of the esp32_ble_servo_bridge board, e.g. AA:BB:CC:DD:EE:FF."
+				},
+				"scanButton": "Scan",
+				"scanningLabel": "Scanning",
+				"noDevicesFound": "No BLE devices found nearby.",
+				"unnamedDevice": "(unnamed)",
+				"sorterServoSuffix": " — SORTER-SERVO-BLE",
+				"demoModeField": {
+					"label": "Demo mode",
+					"help": "The bridge board answers every gate command as if a real servo moved, after the same delay a real move takes — without driving the servo bus. Applies immediately, persists across reboots."
+				},
+				"saveButton": "Save"
+			},
+			"settingsSaveBar": {
+				"unsavedChanges": "Unsaved changes",
+				"resetButton": "Reset to saved",
+				"saveButton": "Save"
+			},
+			"stepperPanel": {
+				"hardwareNotStarted": "Hardware not started. Press Start in the dashboard first.",
+				"requestFailedStatus": "Request failed with status {status}",
+				"pulsing": "Pulsing {direction}.",
+				"requestFailed": "The {direction} request failed.",
+				"movingDegrees": "Moving {degrees}° {direction}.",
+				"stopped": "Stopped.",
+				"stopRequestFailed": "Stop request failed.",
+				"homedAndZeroed": "Homed and zeroed.",
+				"failedToHome": "Failed to home",
+				"homingCanceled": "Homing canceled.",
+				"failedToCancelHoming": "Failed to cancel homing",
+				"chuteSettingsSaved": "Chute settings saved.",
+				"distributorSpeedSaved": "Distributor operating speed saved.",
+				"failedToSaveChuteSettings": "Failed to save chute settings",
+				"failedToSaveEncoderCalibration": "Failed to save the encoder calibration",
+				"endstopSettingsSaved": "Endstop settings saved.",
+				"settingsSaved": "Settings saved.",
+				"failedToSaveSettings": "Failed to save settings",
+				"failedToLoadSettings": "Failed to load settings",
+				"stallCleared": "Stall cleared.",
+				"failedToClearStall": "Failed to clear stall",
+				"driverSettingsApplied": "Driver settings applied.",
+				"failedToSaveDriverSettings": "Failed to save driver settings",
+				"tryAgainButton": "Try again",
+				"applyDriverSettingsButton": "Apply the driver settings",
+				"saveButton": "Save",
+				"badges": {
+					"unknown": "Unknown",
+					"stopped": "Stopped",
+					"moving": "Moving",
+					"homed": "Homed",
+					"notHomed": "Not homed",
+					"endstopTriggered": "Endstop triggered",
+					"endstopClear": "Endstop clear"
+				},
+				"chuteStatusLine": "Chute {chute}°, motor {motor}°, {microsteps} microsteps",
+				"atStatusLine": "At {position}°, {microsteps} microsteps",
+				"unknownMicrosteps": "unknown",
+				"gearRatioLine": "Gear ratio {ratio}:1",
+				"gearRatioDetail": ": {motorDeg}° at the motor is {chuteDeg}° at the chute",
+				"homingFindsMagnetRing": "Homing finds the magnet-ring index slowly.",
+				"homingFindsEndstop": "Homing finds the endstop slowly.",
+				"cancelStopsEveryStepper": " Cancel stops every stepper, in case the wrong motor moves.",
+				"stalledTitle": "{label} stalled",
+						"stalledBody": "Stall detection halted this motor. Clear the jam, then clear the stall. Its home position was dropped, so home it again before precise moves.",
+				"clearStallButton": "Clear the stall",
+				"driverSettingsDisclosure": {
+					"title": "Driver settings",
+					"help": "Currents, microsteps, stall detection"
+				},
+				"panelDriverSettings": {
+					"title": "Driver settings",
+					"description": "Currents, microsteps, stall detection."
+				},
+				"endstopSettingsTitle": "Endstop settings",
+				"driverSettingsReadFailed": "The driver settings could not be read."
+			},
+			"stepperStallGuard": {
+				"httpStatus": "HTTP {status}",
+				"failedToReadSettings": "Failed to read the stall detection settings",
+				"savedLive": "Stall detection saved.",
+				"savedNextStart": "Stall detection saved. It applies at the next start.",
+				"failedToSaveDetectionSettings": "Failed to save the stall detection settings",
+				"enterSpeedAboveZero": "Enter a speed above 0.",
+				"failedToLoadRuns": "Failed to load runs",
+				"failedToLoadSummary": "Failed to load summary",
+				"failedToLoadSamples": "Failed to load samples",
+				"deleteRunDialog": {
+					"title": "Delete the run?",
+					"message": "Delete run {id} and its samples?",
+					"action": "Delete the run"
+				},
+				"failedToDeleteRun": "Failed to delete run",
+				"failedToReadRecordingsAtSpeed": "Failed to read the recordings made at this speed",
+				"recordingLabels": {
+					"free": "Free running",
+					"stall": "Stall",
+					"check": "Check"
+				},
+				"durationAboveZero": "The recording needs a duration above 0 seconds.",
+				"recordingFailed": "The recording failed",
+				"failedToSaveThresholdSettings": "Failed to save the settings",
+				"tuneTitle": "Tune StallGuard",
+				"tuneDescriptionAuto": "Optional while it tunes itself: a recorded stall to check it against.",
+				"tuneDescriptionManual": "Finds where a stall starts, at the speed {label} runs.",
+				"badges": {
+					"wouldTrip": "It would trip",
+					"tuned": "Tuned",
+					"optional": "Optional",
+					"stepOf": "Step {n} of 5"
+				},
+				"readingDriverAndRecordings": "Reading the driver and your recordings",
+				"step1": {
+					"title": "Check the speed",
+					"hintDone": "{speed} µsteps/s at 1/{microsteps} microstepping"
+				},
+				"cantTripYetBadge": "Can't trip yet",
+				"changeButton": "Change",
+				"recordAgainButton": "Record again",
+				"reviewButton": "Review",
+				"closeButton": "Close",
+				"typeSpeedPrompt": "Type the speed {label} runs at.",
+				"speedFieldLabel": "Speed",
+				"useOperatingSpeedButton": "Use the operating speed, {value}",
+				"cantTripTitle": "Can't trip at this speed yet",
+				"cantTripBody": "Cruise TSTEP {tstep}, speed floor {floor}. Steps 2 to 4 fix it.",
+				"stallguardOffTitle": "StallGuard is off",
+				"stallguardOffBody": "Step 4 turns it on.",
+				"canTripTitle": "Can trip at this speed",
+				"canTripBody": "Cruise TSTEP {tstep}, speed floor {floor}.",
+				"tuneAtSpeedButton": "Tune at {speed} µsteps/s",
+				"step2": {
+					"title": "Record {label} running freely",
+					"hintDone": "Running freely it reads {floor} or higher.",
+					"hintLocked": "Check the speed first."
+				},
+				"normalRunningDesc": "Normal running, with nothing holding it back.",
+				"movesMotorKeepClear": "Moves the motor. Keep clear.",
+				"lastRecordingCouldNotBeUsedTitle": "The last recording could not be used",
+				"recordRunningFreelyButton": "Record it running freely",
+				"recordingAboutDuration": "Recording, about {duration} s.",
+				"step3": {
+					"title": "Record a stall",
+					"hintDone": "Held back, it dips to {dip}.",
+					"hintLocked": "Record it running freely first."
+				},
+				"holdBackDesc": "Hold {label} back until it stops, the whole {duration} s. A real stall reads near 0.",
+				"holdOnlyPartWarning": "Hold only the part that turns. Let go if anything feels wrong.",
+				"recordStallButton": "Record a stall",
+				"holdItNowText": "Hold it now, until it stops.",
+				"step4": {
+					"title": "Review and save",
+					"hintDone": "Saved: threshold {threshold}, speed floor {floor}.",
+					"hintLocked": "Needs both recordings."
+				},
+				"thresholdStatLabel": "Threshold (SGTHRS)",
+				"speedFloorStatLabel": "Speed floor (TCOOLTHRS)",
+				"savedHint": "Saved",
+				"nowValueHint": "Now {value}",
+				"runningFreelyLabel": "Running freely",
+				"runningFreelyValue": "{floor} or higher",
+				"stallLabel": "Stall",
+				"stallValue": "{dip} or lower",
+				"tripsAtLabel": "Trips at",
+				"tripsAtValue": "{level} or lower",
+				"checksAboveLabel": "Checks above",
+				"checksAboveValue": "{speed} µsteps/s",
+				"notReliableTitle": "Not reliable at {speed} µsteps/s",
+				"normalMovesDip": "Normal moves dip to {floor}, near the {level} trip line: it would false-trip.",
+				"stallOnlyReached": " The stall only reached {dip}: hold it until it stops.",
+				"recordStallAgainButton": "Record the stall again",
+				"saveAndTurnOnButton": "Save and turn on StallGuard",
+				"saveAnywayButton": "Save anyway",
+				"turnsAutoTuningOff": "Turns automatic tuning off.",
+				"step5": {
+					"title": "Check it",
+					"hintDone": "Nothing would have tripped.",
+					"hintLocked": "Save the settings first."
+				},
+				"oneMoreFreeRunDesc": "One more free run, checked against the saved settings.",
+				"nothingToCheckTitle": "Nothing to check",
+				"nothingToCheckBody": "It never ran above the speed floor ({floor}). See step 1.",
+				"nothingTrippedTitle": "Nothing would have tripped",
+				"nothingTrippedBody": "Lowest {lowest}, trips at {level}.",
+				"wouldHaveStoppedTitle": "It would have stopped the machine",
+				"wouldHaveStoppedBody": "{tripped} of {looked} readings at or under {level}. Record the stall again, or lower the threshold below.",
+				"recordCheckButton": "Record a check",
+				"stressTestIntro": "For a test with detection on: the stress test.",
+				"openStressTestButton": "Open the stress test",
+				"stallDetectionPanel": {
+					"title": "Stall detection",
+					"description": "On or off, and where a stall starts."
+				},
+				"readingDriverText": "Reading the driver",
+				"expertToolsPanel": {
+					"title": "Expert tools",
+					"description": "Sweep options, past recordings, raw readings."
+				},
+				"sweepOptionsDisclosure": {
+					"title": "Sweep options",
+					"help": "Motion, direction, duration, cruise TSTEP, angles"
+				},
+				"pastRecordingsDisclosure": {
+					"title": "Past recordings",
+					"helpCount": "{count} in all, newest first",
+					"helpEmpty": "None yet"
+				},
+				"recordedReadingsDisclosure": {
+					"title": "Recorded readings",
+					"help": "Every SG_RESULT sample recorded for {label}"
+				},
+				"samplesStatLabel": "Samples",
+				"lastSeenHint": "Last {time}",
+				"sgMinLabel": "SG min",
+				"sgMeanLabel": "SG mean",
+				"sgMaxLabel": "SG max",
+				"nothingRecordedYet": "Nothing recorded yet.",
+				"tryAgainButton": "Try again",
+				"changeHowItMovesButton": "Change how it moves"
+			},
+			"tailscaleSection": {
+				"repairMessages": {
+					"restart": "Tailscale service restarted.",
+					"install": "Tailscale installation repair started.",
+					"logout": "Previous sign-in cleared. Enter an auth key to connect again."
+				},
+				"headlines": {
+					"notInstalled": "Tailscale is not installed",
+					"installing": "Installing Tailscale",
+					"stopped": "The Tailscale service isn't running",
+					"loggedOut": "Not connected",
+					"needsApproval": "Waiting for approval",
+					"connected": "Connected",
+					"error": "Not connected"
+				},
+				"joinedAsWithWho": "Joined {network} as {who}.",
+				"joinedAsPlain": "Joined {network}.",
+				"defaultNetworkName": "the network",
+				"failedToLoadStatus": "Failed to load Tailscale status",
+				"machineJoinedNetwork": "The machine joined the network.",
+				"failedToApplyAuthKey": "Failed to apply auth key",
+				"installationRepairCompleted": "Tailscale installation repair completed.",
+				"repairFailed": "Tailscale repair failed",
+				"connectionLostClearingSignIn": "Connection lost while clearing sign-in. Reconnect locally to check the machine and join again.",
+				"repairTailscaleLabel": "Repair Tailscale",
+				"restartServiceLabel": "Restart the service",
+				"installOrRepairLabel": "Install or repair Tailscale",
+				"clearPreviousSignInLabel": "Clear the previous sign-in",
+				"connectedLabel": "Connected",
+				"notConnectedFallback": "Not connected",
+				"loadingLabel": "Loading",
+				"hostnameLabel": "Hostname",
+				"networkLabel": "Network",
+				"joinedAsLabel": "Joined as",
+				"taggedDeviceInfo": "A tagged device: it belongs to the {network} network rather than to a person, and its key doesn't expire. That network's admins can open this page and SSH into the machine.",
+				"signedInAsInfo": "Signed in as {owner}. Its key expires unless key expiry is turned off for this machine in Tailscale's admin console.",
+				"tailscaleReportsWarning": "Tailscale reports: {warning}",
+				"installTailscaleButton": "Install Tailscale",
+				"cantInstallPrefix": "This machine can't install it from here. On the machine, run",
+				"cantInstallSuffix": ", then reload this page.",
+				"startServiceButton": "Start the service",
+				"restartInterruptInfo": "Restarting or repairing Tailscale can briefly interrupt this connection.",
+				"serviceRepairUnavailable": " Service repair isn't available on this machine.",
+				"authKeyWarning": "An auth key gives the owner of that Tailscale network SSH access to this machine and access to your local network. Only use a key you made yourself or got from someone you fully trust.",
+				"authKeyField": {
+					"label": "Auth key",
+					"help": "Make one at tailscale.com/admin/settings/keys. The machine joins (or switches to) that network at once."
+				},
+				"applyButton": "Apply",
+				"restartingServiceText": "Restarting the Tailscale service",
+				"repairingInstallationText": "Repairing the Tailscale installation",
+				"clearingSignInText": "Clearing the previous sign-in",
+				"installationFailedInfo": "The installation failed: {error}. \"Install or repair Tailscale\" in the menu tries again.",
+				"clearSignInModal": {
+					"title": "Clear the previous Tailscale sign-in?",
+					"body": "This disconnects the machine from its Tailscale network and removes any saved setup key. If you opened this page through Tailscale, it may stop answering. Open Settings on the machine's local network and enter a new auth key here to connect again."
+				},
+				"cancelButton": "Cancel",
+				"clearSignInButton": "Clear the sign-in"
+			},
+			"tuningParamRow": {
+				"onOffLabels": {
+					"on": "on",
+					"off": "off"
+				}
+			},
+			"unsavedChangesDialog": {
+				"title": "You have unsaved changes",
+				"body": "Leaving this page discards the edits you haven't saved yet.",
+				"stayButton": "Stay on the page",
+				"discardButton": "Discard the changes",
+				"saveAndLeaveButton": "Save and leave"
+			},
+			"versionsSection": {
+				"panelTitle": "This machine",
+				"localChangesBadge": "Local changes",
+				"checkForUpdatesLabel": "Check for updates",
+				"channelLabel": "Channel",
+				"versionLabel": "Version",
+				"branchLabel": "Branch",
+				"commitLabel": "Commit",
+				"madeLabel": "Made",
+				"loadingLabel": "Loading",
+				"newVersionOutLabel": "A new version is out:",
+				"updateButton": "Update",
+				"upToDateLabel": "Up to date.",
+				"notOnReleaseLabel": "Not on a release.",
+				"couldntReachSource": "Couldn't reach the software's source: {error}",
+				"failedToLoadVersions": "Failed to load versions",
+				"updateFailed": "Update failed",
+				"gettingAndBuilding": "Getting {name} and building it. This takes a minute or two; the page reloads when the machine is back.",
+				"depsChangedWarning": "Dependency files changed ({deps}). A manual dependency install and service restart may be needed.",
+				"onChannelNow": "On {channel} now.",
+				"updatedRestarting": "Updated {old} → {new}. Restarting the backend…",
+				"alreadyAtVersionRestarting": "Already at this version. Restarting the backend…",
+				"backendDidNotComeBack": "The backend did not come back after the update.",
+				"releaseChannelsPanel": {
+					"title": "Release channels",
+					"description": "Not on a release. Switching to one keeps this machine's settings and data."
+				},
+				"upToDateBadge": "Up to date",
+				"runningBadge": "Running",
+				"olderThanSoftwareLine": "Older than this machine's software{version}. It can switch once {channel} has a newer release.",
+				"thisChannelFallback": "this",
+				"canaryNewerInfo": "Newer and less tested. Once on canary, coming back to stable waits until stable reaches v{version}.",
+				"switchButton": "Switch",
+				"updatingExplanation": "Updating checks out the chosen version on this machine, builds its UI and restarts the backend. The machine's settings and sorting data are kept, and local code edits are stashed, not lost."
+			},
+			"wifiSection": {
+				"failedToLoadStatus": "Failed to load WiFi status",
+				"scanFailed": "Scan failed",
+				"failedToConnect": "Failed to connect",
+				"connectedToSsid": "Connected to {ssid}",
+				"nmcliUnavailable": "NetworkManager (nmcli) isn't available on this machine, so its Wi-Fi can't be managed here.",
+				"adaptersLabel": "Adapters",
+				"noAdaptersFound": "No Wi-Fi adapters found.",
+				"connectUsingLabel": "Connect using",
+				"networksLabel": "Networks",
+				"scanButton": "Scan",
+				"noNetworksFound": "No networks found. Try scanning.",
+				"connectedBadge": "Connected",
+				"passwordForSsid": "Password for {ssid}",
+				"openNetworkNoPassword": "An open network: no password.",
+				"connectButton": "Connect",
+				"connectWithDevice": "Connect with {device}",
+				"switchingNetworkInfo": "Switching the network an adapter uses can drop any page reaching this machine through that adapter. Over Ethernet or Tailscale, you stay connected.",
+				"loadingWifi": "Loading Wi-Fi"
+			},
+			"picture": {
+				"captureModePanel": {
+					"failedToLoad": "Failed to load capture modes",
+					"failedToSave": "Failed to save capture mode",
+					"savedStatus": "Capture mode saved.",
+					"title": "Capture mode",
+					"liveResolution": "Live {width}×{height}",
+					"liveFpsSuffix": " at {fps} fps",
+					"loadingText": "Loading the capture modes",
+					"noResolutionChoice": "This camera does not offer a choice of resolution.",
+					"modeFieldLabel": "Mode",
+					"pickModePlaceholder": "Pick a mode",
+					"pixelFormatField": {
+						"label": "Pixel format",
+						"help": "MJPG is the default: compressed, about a tenth of YUYV's USB bandwidth. Pick another only if this camera needs it."
+					},
+					"mjpgDefaultLabel": "MJPG (default)",
+					"nonePlaceholder": "None",
+					"modeOptionLabel": "{width}×{height} at {fps} fps"
+				},
+				"deviceControlsPanel": {
+					"manualSettingsTitle": "Manual settings",
+					"onLabel": "On",
+					"offLabel": "Off",
+					"naLabel": "n/a",
+					"lessLabel": "Less {label}",
+					"moreLabel": "More {label}",
+					"noControlsMessage": "This source offers no camera controls to adjust."
+				},
+				"driftDetection": {
+					"onLabel": "on",
+					"offLabel": "off",
+					"liveValuesSaved": "Live values saved.",
+					"failedToAdopt": "Failed to adopt live values",
+					"savedSettingsRestored": "Saved settings restored.",
+					"failedToRestore": "Failed to restore saved values",
+					"modalTitle": "The camera's settings drifted",
+					"modalIntro": "The camera reports different values than the saved ones. Which should it use?",
+					"settingHeader": "Setting",
+					"savedHeader": "Saved",
+					"liveHeader": "Live",
+					"ignoreButton": "Ignore",
+					"keepLiveButton": "Keep the live values",
+					"restoreSavedButton": "Restore the saved values"
+				},
+				"orientationPanel": {
+					"title": "Orientation",
+					"rotateLabel": "Rotate",
+					"rotationOptionLabel": "{degrees}°",
+					"flipHorizontalLabel": "Flip horizontally",
+					"flipVerticalLabel": "Flip vertically"
+				}
+			}
+		}
+	}
+}

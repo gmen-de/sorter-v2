@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 
@@ -20,9 +21,9 @@
 
 <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 text-sm text-ink-muted">
 	<div class="flex items-center gap-2">
-		<span>Per page</span>
+		<span>{$_('components.profiles.profilePagination.perPageLabel')}</span>
 		<Select
-			label="Profiles per page"
+			label={$_('components.profiles.profilePagination.selectLabel')}
 			size="sm"
 			class="w-20"
 			value={String(props.pageSize)}
@@ -31,7 +32,7 @@
 		/>
 	</div>
 	<p>{props.summary}</p>
-	<nav aria-label="Pages" class="flex items-center gap-1">
+	<nav aria-label={$_('components.profiles.profilePagination.pagesNavLabel')} class="flex items-center gap-1">
 		<Button
 			size="sm"
 			variant="ghost"
@@ -39,7 +40,7 @@
 			disabled={props.currentPage <= 1}
 			onclick={() => props.onPageChange(props.currentPage - 1)}
 		>
-			Previous
+			{$_('components.profiles.profilePagination.previousButton')}
 		</Button>
 		{#each props.visiblePageNumbers as pageNumber}
 			<Button
@@ -57,7 +58,7 @@
 			disabled={props.currentPage >= props.totalPages}
 			onclick={() => props.onPageChange(props.currentPage + 1)}
 		>
-			Next
+			{$_('components.profiles.profilePagination.nextButton')}
 			<ChevronRight size={14} />
 		</Button>
 	</nav>

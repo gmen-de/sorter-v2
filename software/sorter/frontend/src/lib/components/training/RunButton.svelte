@@ -5,6 +5,7 @@
 <script lang="ts">
 	import Play from '@lucide/svelte/icons/play';
 	import Square from '@lucide/svelte/icons/square';
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { endRun, startRun, type TrainingState } from '$lib/training/api';
 
@@ -39,7 +40,9 @@
 
 <span class="inline-flex flex-col items-end gap-1">
 	{#if run}
-		<Button size="sm" icon={Square} loading={busy} onclick={act}>End run</Button>
+		<Button size="sm" icon={Square} loading={busy} onclick={act}
+			>{$_('components.training.runButton.endRun')}</Button
+		>
 	{:else}
 		<Button
 			size="sm"
@@ -47,10 +50,10 @@
 			icon={Play}
 			loading={busy}
 			disabled={!ready}
-			title={ready ? undefined : 'Pick a color first'}
+			title={ready ? undefined : $_('components.training.runButton.pickColorFirstTitle')}
 			onclick={act}
 		>
-			Start run
+			{$_('components.training.runButton.startRun')}
 		</Button>
 	{/if}
 	{#if error}<span class="text-sm text-danger-ink">{error}</span>{/if}

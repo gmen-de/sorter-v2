@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -25,8 +26,14 @@
 	} = $props();
 </script>
 
-<Panel title="Operating speed" description="How fast the distributor moves from bin to bin.">
-	<Field label="Speed" for="chute-operating-speed">
+<Panel
+	title={$_('components.settings.stepper.stepperChuteOperation.panel.title')}
+	description={$_('components.settings.stepper.stepperChuteOperation.panel.description')}
+>
+	<Field
+		label={$_('components.settings.stepper.stepperChuteOperation.speedLabel')}
+		for="chute-operating-speed"
+	>
 		<Input
 			id="chute-operating-speed"
 			type="number"
@@ -46,7 +53,7 @@
 			disabled={loading || homing || canceling}
 			onclick={onSave}
 		>
-			Save
+			{$_('components.settings.stepper.stepperChuteOperation.saveButton')}
 		</Button>
 	{/snippet}
 </Panel>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -36,50 +37,59 @@
 </script>
 
 <Panel
-	title="Chute magnet-ring encoder"
-	description="This board has no mechanical endstop — the chute's position comes from a magnet-ring Hall encoder instead."
+	title={$_('components.setup.chuteEncoderPanel.panelTitle')}
+	description={$_('components.setup.chuteEncoderPanel.panelDescription')}
 >
 	{#snippet actions()}
 		<Badge tone={connected ? 'success' : 'neutral'} dot>
-			{connected ? 'Connected' : 'Not connected'}
+			{connected
+				? $_('components.setup.chuteEncoderPanel.badge.connected')
+				: $_('components.setup.chuteEncoderPanel.badge.notConnected')}
 		</Badge>
 	{/snippet}
 
 	<div class="flex flex-col gap-4">
 		<Alert tone="warning">
-			Not yet bench-verified against real hardware — see
+			{$_('components.setup.chuteEncoderPanel.warningBeforeCode')}
 			<code class="font-mono text-xs">software/firmware/octopus_control_board/ChuteEncoder.h</code>
-			for the known caveats (direction sign, counts-per-revolution are a nominal guess).
+			{$_('components.setup.chuteEncoderPanel.warningAfterCode')}
 		</Alert>
 
 		<p class="text-sm text-ink-muted">
-			"Find the index" rotates the chute slowly until the magnet ring's one index gap passes the
-			sensors, then moves to bin 1 — the encoder equivalent of finding an endstop.
+			{$_('components.setup.chuteEncoderPanel.findIndexExplanation')}
 		</p>
 
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 			<div class="flex items-center justify-between rounded-control bg-well px-4 py-3">
-				<span class="text-sm text-ink-muted">Index synced</span>
+				<span class="text-sm text-ink-muted">{$_('components.setup.chuteEncoderPanel.stats.indexSynced')}</span>
 				<Badge tone={indexSynced ? 'success' : 'neutral'}>
-					{indexSynced === null ? '–' : indexSynced ? 'Yes' : 'Not yet'}
+					{indexSynced === null
+						? '–'
+						: indexSynced
+							? $_('components.setup.chuteEncoderPanel.status.yes')
+							: $_('components.setup.chuteEncoderPanel.status.notYet')}
 				</Badge>
 			</div>
 			<div class="flex items-center justify-between rounded-control bg-well px-4 py-3">
-				<span class="text-sm text-ink-muted">Homed</span>
+				<span class="text-sm text-ink-muted">{$_('components.setup.chuteEncoderPanel.stats.homed')}</span>
 				<Badge tone={homed ? 'success' : 'neutral'}>
-					{homed === null ? '–' : homed ? 'Yes' : 'No'}
+					{homed === null
+						? '–'
+						: homed
+							? $_('components.setup.chuteEncoderPanel.status.yes')
+							: $_('components.setup.chuteEncoderPanel.status.no')}
 				</Badge>
 			</div>
 			<div class="flex items-center justify-between rounded-control bg-well px-4 py-3">
-				<span class="text-sm text-ink-muted">Raw count</span>
+				<span class="text-sm text-ink-muted">{$_('components.setup.chuteEncoderPanel.stats.rawCount')}</span>
 				<span class="font-mono text-sm text-ink">{encoderCount ?? '–'}</span>
 			</div>
 		</div>
 
 		<Field
-			label="Counts per revolution"
+			label={$_('components.setup.chuteEncoderPanel.countsPerRevolution.label')}
 			for="chute-encoder-counts-per-rev"
-			help="Nominal guess, not bench-calibrated — adjust once real hardware confirms the real figure."
+			help={$_('components.setup.chuteEncoderPanel.countsPerRevolution.help')}
 		>
 			<Input
 				id="chute-encoder-counts-per-rev"
@@ -99,9 +109,11 @@
 	</div>
 
 	{#snippet footer()}
-		<Button variant="ghost" loading={canceling} onclick={onCancel}>Stop the motion</Button>
+		<Button variant="ghost" loading={canceling} onclick={onCancel}
+			>{$_('components.setup.chuteEncoderPanel.buttons.stopMotion')}</Button
+		>
 		<Button variant="primary" loading={homing} disabled={!connected} onclick={onFindIndex}>
-			Find the index
+			{$_('components.setup.chuteEncoderPanel.buttons.findIndex')}
 		</Button>
 	{/snippet}
 </Panel>

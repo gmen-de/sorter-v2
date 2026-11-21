@@ -6,6 +6,7 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
@@ -61,7 +62,7 @@
 			take(await res.json());
 			error = null;
 		} catch (e: any) {
-			error = e.message ?? 'Failed to read the automatic tuning';
+			error = e.message ?? $_('components.settings.stepper.stepperStallGuardAuto.errors.readFailed');
 		}
 	}
 
@@ -78,7 +79,8 @@
 			take(await res.json());
 			onchange?.();
 		} catch (e: any) {
-			error = e.message ?? 'Failed to change the automatic tuning';
+			error =
+				e.message ?? $_('components.settings.stepper.stepperStallGuardAuto.errors.changeFailed');
 		} finally {
 			saving = false;
 		}
@@ -95,53 +97,86 @@
 	const facts = $derived.by(() => {
 		const t = tuning;
 		if (!t || !on) return [];
+		const base = 'components.settings.stepper.stepperStallGuardAuto';
 		const items: { label: string; value: string }[] = [];
-		if (t.trigger != null) items.push({ label: 'Trips at', value: `${t.trigger} or lower` });
+		if (t.trigger != null)
+			items.push({
+				label: $_(`${base}.facts.tripsAt`),
+				value: $_(`${base}.facts.tripsAtValue`, { values: { trigger: t.trigger } })
+			});
 		items.push({
-			label: 'Normal running',
-			value: t.normal_low != null ? `${t.normal_low} or higher` : 'Still learning'
+			label: $_(`${base}.facts.normalRunning`),
+			value:
+				t.normal_low != null
+					? $_(`${base}.facts.normalRunningValue`, { values: { value: t.normal_low } })
+					: $_(`${base}.facts.stillLearning`)
 		});
 		if (t.tcoolthrs != null)
 			items.push({
-				label: 'Speed floor',
+				label: $_(`${base}.facts.speedFloor`),
 				value:
 					t.floor_speed != null
-						? `${t.tcoolthrs}, checks above ${t.floor_speed.toLocaleString()} µsteps/s`
+						? $_(`${base}.facts.speedFloorValueWithFloor`, {
+								values: { tcoolthrs: t.tcoolthrs, floor: t.floor_speed.toLocaleString() }
+							})
 						: `${t.tcoolthrs}`
 			});
 		items.push({
-			label: 'Learned from',
-			value: `${(t.learned_from ?? 0).toLocaleString()} readings`
+			label: $_(`${base}.facts.learnedFrom`),
+			value: $_(`${base}.facts.learnedFromValue`, {
+				values: { count: (t.learned_from ?? 0).toLocaleString() }
+			})
 		});
 		if (lastChange)
 			items.push({
-				label: 'Last change',
-				value: `${fmtTime(lastChange.at)}: trips at ${lastChange.sgthrs[0] != null ? 2 * lastChange.sgthrs[0] : '–'} → ${2 * lastChange.sgthrs[1]}`
+				label: $_(`${base}.facts.lastChange`),
+				value: $_(`${base}.facts.lastChangeValue`, {
+					values: {
+						time: fmtTime(lastChange.at),
+						from: lastChange.sgthrs[0] != null ? 2 * lastChange.sgthrs[0] : '–',
+						to: 2 * lastChange.sgthrs[1]
+					}
+				})
 			});
 		return items;
 	});
 </script>
 
 {#if tuning?.supported}
-	<Panel title="Automatic tuning" description="Sets the trigger from how {label} runs." flush>
+	<Panel
+		title={$_('components.settings.stepper.stepperStallGuardAuto.panel.title')}
+		description={$_('components.settings.stepper.stepperStallGuardAuto.panel.description', {
+			values: { label }
+		})}
+		flush
+	>
 		{#snippet actions()}
 			{#if !on}
-				<Badge>Off</Badge>
+				<Badge>{$_('components.settings.stepper.stepperStallGuardAuto.badge.off')}</Badge>
 			{:else if tuning?.working_harder}
-				<Badge tone="warning">Working harder</Badge>
+				<Badge tone="warning"
+					>{$_('components.settings.stepper.stepperStallGuardAuto.badge.workingHarder')}</Badge
+				>
 			{:else if tuning?.state === 'tuned'}
-				<Badge tone="success">Tuned</Badge>
+				<Badge tone="success">{$_('components.settings.stepper.stepperStallGuardAuto.badge.tuned')}</Badge>
 			{:else if tuning?.state === 'learning'}
-				<Badge tone="primary">Learning {tuning.readings ?? 0} of {tuning.needed ?? 0}</Badge>
+				<Badge tone="primary"
+					>{$_('components.settings.stepper.stepperStallGuardAuto.badge.learning', {
+						values: { readings: tuning.readings ?? 0, needed: tuning.needed ?? 0 }
+					})}</Badge
+				>
 			{:else if tuning?.state === 'waiting'}
-				<Badge>Paused for a recording</Badge>
+				<Badge>{$_('components.settings.stepper.stepperStallGuardAuto.badge.pausedForRecording')}</Badge>
 			{/if}
 		{/snippet}
 		<div class="divide-y divide-line border-t border-line">
-			<SettingRow label="Tune automatically" help="A threshold saved by hand turns it off.">
+			<SettingRow
+				label={$_('components.settings.stepper.stepperStallGuardAuto.tuneAutomatically.label')}
+				help={$_('components.settings.stepper.stepperStallGuardAuto.tuneAutomatically.help')}
+			>
 				<Switch
 					checked={tuning.auto}
-					label="Tune automatically"
+					label={$_('components.settings.stepper.stepperStallGuardAuto.tuneAutomatically.label')}
 					disabled={saving || !tuning.running}
 					onchange={(checked) => send({ enabled: checked })}
 				/>
@@ -150,17 +185,29 @@
 				<div class="flex flex-col gap-3 px-(--pad-panel) py-(--pad-row)">
 					{#if error}<Alert tone="danger">{error}</Alert>{/if}
 					{#if !tuning.running}
-						<Alert tone="info">Not running: StallGuard is off on this machine.</Alert>
+						<Alert tone="info"
+							>{$_('components.settings.stepper.stepperStallGuardAuto.alerts.notRunning')}</Alert
+						>
 					{/if}
 					{#if on && tuning.working_harder}
-						<Alert tone="warning" title="Working harder than it did" actions={learnAgain}>
-							Normal running read {tuning.baseline_low} or higher; now {tuning.normal_low}. Check {label}
-							turns freely, then learn again.
+						<Alert
+							tone="warning"
+							title={$_('components.settings.stepper.stepperStallGuardAuto.alerts.workingHarderTitle')}
+							actions={learnAgain}
+						>
+							{$_('components.settings.stepper.stepperStallGuardAuto.alerts.workingHarderBody', {
+								values: { baseline: tuning.baseline_low, normal: tuning.normal_low, label }
+							})}
 						</Alert>
 					{/if}
 					{#if on && tuning.reliable === false}
-						<Alert tone="danger" title="Normal running is close to a stall">
-							It reads {tuning.normal_low} or higher. A stall still trips it, with little room.
+						<Alert
+							tone="danger"
+							title={$_('components.settings.stepper.stepperStallGuardAuto.alerts.closeToStallTitle')}
+						>
+							{$_('components.settings.stepper.stepperStallGuardAuto.alerts.closeToStallBody', {
+								values: { normal: tuning.normal_low }
+							})}
 						</Alert>
 					{/if}
 					{#if on && tuning.error}<Alert tone="danger">{tuning.error}</Alert>{/if}
@@ -180,7 +227,7 @@
 					loading={saving}
 					onclick={() => send({ learn_again: true })}
 				>
-					Learn again
+					{$_('components.settings.stepper.stepperStallGuardAuto.buttons.learnAgain')}
 				</Button>
 			{/if}
 		{/snippet}
@@ -188,6 +235,7 @@
 {/if}
 
 {#snippet learnAgain()}
-	<Button size="sm" loading={saving} onclick={() => send({ learn_again: true })}>Learn again</Button
+	<Button size="sm" loading={saving} onclick={() => send({ learn_again: true })}
+		>{$_('components.settings.stepper.stepperStallGuardAuto.buttons.learnAgain')}</Button
 	>
 {/snippet}

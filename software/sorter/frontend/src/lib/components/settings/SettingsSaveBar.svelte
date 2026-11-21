@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	// The Save / Reset pair for a settings panel's footer. Rendered at both the
@@ -21,8 +22,14 @@
 
 <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
 	{#if dirty}
-		<span class="mr-auto text-sm text-warning-ink">Unsaved changes</span>
+		<span class="mr-auto text-sm text-warning-ink"
+			>{$_('components.settings.settingsSaveBar.unsavedChanges')}</span
+		>
 	{/if}
-	<Button variant="ghost" onclick={reset} disabled={saving || disabled}>Reset to saved</Button>
-	<Button variant="primary" onclick={save} loading={saving} {disabled}>Save</Button>
+	<Button variant="ghost" onclick={reset} disabled={saving || disabled}
+		>{$_('components.settings.settingsSaveBar.resetButton')}</Button
+	>
+	<Button variant="primary" onclick={save} loading={saving} {disabled}
+		>{$_('components.settings.settingsSaveBar.saveButton')}</Button
+	>
 </div>

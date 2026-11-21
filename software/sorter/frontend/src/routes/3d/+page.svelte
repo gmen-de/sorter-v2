@@ -12,6 +12,7 @@
 	// Each bin's card is a BinFrontCard in a layer behind the canvas, which
 	// the view turns onto the bin's front (see view.ts).
 	import { onMount, untrack } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import AppShell from '$lib/components/AppShell.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -281,10 +282,10 @@
 	}
 
 	const aimBlocked = $derived.by(() => {
-		if (!selected) return 'Pick a bin first.';
-		if (sorting) return 'Pause the machine to point the chute.';
-		if (homed === false) return 'Home the chute first.';
-		if (!selected.reachable) return 'The chute cannot reach this bin.';
+		if (!selected) return $_('routes.3d.pickBinFirst');
+		if (sorting) return $_('routes.3d.pauseToPoint');
+		if (homed === false) return $_('routes.3d.homeChuteFirst');
+		if (!selected.reachable) return $_('routes.3d.chuteCannotReach');
 		return null;
 	});
 
@@ -333,12 +334,12 @@
 
 	const menuItems = $derived([
 		{
-			label: 'Point the chute here',
+			label: $_('routes.3d.menuPointChute'),
 			icon: Crosshair,
 			onselect: () => void aim(),
 			disabled: !!aimBlocked
 		},
-		{ label: 'Open the bins page', icon: LayoutGrid, href: '/bins' }
+		{ label: $_('routes.3d.menuOpenBins'), icon: LayoutGrid, href: '/bins' }
 	]);
 
 	// ------------------------------------------------------------ start and stop
@@ -442,18 +443,18 @@
 	const selectedFacts = $derived(
 		selected
 			? [
-					{ label: 'Layer', value: selected.layer + 1 },
-					{ label: 'Section', value: selected.section + 1 },
-					{ label: 'Bin', value: selected.globalIndex + 1 },
-					{ label: 'Chute angle', value: `${selected.chuteAngle.toFixed(1)}°` }
+					{ label: $_('routes.3d.factLayer'), value: selected.layer + 1 },
+					{ label: $_('routes.3d.factSection'), value: selected.section + 1 },
+					{ label: $_('routes.3d.factBin'), value: selected.globalIndex + 1 },
+					{ label: $_('routes.3d.factChuteAngle'), value: `${selected.chuteAngle.toFixed(1)}°` }
 				]
 			: []
 	);
 	const doorWords = (d: DoorState) =>
-		!d.calibrated ? 'Not calibrated' : d.open < 0.5 ? 'Closed' : 'Open';
+		!d.calibrated ? $_('routes.3d.doorNotCalibrated') : d.open < 0.5 ? $_('routes.3d.doorClosed') : $_('routes.3d.doorOpen');
 </script>
 
-<svelte:head><title>3D · Sorter</title></svelte:head>
+<svelte:head><title>{$_('routes.3d.pageTitle')}</title></svelte:head>
 
 <AppShell fit>
 	<div class="flex min-h-0 flex-1 flex-col gap-(--gap-panels) p-4 sm:p-6 lg:flex-row">
@@ -487,7 +488,7 @@
 			<canvas
 				bind:this={canvas}
 				class="relative block h-full w-full touch-none select-none"
-				aria-label="The machine in 3D"
+				aria-label={$_('routes.3d.machineAriaLabel')}
 				{onpointerdown}
 				{onpointerup}
 				{onpointermove}
@@ -502,29 +503,31 @@
 			{/if}
 			{#if loadError}
 				<div class="absolute inset-x-4 top-4">
-					<Alert tone="danger" title="The model did not load">{loadError}</Alert>
+					<Alert tone="danger" title={$_('routes.3d.modelLoadFailedTitle')}>{loadError}</Alert>
 				</div>
 			{/if}
-			<Menu bind:this={menu} label="Bin" items={menuItems} />
+			<Menu bind:this={menu} label={$_('routes.3d.binMenuLabel')} items={menuItems} />
 			{#if import.meta.env.DEV && bench}
 				<pre class="absolute bottom-3 left-3 bg-raised p-2 text-xs text-ink">{bench}</pre>
 			{/if}
 		</div>
 
 		<div class="flex flex-col gap-(--gap-panels) lg:w-80 lg:shrink-0 lg:overflow-y-auto">
-			<Panel title={selected ? categoryLabel(selected.categoryIds) || 'No category' : 'Bins'}>
+			<Panel
+				title={selected ? categoryLabel(selected.categoryIds) || $_('routes.3d.noCategory') : $_('routes.3d.binsPanelTitle')}
+			>
 				{#if selected}
 					<div class="flex flex-col gap-3">
 						<KeyValue items={selectedFacts} />
 						{#if !selected.enabled}
-							<p class="text-sm text-ink-muted">This bin's layer or section is turned off.</p>
+							<p class="text-sm text-ink-muted">{$_('routes.3d.layerSectionOff')}</p>
 						{/if}
 						<Button
 							variant="primary"
 							icon={Crosshair}
 							loading={aiming}
 							disabled={!!aimBlocked}
-							onclick={() => void aim()}>Point the chute here</Button
+							onclick={() => void aim()}>{$_('routes.3d.menuPointChute')}</Button
 						>
 						{#if aimBlocked && !aiming}
 							<p class="text-sm text-ink-muted">{aimBlocked}</p>
@@ -536,32 +539,33 @@
 				{:else}
 					<p class="text-sm text-ink-muted">
 						{#if touch}
-							Tap a bin to see what it takes and to point the chute at it. Drag to turn the machine,
-							pinch to zoom, and drag with two fingers to move it.
+							{$_('routes.3d.touchHelp')}
 						{:else}
-							Click a bin to see what it takes. Right-click one to point the chute at it. Drag to
-							turn the machine, scroll to zoom, and shift-drag to move it.
+							{$_('routes.3d.mouseHelp')}
 						{/if}
 					</p>
 				{/if}
 			</Panel>
 
-			<Panel title="Machine" flush>
+			<Panel title={$_('routes.3d.machinePanelTitle')} flush>
 				<div class="divide-y divide-line">
 					<SettingRow
-						label="See inside"
-						help="See through the frame and the bins to the chute and its doors."
+						label={$_('routes.3d.seeInsideLabel')}
+						help={$_('routes.3d.seeInsideHelp')}
 					>
-						<Switch bind:checked={seeInside} label="See inside" />
+						<Switch bind:checked={seeInside} label={$_('routes.3d.seeInsideLabel')} />
 					</SettingRow>
 					<div class="px-(--pad-panel) py-(--pad-row)">
 						<KeyValue
 							items={[
 								{
-									label: 'Chute',
-									value: chuteAngle === null ? 'Unknown' : `${chuteAngle.toFixed(1)}°`
+									label: $_('routes.3d.chuteKeyLabel'),
+									value: chuteAngle === null ? $_('routes.3d.chuteUnknown') : `${chuteAngle.toFixed(1)}°`
 								},
-								...doors.map((d, i) => ({ label: `Layer ${i + 1} door`, value: doorWords(d) }))
+								...doors.map((d, i) => ({
+									label: $_('routes.3d.layerDoorLabel', { values: { n: i + 1 } }),
+									value: doorWords(d)
+								}))
 							]}
 						/>
 					</div>

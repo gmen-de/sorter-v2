@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getBackendHttpBase } from '$lib/backend';
 	import { onDestroy } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import {
 		cloneUsbCameraSettings,
 		normalizeUsbCameraControls,
@@ -38,7 +39,7 @@
 		source = null,
 		hasCamera = true,
 		showHeader = true,
-		primaryActionLabel = 'Save',
+		primaryActionLabel = $_('components.settings.pictureSettingsSidebar.defaultPrimaryActionLabel'),
 		allowPrimaryActionWithoutChanges = false,
 		onSaved,
 		onClose,
@@ -217,7 +218,7 @@
 			await Promise.all([loadLocalSettings(), loadDeviceSettings()]);
 			emitPreview(role, savedSettings, savedSettings);
 		} catch (e: any) {
-			error = e.message ?? 'Failed to load picture settings';
+			error = e.message ?? $_('components.settings.pictureSettingsSidebar.errors.loadFailed');
 		} finally {
 			loading = false;
 		}
@@ -248,7 +249,7 @@
 		} catch (e: any) {
 			if (e?.name === 'AbortError') return;
 			if (requestId === devicePreviewRequest) {
-				error = e.message ?? 'Failed to preview camera settings';
+				error = e.message ?? $_('components.settings.pictureSettingsSidebar.errors.previewFailed');
 			}
 		} finally {
 			if (devicePreviewAbortController === abortController) {
@@ -302,9 +303,9 @@
 			if (!res.ok) throw new Error(await res.text());
 			const data = (await res.json()) as CameraDeviceSettingsResponse;
 			applyDeviceResponse(data);
-			status = data.message ?? 'Camera reset to automatic settings.';
+			status = data.message ?? $_('components.settings.pictureSettingsSidebar.status.cameraResetDefault');
 		} catch (e: any) {
-			error = e.message ?? 'Failed to reset camera settings';
+			error = e.message ?? $_('components.settings.pictureSettingsSidebar.errors.resetFailed');
 		} finally {
 			saving = false;
 		}
@@ -327,15 +328,17 @@
 				const normalizedLocal = await saveLocalSettingsPayload(localPayload);
 				savedSettings = normalizedLocal;
 				draftSettings = clonePictureSettings(normalizedLocal);
-				status = deviceSupported ? 'Camera settings saved.' : 'Feed orientation saved.';
+				status = deviceSupported
+					? $_('components.settings.pictureSettingsSidebar.status.cameraSettingsSaved')
+					: $_('components.settings.pictureSettingsSidebar.status.feedOrientationSaved');
 				emitPreview(role, normalizedLocal, normalizedLocal);
 			} else if (isConfirmOnly) {
-				status = 'Picture settings confirmed.';
+				status = $_('components.settings.pictureSettingsSidebar.status.confirmed');
 			}
 
 			onSaved?.();
 		} catch (e: any) {
-			error = e.message ?? 'Failed to save camera settings';
+			error = e.message ?? $_('components.settings.pictureSettingsSidebar.errors.saveFailed');
 		} finally {
 			saving = false;
 		}
@@ -350,7 +353,7 @@
 		if (devicePayload) {
 			queueDevicePreview({ immediate: true });
 		}
-		status = 'Reverted changes.';
+		status = $_('components.settings.pictureSettingsSidebar.status.reverted');
 		error = null;
 		emitPreview(role, savedSettings, savedSettings);
 	}
@@ -362,9 +365,9 @@
 		if (deviceProvider === 'usb-opencv') {
 			draftUsbSettings = usbCameraSaneDefaults(usbControls);
 			queueDevicePreview({ immediate: true });
-			status = 'Reset USB camera controls and feed transforms to sane defaults. Save to apply.';
+			status = $_('components.settings.pictureSettingsSidebar.status.resetUsbAndTransforms');
 		} else {
-			status = 'Reset feed transforms to defaults. Save to apply.';
+			status = $_('components.settings.pictureSettingsSidebar.status.resetTransforms');
 		}
 		error = null;
 	}
@@ -411,14 +414,20 @@
 </script>
 
 {#snippet closeAction()}
-	<Button variant="ghost" size="sm" icon={X} label="Close the picture settings" onclick={closeSidebar} />
+	<Button
+		variant="ghost"
+		size="sm"
+		icon={X}
+		label={$_('components.settings.pictureSettingsSidebar.closeLabel')}
+		onclick={closeSidebar}
+	/>
 {/snippet}
 
 {#snippet body()}
 	<div class="divide-y divide-line">
 		{#if !hasCamera}
 			<p class="px-(--pad-panel) py-(--pad-row) text-sm text-ink-muted">
-				Choose a camera to see these changes live.
+				{$_('components.settings.pictureSettingsSidebar.noCamera')}
 			</p>
 		{/if}
 		{#if error}
@@ -427,7 +436,7 @@
 		{#if loading}
 			<p class="flex items-center justify-center gap-2 px-(--pad-panel) py-8 text-sm text-ink-muted">
 				<Spinner size={16} />
-				Loading the picture settings
+				{$_('components.settings.pictureSettingsSidebar.loadingSettings')}
 			</p>
 		{:else}
 			<CaptureModePanel {role} />
@@ -450,7 +459,7 @@
 					{#if status}<p class="text-sm text-ink-muted">{status}</p>{/if}
 					{#if deviceSupported}
 						<Button variant="ghost" size="sm" icon={RotateCcw} disabled={saving} onclick={resetCameraToAutoDefaults}>
-							Reset the camera to auto
+							{$_('components.settings.pictureSettingsSidebar.resetCameraButton')}
 						</Button>
 					{/if}
 				</div>
@@ -471,11 +480,17 @@
 	<Button
 		variant="ghost"
 		icon={Undo2}
-		label="Undo the changes"
+		label={$_('components.settings.pictureSettingsSidebar.undoLabel')}
 		disabled={saving || !hasUnsavedChanges()}
 		onclick={revertChanges}
 	/>
-	<Button variant="ghost" icon={RotateCcw} label="Back to the defaults" disabled={saving} onclick={resetToDefaults} />
+	<Button
+		variant="ghost"
+		icon={RotateCcw}
+		label={$_('components.settings.pictureSettingsSidebar.backToDefaultsLabel')}
+		disabled={saving}
+		onclick={resetToDefaults}
+	/>
 	<Button variant="primary" class="ml-auto" loading={saving} disabled={!canSave()} onclick={saveSettings}>
 		{primaryActionLabel}
 	</Button>
@@ -484,7 +499,7 @@
 <!-- In a page, a panel of its own; in a dialog (no header), just its sections. -->
 {#if showHeader}
 	<Panel
-		title="Picture"
+		title={$_('components.settings.pictureSettingsSidebar.panelTitle')}
 		flush
 		actions={onClose ? closeAction : undefined}
 		footer={loading ? undefined : foot}

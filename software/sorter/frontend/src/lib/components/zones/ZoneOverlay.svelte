@@ -11,6 +11,7 @@
 	moves it alone.
 -->
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import {
 		angleOf,
 		channelPolygon,
@@ -194,7 +195,30 @@
 	);
 
 	function radiusLabel(which: Radius): string {
-		return which === 'inner_radius' ? 'The ring inner edge' : which === 'outer_radius' ? 'The ring outer edge' : "The exit's outer edge";
+		if (which === 'inner_radius') return $_('components.zones.zoneOverlay.ariaLabel.ringInnerEdge');
+		if (which === 'outer_radius') return $_('components.zones.zoneOverlay.ariaLabel.ringOuterEdge');
+		return $_('components.zones.zoneOverlay.ariaLabel.exitOuterEdge');
+	}
+
+	function zoneAriaLabel(name: ZoneName): string {
+		if (name === 'drop') return $_('components.zones.zoneOverlay.ariaLabel.dropZone');
+		if (name === 'exit') return $_('components.zones.zoneOverlay.ariaLabel.exitZone');
+		return $_('components.zones.zoneOverlay.ariaLabel.preciseZone');
+	}
+
+	function zoneEdgeAriaLabel(name: ZoneName, edge: 'start' | 'end'): string {
+		const first = edge === 'start';
+		if (name === 'drop') {
+			return first
+				? $_('components.zones.zoneOverlay.ariaLabel.dropZoneFirstEdge')
+				: $_('components.zones.zoneOverlay.ariaLabel.dropZoneLastEdge');
+		}
+		if (name === 'exit') {
+			return first
+				? $_('components.zones.zoneOverlay.ariaLabel.exitZoneFirstEdge')
+				: $_('components.zones.zoneOverlay.ariaLabel.exitZoneLastEdge');
+		}
+		return $_('components.zones.zoneOverlay.ariaLabel.preciseZoneFirstEdge');
 	}
 </script>
 
@@ -205,7 +229,7 @@
 		preserveAspectRatio="xMidYMid meet"
 		class="h-full w-full overflow-hidden"
 		role="group"
-		aria-label="Zones"
+		aria-label={$_('components.zones.zoneOverlay.ariaLabel.zones')}
 		onpointermove={move}
 		onpointerup={end}
 		onpointercancel={end}
@@ -225,7 +249,7 @@
 					style:cursor={editing ? (locked(name) ? 'not-allowed' : 'grab') : 'default'}
 					role="button"
 					tabindex="-1"
-					aria-label="The {name} zone"
+					aria-label={zoneAriaLabel(name)}
 					onpointerdown={(e) =>
 						begin(e, { kind: 'zone', zone: name, lastAngle: angleOf(zones.center, toFrame(e)) }, name)}
 					onwheel={(e) => wheel(e, name)}
@@ -304,7 +328,7 @@
 						style:cursor={locked(edge.name) ? 'not-allowed' : 'grab'}
 						role="button"
 						tabindex="-1"
-						aria-label="The {edge.name} zone's {edge.edge === 'start' ? 'first' : 'last'} edge"
+						aria-label={zoneEdgeAriaLabel(edge.name, edge.edge)}
 						onpointerdown={(e) => begin(e, { kind: 'edge', zone: edge.name, edge: edge.edge }, edge.name)}
 					/>
 				{/if}
@@ -317,7 +341,7 @@
 					style:cursor={locked('ring') ? 'not-allowed' : 'move'}
 					role="button"
 					tabindex="-1"
-					aria-label="The inner circle's center"
+					aria-label={$_('components.zones.zoneOverlay.ariaLabel.innerCircleCenter')}
 					onpointerdown={(e) => {
 						const p = toFrame(e);
 						begin(e, { kind: 'hub', offset: [p[0] - h[0], p[1] - h[1]] }, 'ring');
@@ -333,7 +357,7 @@
 					style:cursor={locked('ring') ? 'not-allowed' : 'move'}
 					role="button"
 					tabindex="-1"
-					aria-label="The ring's center"
+					aria-label={$_('components.zones.zoneOverlay.ariaLabel.ringCenter')}
 					onpointerdown={(e) => {
 						const p = toFrame(e);
 						begin(e, { kind: 'center', offset: [p[0] - zones.center[0], p[1] - zones.center[1]] }, 'ring');

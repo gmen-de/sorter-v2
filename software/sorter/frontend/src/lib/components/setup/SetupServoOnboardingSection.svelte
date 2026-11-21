@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachinesContext } from '$lib/machines/context';
 	import { onMount } from 'svelte';
@@ -156,8 +157,10 @@
 				state: 'factory' as const,
 				tone: 'warning' as const,
 				accent: 'border-l-warning',
-				title: 'Promote ID before continuing',
-				description: `Factory ID 1 detected. Promote it to ID ${suggestedNextId} before connecting the next servo.`
+				title: $_('components.setup.setupServoOnboardingSection.servoState.factory.title'),
+				description: $_('components.setup.setupServoOnboardingSection.servoState.factory.description', {
+					values: { nextId: suggestedNextId }
+				})
 			};
 		}
 
@@ -170,8 +173,10 @@
 				state: 'needs-calibration' as const,
 				tone: undefined,
 				accent: 'border-l-line-strong',
-				title: 'Needs calibration',
-				description: 'Run auto-calibration before testing movement or assigning direction.'
+				title: $_('components.setup.setupServoOnboardingSection.servoState.needsCalibration.title'),
+				description: $_(
+					'components.setup.setupServoOnboardingSection.servoState.needsCalibration.description'
+				)
 			};
 		}
 
@@ -184,8 +189,10 @@
 				state: 'needs-assignment' as const,
 				tone: 'primary' as const,
 				accent: 'border-l-primary',
-				title: 'Ready for assignment',
-				description: 'Calibration is done. Assign this servo to a storage layer next.'
+				title: $_('components.setup.setupServoOnboardingSection.servoState.needsAssignment.title'),
+				description: $_(
+					'components.setup.setupServoOnboardingSection.servoState.needsAssignment.description'
+				)
 			};
 		}
 
@@ -197,8 +204,10 @@
 			state: 'ready' as const,
 			tone: 'success' as const,
 			accent: 'border-l-success',
-			title: 'Setup complete',
-			description: `Calibrated and assigned to Layer ${layer}. Test the motion if you want a final check.`
+			title: $_('components.setup.setupServoOnboardingSection.servoState.ready.title'),
+			description: $_('components.setup.setupServoOnboardingSection.servoState.ready.description', {
+				values: { layer }
+			})
 		};
 	}
 
@@ -275,7 +284,7 @@
 				void loadBleStatus({ silent: true });
 			}
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to load servo setup';
+			errorMsg = e.message ?? $_('components.setup.setupServoOnboardingSection.errors.loadFailed');
 		} finally {
 			loading = false;
 		}
@@ -327,7 +336,7 @@
 			applyWaveshareInventory(await res.json());
 		} catch (e: any) {
 			if (!options.silent) {
-				errorMsg = e.message ?? 'Failed to scan Waveshare bus';
+				errorMsg = e.message ?? $_('components.setup.setupServoOnboardingSection.errors.scanBusFailed');
 			}
 		} finally {
 			if (refresh) {
@@ -381,10 +390,18 @@
 				throw new Error(text);
 			}
 			const payload = await res.json();
-			statusMsg = payload?.message ?? `Servo ${servoId} calibrated.`;
+			statusMsg =
+				payload?.message ??
+				$_('components.setup.setupServoOnboardingSection.status.servoCalibrated', {
+					values: { servoId }
+				});
 			await loadWaveshareInventory({ refresh: true });
 		} catch (e: any) {
-			errorMsg = e.message ?? `Failed to calibrate servo ${servoId}`;
+			errorMsg =
+				e.message ??
+				$_('components.setup.setupServoOnboardingSection.errors.calibrateServoFailed', {
+					values: { servoId }
+				});
 		} finally {
 			setBusy(servoId, null);
 		}
@@ -409,7 +426,11 @@
 			}
 			lastMoveByServoId = { ...lastMoveByServoId, [servoId]: position };
 		} catch (e: any) {
-			errorMsg = e.message ?? `Failed to move servo ${servoId}`;
+			errorMsg =
+				e.message ??
+				$_('components.setup.setupServoOnboardingSection.errors.moveServoFailed', {
+					values: { servoId }
+				});
 		} finally {
 			setBusy(servoId, null);
 		}
@@ -444,7 +465,11 @@
 				);
 			}
 		} catch (e: any) {
-			errorMsg = e.message ?? `Failed to nudge servo ${servoId}`;
+			errorMsg =
+				e.message ??
+				$_('components.setup.setupServoOnboardingSection.errors.nudgeServoFailed', {
+					values: { servoId }
+				});
 		} finally {
 			setBusy(servoId, null);
 		}
@@ -476,10 +501,14 @@
 				next[newId] = layer;
 				layerByAssignment = next;
 			}
-			statusMsg = payload?.message ?? `Servo ${currentId} → ${newId}.`;
+			statusMsg =
+				payload?.message ??
+				$_('components.setup.setupServoOnboardingSection.status.servoIdChanged', {
+					values: { currentId, newId }
+				});
 			await loadWaveshareInventory({ refresh: true });
 		} catch (e: any) {
-			errorMsg = e.message ?? `Failed to change servo ID`;
+			errorMsg = e.message ?? $_('components.setup.setupServoOnboardingSection.errors.changeIdFailed');
 		} finally {
 			setBusy(currentId, null);
 		}
@@ -511,7 +540,8 @@
 				: [];
 			bleLastError = typeof payload?.last_error === 'string' ? payload.last_error : null;
 		} catch (e: any) {
-			if (!options.silent) errorMsg = e.message ?? 'Failed to reach the BLE bridge';
+			if (!options.silent)
+				errorMsg = e.message ?? $_('components.setup.setupServoOnboardingSection.errors.bleUnreachable');
 			bleConnected = false;
 		} finally {
 			bleStatusLoading = false;
@@ -531,10 +561,11 @@
 			);
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
-			statusMsg = payload?.message ?? 'Servo learned.';
+			statusMsg =
+				payload?.message ?? $_('components.setup.setupServoOnboardingSection.status.servoLearned');
 			await loadBleStatus();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to learn a new servo';
+			errorMsg = e.message ?? $_('components.setup.setupServoOnboardingSection.errors.learnFailed');
 		} finally {
 			bleLearning = false;
 		}
@@ -553,11 +584,12 @@
 			);
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
-			statusMsg = payload?.message ?? 'Servos reset to factory defaults.';
+			statusMsg =
+				payload?.message ?? $_('components.setup.setupServoOnboardingSection.status.servosReset');
 			bleStateByGate = {};
 			await loadBleStatus();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to reset the servos';
+			errorMsg = e.message ?? $_('components.setup.setupServoOnboardingSection.errors.resetFailed');
 		} finally {
 			bleResettingAll = false;
 		}
@@ -583,7 +615,9 @@
 				[gate]: (['open', 'closed', 'blocked'].includes(state) ? state : 'unknown') as BleGateState
 			};
 		} catch (e: any) {
-			errorMsg = e.message ?? `Failed to move gate ${gate}`;
+			errorMsg =
+				e.message ??
+				$_('components.setup.setupServoOnboardingSection.errors.moveGateFailed', { values: { gate } });
 			bleStateByGate = { ...bleStateByGate, [gate]: 'error' };
 		} finally {
 			setBleBusy(gate, null);
@@ -601,9 +635,15 @@
 			);
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
-			statusMsg = payload?.message ?? `Gate ${gate} calibrated.`;
+			statusMsg =
+				payload?.message ??
+				$_('components.setup.setupServoOnboardingSection.status.gateCalibrated', { values: { gate } });
 		} catch (e: any) {
-			errorMsg = e.message ?? `Failed to calibrate gate ${gate}`;
+			errorMsg =
+				e.message ??
+				$_('components.setup.setupServoOnboardingSection.errors.calibrateGateFailed', {
+					values: { gate }
+				});
 		} finally {
 			setBleBusy(gate, null);
 		}
@@ -737,13 +777,14 @@
 			});
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
-			statusMsg = payload?.message ?? 'Servo setup saved.';
+			statusMsg =
+				payload?.message ?? $_('components.setup.setupServoOnboardingSection.status.setupSaved');
 			await loadSettings();
 			if (onSaved) {
 				await onSaved();
 			}
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to save servo setup';
+			errorMsg = e.message ?? $_('components.setup.setupServoOnboardingSection.errors.saveFailed');
 		} finally {
 			saving = false;
 		}
@@ -821,52 +862,70 @@
 <div class="flex flex-col gap-(--gap-panels)">
 	{#if !settingsLoaded}
 		{#if errorMsg}
-			<Alert tone="danger" title="The servo configuration did not load">
+			<Alert tone="danger" title={$_('components.setup.setupServoOnboardingSection.loadError.title')}>
 				{errorMsg}
 				{#snippet actions()}
-					<Button size="sm" onclick={() => void loadSettings()}>Retry</Button>
+					<Button size="sm" onclick={() => void loadSettings()}
+						>{$_('components.setup.setupServoOnboardingSection.buttons.retry')}</Button
+					>
 				{/snippet}
 			</Alert>
 		{:else}
 			<Panel>
 				<p class="flex items-center gap-2 text-sm text-ink-muted">
 					<Spinner size={16} />
-					Loading the servo configuration…
+					{$_('components.setup.setupServoOnboardingSection.loading')}
 				</p>
 			</Panel>
 		{/if}
 	{:else}
-		<Panel title="Servo backend">
+		<Panel title={$_('components.setup.setupServoOnboardingSection.backendPanel.title')}>
 			{#snippet actions()}
 				{#if discoveredServoSource !== servoSource && onSourceChange}
 					<Button size="sm" onclick={() => onSourceChange(discoveredServoSource)}>
-						Use the detected one ({discoveredServoSource === 'waveshare' ? 'Waveshare' : 'PCA9685'})
+						{$_('components.setup.setupServoOnboardingSection.backendPanel.useDetectedOne', {
+							values: { name: discoveredServoSource === 'waveshare' ? 'Waveshare' : 'PCA9685' }
+						})}
 					</Button>
 				{/if}
 			{/snippet}
 			<p class="text-sm text-ink-muted">
 				{#if servoSource === 'waveshare_ble'}
-					Using Waveshare SC15 servos over the ESP32 BLE gate bridge.
+					{$_('components.setup.setupServoOnboardingSection.backendPanel.status.bleBackend')}
 				{:else if servoSource !== 'waveshare'}
-					No Waveshare servo bus found, so a PCA9685 on a control board is assumed.
+					{$_('components.setup.setupServoOnboardingSection.backendPanel.status.noWaveshareBus')}
 				{:else if discoveredServoSource === 'waveshare'}
-					The Waveshare SC serial bus was found{#if discoveredWaveshareServos > 0}, with
-						<span class="text-ink">
-							{discoveredWaveshareServos}
-							{discoveredWaveshareServos === 1 ? 'servo' : 'servos'}
-						</span> on it{/if}.
+					{#if discoveredWaveshareServos > 0}
+						{$_('components.setup.setupServoOnboardingSection.backendPanel.status.waveshareFoundWithCount', {
+							values: {
+								count: discoveredWaveshareServos,
+								unit:
+									discoveredWaveshareServos === 1
+										? $_('components.setup.setupServoOnboardingSection.backendPanel.unit.servoSingular')
+										: $_('components.setup.setupServoOnboardingSection.backendPanel.unit.servoPlural')
+							}
+						})}
+					{:else}
+						{$_('components.setup.setupServoOnboardingSection.backendPanel.status.waveshareFoundPlain')}
+					{/if}
 				{:else}
-					Using the Waveshare SC serial bus.
+					{$_('components.setup.setupServoOnboardingSection.backendPanel.status.usingWaveshareBus')}
 				{/if}
 			</p>
 			{#if onSourceChange}
 				<SegmentedControl
-					label="Servo backend"
+					label={$_('components.setup.setupServoOnboardingSection.backendPanel.title')}
 					value={servoSource}
 					options={[
 						{ value: 'pca', label: 'PCA9685' },
-						{ value: 'waveshare', label: 'Waveshare (wired)' },
-						{ value: 'waveshare_ble', label: 'Waveshare (BLE)' }
+						{
+							value: 'waveshare',
+							label: $_('components.setup.setupServoOnboardingSection.backendPanel.options.waveshareWired')
+						},
+						{
+							value: 'waveshare_ble',
+							label: $_('components.setup.setupServoOnboardingSection.backendPanel.options.waveshareBle')
+						}
 					]}
 					onchange={(value) => onSourceChange?.(value)}
 				/>
@@ -939,8 +998,12 @@
 			<Alert tone="success">{statusMsg}</Alert>
 		{/if}
 		<div class="flex flex-wrap items-center gap-3">
-			<Button variant="primary" loading={saving} onclick={saveServoSetup}>Save the servos</Button>
-			{#if loading}<span class="text-sm text-ink-muted">Loading the servo configuration…</span>{/if}
+			<Button variant="primary" loading={saving} onclick={saveServoSetup}
+				>{$_('components.setup.setupServoOnboardingSection.buttons.saveServos')}</Button
+			>
+			{#if loading}<span class="text-sm text-ink-muted"
+					>{$_('components.setup.setupServoOnboardingSection.loading')}</span
+				>{/if}
 		</div>
 	{/if}
 </div>

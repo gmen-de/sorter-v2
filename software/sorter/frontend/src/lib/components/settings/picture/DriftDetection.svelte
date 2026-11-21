@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase } from '$lib/backend';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -52,7 +53,10 @@
 	}
 
 	function formatValue(v: number | boolean): string {
-		if (typeof v === 'boolean') return v ? 'on' : 'off';
+		if (typeof v === 'boolean')
+			return v
+				? $_('components.settings.picture.driftDetection.onLabel')
+				: $_('components.settings.picture.driftDetection.offLabel');
 		if (Number.isInteger(v)) return String(v);
 		return v.toFixed(2);
 	}
@@ -95,12 +99,12 @@
 				body: JSON.stringify(liveSnapshot)
 			});
 			if (!res.ok) throw new Error(await res.text());
-			status = 'Live values saved.';
+			status = $_('components.settings.picture.driftDetection.liveValuesSaved');
 			open = false;
 			ignoredSignature = null;
 			onAction?.('adopt');
 		} catch (e: any) {
-			error = e.message ?? 'Failed to adopt live values';
+			error = e.message ?? $_('components.settings.picture.driftDetection.failedToAdopt');
 		} finally {
 			applying = false;
 		}
@@ -117,12 +121,12 @@
 				body: JSON.stringify(savedSnapshot)
 			});
 			if (!res.ok) throw new Error(await res.text());
-			status = 'Saved settings restored.';
+			status = $_('components.settings.picture.driftDetection.savedSettingsRestored');
 			open = false;
 			ignoredSignature = null;
 			onAction?.('restore');
 		} catch (e: any) {
-			error = e.message ?? 'Failed to restore saved values';
+			error = e.message ?? $_('components.settings.picture.driftDetection.failedToRestore');
 		} finally {
 			applying = false;
 		}
@@ -153,14 +157,18 @@
 	});
 </script>
 
-<Modal bind:open title="The camera's settings drifted">
+<Modal bind:open title={$_('components.settings.picture.driftDetection.modalTitle')}>
 	<div class="flex flex-col gap-3">
-		<p>The camera reports different values than the saved ones. Which should it use?</p>
+		<p>{$_('components.settings.picture.driftDetection.modalIntro')}</p>
 		{#if error}<Alert tone="danger">{error}</Alert>{/if}
 		<div class="overflow-x-auto">
 			<table class="data-table">
 				<thead>
-					<tr><th>Setting</th><th class="num">Saved</th><th class="num">Live</th></tr>
+					<tr
+						><th>{$_('components.settings.picture.driftDetection.settingHeader')}</th><th
+							class="num">{$_('components.settings.picture.driftDetection.savedHeader')}</th
+						><th class="num">{$_('components.settings.picture.driftDetection.liveHeader')}</th></tr
+					>
 				</thead>
 				<tbody>
 					{#each diffs as diff}
@@ -176,8 +184,14 @@
 		{#if status}<p class="text-ink-muted">{status}</p>{/if}
 	</div>
 	{#snippet footer()}
-		<Button variant="ghost" disabled={applying} onclick={ignore}>Ignore</Button>
-		<Button disabled={applying} onclick={adopt}>Keep the live values</Button>
-		<Button variant="primary" disabled={applying} onclick={restore}>Restore the saved values</Button>
+		<Button variant="ghost" disabled={applying} onclick={ignore}
+			>{$_('components.settings.picture.driftDetection.ignoreButton')}</Button
+		>
+		<Button disabled={applying} onclick={adopt}
+			>{$_('components.settings.picture.driftDetection.keepLiveButton')}</Button
+		>
+		<Button variant="primary" disabled={applying} onclick={restore}
+			>{$_('components.settings.picture.driftDetection.restoreSavedButton')}</Button
+		>
 	{/snippet}
 </Modal>

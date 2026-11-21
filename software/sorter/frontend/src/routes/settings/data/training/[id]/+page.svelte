@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Square from '@lucide/svelte/icons/square';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
@@ -33,16 +34,16 @@
 	const machine = getMachineContext();
 
 	const POLL_MS = 3000;
-	const FILTERS: { value: PieceFilter; label: string }[] = [
-		{ value: 'all', label: 'All' },
-		{ value: 'disagree', label: 'Disagrees with the machine' },
-		{ value: 'excluded', label: 'Excluded' }
-	];
-	const EMPTY: Record<PieceFilter, string> = {
-		all: 'No pieces yet.',
-		disagree: 'No piece disagrees with the machine.',
-		excluded: 'No piece is excluded.'
-	};
+	const FILTERS = $derived<{ value: PieceFilter; label: string }[]>([
+		{ value: 'all', label: $_('routes.settings.data.trainingDetail.filters.all') },
+		{ value: 'disagree', label: $_('routes.settings.data.trainingDetail.filters.disagree') },
+		{ value: 'excluded', label: $_('routes.settings.data.trainingDetail.filters.excluded') }
+	]);
+	const EMPTY = $derived<Record<PieceFilter, string>>({
+		all: $_('routes.settings.data.trainingDetail.empty.all'),
+		disagree: $_('routes.settings.data.trainingDetail.empty.disagree'),
+		excluded: $_('routes.settings.data.trainingDetail.empty.excluded')
+	});
 
 	const base = $derived(machineHttpBaseUrlFromWsUrl(machine.machine?.url) ?? getBackendHttpBase());
 
@@ -77,7 +78,8 @@
 			total = res.total;
 			error = null;
 		} catch (e) {
-			if (mine === request && !quiet) error = `Couldn't load the run: ${message(e)}`;
+			if (mine === request && !quiet)
+				error = $_('routes.settings.data.trainingDetail.loadError', { values: { error: message(e) } });
 		} finally {
 			if (mine === request) loading = false;
 		}
@@ -92,7 +94,7 @@
 			total = res.total;
 			pieces = [...pieces, ...res.pieces.filter((p) => !have.has(p.uuid))];
 		} catch (e) {
-			error = `Couldn't load more pieces: ${message(e)}`;
+			error = $_('routes.settings.data.trainingDetail.loadMoreError', { values: { error: message(e) } });
 		} finally {
 			loadingMore = false;
 		}
@@ -166,20 +168,28 @@
 	});
 </script>
 
-<svelte:head><title>Sorter - Training run</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.data.trainingDetail.pageTitle')}</title></svelte:head>
 
 <PageHeader
-	title={run ? `Run from ${formatWhen(run.started_at)}` : 'Training run'}
-	description="Every piece the machine saw during this run, labeled with the color of its segment. Click a piece to exclude it, and again to bring it back."
+	title={run
+		? $_('routes.settings.data.trainingDetail.titleWithRun', { values: { when: formatWhen(run.started_at) } })
+		: $_('routes.settings.data.trainingDetail.title')}
+	description={$_('routes.settings.data.trainingDetail.description')}
 >
 	{#snippet actions()}
-		<Button icon={ArrowLeft} href="/settings/data/training">Back to training runs</Button>
+		<Button icon={ArrowLeft} href="/settings/data/training"
+			>{$_('routes.settings.data.trainingDetail.backButton')}</Button
+		>
 		{#if run?.collecting}
-			<Button icon={Square} loading={ending} onclick={end}>End run</Button>
+			<Button icon={Square} loading={ending} onclick={end}
+				>{$_('routes.settings.data.trainingDetail.endRunButton')}</Button
+			>
 		{/if}
 		{#if run}
 			<Button loading={runBusy} onclick={toggleRun}>
-				{run.excluded ? 'Include run' : 'Exclude run'}
+				{run.excluded
+					? $_('routes.settings.data.trainingDetail.includeRunButton')
+					: $_('routes.settings.data.trainingDetail.excludeRunButton')}
 			</Button>
 		{/if}
 	{/snippet}
@@ -187,29 +197,52 @@
 		<div class="flex flex-col gap-1">
 			<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink">
 				<RunColors colors={run.colors} />
-				{#if run.ended_at === null}<Badge tone="success" dot>Collecting</Badge>{/if}
-				{#if run.excluded}<Badge>Excluded</Badge>{/if}
+				{#if run.ended_at === null}<Badge tone="success" dot
+						>{$_('routes.settings.data.trainingDetail.collectingBadge')}</Badge
+					>{/if}
+				{#if run.excluded}<Badge>{$_('routes.settings.data.trainingDetail.excludedBadge')}</Badge>{/if}
 			</div>
 			<p class="num text-sm text-ink-muted">
-				{formatWhen(run.started_at)} to
-				{#if run.ended_at === null}now{:else}{formatTime(run.ended_at)}, {formatDuration(
-						run.ended_at - run.started_at
-					)}{/if}.
-				{run.segments.length}
-				{run.segments.length === 1 ? 'segment' : 'segments'}, {run.pieces.toLocaleString()} pieces,
-				{run.labeled.toLocaleString()} labeled, {run.excluded_pieces.toLocaleString()} excluded.
+				{#if run.ended_at === null}
+					{$_('routes.settings.data.trainingDetail.runSummaryOngoing', {
+						values: {
+							from: formatWhen(run.started_at),
+							segments: run.segments.length,
+							pieces: run.pieces.toLocaleString(),
+							labeled: run.labeled.toLocaleString(),
+							excludedCount: run.excluded_pieces.toLocaleString()
+						}
+					})}
+				{:else}
+					{$_('routes.settings.data.trainingDetail.runSummaryEnded', {
+						values: {
+							from: formatWhen(run.started_at),
+							to: formatTime(run.ended_at),
+							duration: formatDuration(run.ended_at - run.started_at),
+							segments: run.segments.length,
+							pieces: run.pieces.toLocaleString(),
+							labeled: run.labeled.toLocaleString(),
+							excludedCount: run.excluded_pieces.toLocaleString()
+						}
+					})}
+				{/if}
 			</p>
 		</div>
 	{/if}
 </PageHeader>
 
-<Panel title="Pieces" flush>
+<Panel title={$_('routes.settings.data.trainingDetail.piecesPanelTitle')} flush>
 	<div class="flex flex-col gap-3 px-(--pad-panel) pb-3">
-		<SegmentedControl bind:value={filter} options={FILTERS} label="Which pieces" size="sm" />
+		<SegmentedControl
+			bind:value={filter}
+			options={FILTERS}
+			label={$_('routes.settings.data.trainingDetail.filterLabel')}
+			size="sm"
+		/>
 		{#if error}<p class="text-sm text-danger-ink">{error}</p>{/if}
 		{#if loading && pieces.length === 0}
 			<p class="flex items-center gap-2 text-sm text-ink-muted">
-				<Spinner size={14} /> Loading the pieces
+				<Spinner size={14} /> {$_('routes.settings.data.trainingDetail.loadingPieces')}
 			</p>
 		{:else if pieces.length === 0 && !error}
 			<p class="text-sm text-ink-muted">{EMPTY[filter]}</p>
@@ -219,7 +252,7 @@
 		<div
 			class="border-t border-line"
 			role="group"
-			aria-label="The run's pieces"
+			aria-label={$_('routes.settings.data.trainingDetail.piecesGroupLabel')}
 			onpointerenter={() => (held = true)}
 			onpointerleave={() => (held = false)}
 		>
@@ -233,10 +266,14 @@
 		</div>
 		<div class="flex items-center justify-between gap-3 border-t border-line px-(--pad-panel) py-3">
 			<span class="num text-sm text-ink-muted">
-				{pieces.length.toLocaleString()} of {total.toLocaleString()}
+				{$_('routes.settings.data.trainingDetail.shownOfTotal', {
+					values: { shown: pieces.length.toLocaleString(), total: total.toLocaleString() }
+				})}
 			</span>
 			{#if pieces.length < total}
-				<Button size="sm" loading={loadingMore} onclick={loadMore}>Load more</Button>
+				<Button size="sm" loading={loadingMore} onclick={loadMore}
+					>{$_('routes.settings.data.trainingDetail.loadMoreButton')}</Button
+				>
 			{/if}
 		</div>
 	{/if}

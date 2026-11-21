@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Check from '@lucide/svelte/icons/check';
 	import RefreshCcw from '@lucide/svelte/icons/refresh-ccw';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -47,27 +48,39 @@
 	} {
 		switch (category) {
 			case 'controller':
-				return { label: 'Controller', tone: 'success' };
+				return {
+					label: $_('components.setup.steps.discoveryStep.category.controller'),
+					tone: 'success'
+				};
 			case 'servo_bus':
-				return { label: 'Servo bus', tone: 'success' };
+				return {
+					label: $_('components.setup.steps.discoveryStep.category.servoBus'),
+					tone: 'success'
+				};
 			case 'unrecognised_controller':
-				return { label: 'Unrecognised', tone: 'danger' };
+				return {
+					label: $_('components.setup.steps.discoveryStep.category.unrecognised'),
+					tone: 'danger'
+				};
 			default:
-				return { label: 'Unknown' };
+				return { label: $_('components.setup.steps.discoveryStep.category.unknown') };
 		}
 	}
 
 	function usbDeviceDisplayName(device: UsbDevice): string {
 		if (device.category === 'controller') {
-			const name = device.device_name || device.product || 'Control board';
+			const name =
+				device.device_name ||
+				device.product ||
+				$_('components.setup.steps.discoveryStep.controlBoardFallback');
 			if (device.role) return `${name} · ${device.role}`;
 			return name;
 		}
 		if (device.category === 'servo_bus') {
 			const count = device.servo_count ?? 0;
-			return `Waveshare servo bus · ${count} servo${count === 1 ? '' : 's'}`;
+			return $_('components.setup.steps.discoveryStep.servoBusName', { values: { count } });
 		}
-		return device.product || 'Serial device';
+		return device.product || $_('components.setup.steps.discoveryStep.serialDeviceFallback');
 	}
 
 	function boardFamilyLabel(family: string | null | undefined): string | null {
@@ -95,32 +108,46 @@
 		<Alert
 			tone="warning"
 			title={bootloaderBoard
-				? 'The control board is waiting for its firmware.'
-				: 'No control board answered.'}
+				? $_('components.setup.steps.discoveryStep.noBoard.waitingTitle')
+				: $_('components.setup.steps.discoveryStep.noBoard.noneTitle')}
 		>
 			{#if bootloaderBoard}
-				It shows up as a drive called RPI-RP2, which is what a Pico does before it has ever been
-				flashed. Open <a href="/settings/control-board" class="underline">Settings > Control board</a>,
-				tick <strong>Recovery flash</strong>, pick the newest firmware release (the file for the kit's
-				board is <strong>basically-v1-2-distribution</strong>) and flash it. Then come back and rescan.
+				{$_('components.setup.steps.discoveryStep.noBoard.waitingBefore')}
+				<a href="/settings/control-board" class="underline"
+					>{$_('components.setup.steps.discoveryStep.noBoard.settingsLink')}</a
+				>,
+				{$_('components.setup.steps.discoveryStep.noBoard.waitingTickBefore')}
+				<strong>{$_('components.setup.steps.discoveryStep.noBoard.recoveryFlash')}</strong
+				>{$_('components.setup.steps.discoveryStep.noBoard.waitingTickAfter')}
+				<strong>basically-v1-2-distribution</strong>{$_(
+					'components.setup.steps.discoveryStep.noBoard.waitingAfter'
+				)}
 			{:else}
-				On a new machine this usually means the Pico has no firmware yet. Unplug the Pico's USB cable,
-				hold down the BOOTSEL button (the white button on top of the Pico), plug the cable back in and
-				let go. Then open <a href="/settings/control-board" class="underline">Settings > Control board</a>,
-				tick <strong>Recovery flash</strong>, pick the newest firmware release (the file for the kit's
-				board is <strong>basically-v1-2-distribution</strong>), flash it, and come back to rescan. If
-				the board has been flashed before, check its power and USB cable instead.
+				{$_('components.setup.steps.discoveryStep.noBoard.noneBefore')}
+				<a href="/settings/control-board" class="underline"
+					>{$_('components.setup.steps.discoveryStep.noBoard.settingsLink')}</a
+				>,
+				{$_('components.setup.steps.discoveryStep.noBoard.waitingTickBefore')}
+				<strong>{$_('components.setup.steps.discoveryStep.noBoard.recoveryFlash')}</strong
+				>{$_('components.setup.steps.discoveryStep.noBoard.waitingTickAfter')}
+				<strong>basically-v1-2-distribution</strong>{$_(
+					'components.setup.steps.discoveryStep.noBoard.noneAfter'
+				)}
 			{/if}
 		</Alert>
 	{/if}
 
 	<Panel
-		title="USB devices"
-		description="{inUseCount} {inUseCount === 1 ? 'controller' : 'controllers'} in use."
+		title={$_('components.setup.steps.discoveryStep.usbDevices.panelTitle')}
+		description={$_('components.setup.steps.discoveryStep.usbDevices.panelDescription', {
+			values: { count: inUseCount }
+		})}
 		flush
 	>
 		{#snippet actions()}
-			<Button size="sm" icon={RefreshCcw} loading={loadingWizard} onclick={onRescan}>Rescan</Button>
+			<Button size="sm" icon={RefreshCcw} loading={loadingWizard} onclick={onRescan}
+				>{$_('components.setup.steps.discoveryStep.rescan')}</Button
+			>
 		{/snippet}
 		{#if usbDevices.length}
 			<ul class="divide-y divide-line">
@@ -136,7 +163,9 @@
 							class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-check {device.use_by_default
 								? 'bg-success text-on-success'
 								: 'border border-line-strong'}"
-							title={device.use_by_default ? 'In use' : 'Not used'}
+							title={device.use_by_default
+								? $_('components.setup.steps.discoveryStep.usbDevices.inUse')
+								: $_('components.setup.steps.discoveryStep.usbDevices.notUsed')}
 						>
 							{#if device.use_by_default}<Check size={12} strokeWidth={3} />{/if}
 						</span>
@@ -155,7 +184,9 @@
 				{/each}
 			</ul>
 		{:else}
-			<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">No USB devices found.</p>
+			<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">
+				{$_('components.setup.steps.discoveryStep.usbDevices.none')}
+			</p>
 		{/if}
 	</Panel>
 </div>

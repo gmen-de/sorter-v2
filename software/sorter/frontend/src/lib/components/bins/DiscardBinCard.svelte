@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
 </script>
@@ -7,10 +8,9 @@
      every layer's doors into the discard bucket below the machine. It is shown
      so the operator knows the output exists; it is not interactive and has no
      physical slot. -->
-<Panel title="Discard bin">
-	{#snippet actions()}<Badge>Virtual</Badge>{/snippet}
+<Panel title={$_('components.bins.discardBinCard.panelTitle')}>
+	{#snippet actions()}<Badge>{$_('components.bins.discardBinCard.virtualBadge')}</Badge>{/snippet}
 	<p class="text-sm text-ink-muted">
-		Pieces that match no sorting rule, or whose category has no assigned bin, fall through all layer
-		doors into the discard bucket below the machine. Empty it by hand when it fills up.
+		{$_('components.bins.discardBinCard.description')}
 	</p>
 </Panel>

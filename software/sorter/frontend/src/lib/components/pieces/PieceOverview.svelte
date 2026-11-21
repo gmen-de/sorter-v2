@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import PieceCorrection from '$lib/components/PieceCorrection.svelte';
 	import ImageZoom from '$lib/components/ui/ImageZoom.svelte';
 	import PartImage from '$lib/components/ui/PartImage.svelte';
@@ -48,7 +49,7 @@
 				<p class="text-sm text-ink-muted">{framesNote}</p>
 				{#if frames.length === 0}
 					<p class="flex h-[4.75rem] items-center text-sm text-ink-muted">
-						No burst frames for this piece.
+						{$_('components.pieces.pieceOverview.noFrames')}
 					</p>
 				{:else}
 					<FrameStrip {frames} {onZoom} />
@@ -86,17 +87,26 @@
 					</dl>
 					{#if reference}
 						<div class="flex shrink-0 flex-col items-center gap-0.5">
-							<ImageZoom src={reference} label="Brickognize's picture of this part">
+							<ImageZoom
+								src={reference}
+								label={$_('components.pieces.pieceOverview.brickognizeLabel')}
+							>
 								<button
 									type="button"
-									aria-label="Enlarge Brickognize's picture of this part"
+									aria-label={$_('components.pieces.pieceOverview.enlargeBrickognizeLabel')}
 									class="block rounded-item p-1 transition-colors hover:bg-hover"
-									onclick={() => onZoom(reference, `Brickognize: ${name}`)}
+									onclick={() =>
+										onZoom(
+											reference,
+											$_('components.pieces.pieceOverview.brickognizeZoomLabel', { values: { name } })
+										)}
 								>
 									<PartImage src={reference} class="size-20" />
 								</button>
 							</ImageZoom>
-							<span class="text-xs text-ink-muted">Brickognize</span>
+							<span class="text-xs text-ink-muted"
+								>{$_('components.pieces.pieceOverview.brickognizeCaption')}</span
+							>
 						</div>
 					{/if}
 				</div>

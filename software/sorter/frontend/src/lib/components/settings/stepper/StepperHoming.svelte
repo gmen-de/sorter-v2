@@ -1,5 +1,6 @@
 <script lang="ts">
 	import House from '@lucide/svelte/icons/house';
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	// Homing, as the buttons at the top of a motor's panel: find the endstop, or
@@ -23,7 +24,9 @@
 
 <div class="flex flex-wrap items-center gap-2">
 	<Button icon={House} loading={homing} disabled={loading || saving || canceling} onclick={onHome}>
-		Home to the endstop
+		{$_('components.settings.stepper.stepperHoming.homeButton')}
 	</Button>
-	<Button variant="danger" loading={canceling} disabled={!homing} onclick={onCancel}>Cancel</Button>
+	<Button variant="danger" loading={canceling} disabled={!homing} onclick={onCancel}
+		>{$_('components.settings.stepper.stepperHoming.cancelButton')}</Button
+	>
 </div>

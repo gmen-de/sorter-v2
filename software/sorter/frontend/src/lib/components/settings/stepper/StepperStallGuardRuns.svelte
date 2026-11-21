@@ -7,6 +7,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { fmtTime, type Run } from '$lib/settings/stallguard';
 
@@ -28,7 +29,9 @@
 </script>
 
 {#if runs.length === 0}
-	<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">Nothing recorded yet.</p>
+	<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">
+		{$_('components.settings.stepper.stepperStallGuardRuns.emptyState')}
+	</p>
 {:else}
 	<ul class="divide-y divide-line border-t border-line">
 		{#each shown as run (run.id)}
@@ -48,7 +51,12 @@
 					</span>
 					<span class="text-ink-muted">{fmtTime(run.started_at)}</span>
 					<span class="text-ink-muted">
-						{run.sample_count} samples{#if run.sg_min != null}, SG {run.sg_min} to {run.sg_max}{/if}{#if run.suggested_sgthrs != null},
+						{$_('components.settings.stepper.stepperStallGuardRuns.samplesCount', {
+							values: { count: run.sample_count }
+						})}{#if run.sg_min != null}, {$_(
+								'components.settings.stepper.stepperStallGuardRuns.sgRange',
+								{ values: { min: run.sg_min, max: run.sg_max } }
+							)}{/if}{#if run.suggested_sgthrs != null},
 							SGTHRS {run.suggested_sgthrs}{/if}
 						{#if run.label}<span class="text-ink"> · {run.label}</span>{/if}
 					</span>
@@ -57,7 +65,7 @@
 					variant="ghost"
 					size="sm"
 					icon={Trash2}
-					label="Delete run"
+					label={$_('components.settings.stepper.stepperStallGuardRuns.deleteButtonLabel')}
 					class="mt-2"
 					onclick={() => ondelete(run)}
 				/>
@@ -72,7 +80,13 @@
 				icon={showAll ? ChevronUp : ChevronDown}
 				onclick={() => (showAll = !showAll)}
 			>
-				{showAll ? `Show the latest ${SHOWN}` : `Show all ${runs.length} runs`}
+				{showAll
+					? $_('components.settings.stepper.stepperStallGuardRuns.showLatest', {
+							values: { n: SHOWN }
+						})
+					: $_('components.settings.stepper.stepperStallGuardRuns.showAll', {
+							values: { n: runs.length }
+						})}
 			</Button>
 		</div>
 	{/if}

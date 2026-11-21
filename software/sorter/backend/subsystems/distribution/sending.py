@@ -1,3 +1,4 @@
+import math
 import time
 import queue
 from typing import Optional
@@ -10,7 +11,51 @@ from utils.event import knownObjectToEvent
 from defs.known_object import PieceStage
 
 
-CHUTE_SETTLE_MS = 2000
+# Physics-derived settle wait, replacing a flat 2000ms for every layer -
+# free-fall distance to the layer's own gate grows with depth, so a piece
+# landing on layer 1 (topmost, hit first) needs far less settle time than one
+# landing on layer 8. Derived from the sorter's 4-8 layer gen4_core stack
+# (160mm pitch) - see the project memory `chute-fallzeiten-wartezeit` for the
+# full derivation (LEGO Tile 1x1 quarter-circle and Brick 2x10, air
+# resistance negligible, pure free fall + a fixed gate/funnel slide time).
+GRAVITY_M_S2 = 9.81
+FALL_DISTANCE_BASE_M = 0.115  # fall distance to layer 1's gate midpoint
+FALL_DISTANCE_PER_LAYER_M = 0.16  # additional fall distance per layer deeper (= layer pitch)
+CHUTE_SLIDE_S = 0.35  # gate + funnel slide time, layer-independent (measured)
+SETTLE_RESERVE_S = 0.1
+# Used only if a piece's target layer is somehow unknown - the layer-1 value
+# this formula was tuned against would be too short to be safe as a
+# catch-all, so this keeps the old flat constant as a conservative fallback.
+FALLBACK_SETTLE_MS = 2000
+# An operator's per-layer adjustment (storage-layers settings) must never
+# bring the total settle wait below this - otherwise the chute could start
+# repositioning before a piece has actually fallen clear.
+MIN_SETTLE_MS = 100
+
+
+def chuteSettleMsForLayer(layer_index: Optional[int]) -> float:
+    """Milliseconds to wait after a drop before the piece has settled
+    (fallen + slid clear) on the given layer (0 = topmost, hit first)."""
+    if layer_index is None or layer_index < 0:
+        return FALLBACK_SETTLE_MS
+    n = layer_index + 1
+    fall_distance_m = FALL_DISTANCE_BASE_M + FALL_DISTANCE_PER_LAYER_M * (n - 1)
+    fall_time_s = math.sqrt(2 * fall_distance_m / GRAVITY_M_S2)
+    return (fall_time_s + CHUTE_SLIDE_S + SETTLE_RESERVE_S) * 1000.0
+
+
+def chuteSettleMsForPiece(layer_index: Optional[int], adjust_ms: int = 0) -> float:
+    """``chuteSettleMsForLayer`` plus the operator's per-layer adjustment
+    (storage-layers settings), floored at ``MIN_SETTLE_MS``. What ``Sending``
+    actually waits; the plain per-layer function above is also used on its
+    own where only the physics-computed base value is wanted (e.g. the
+    storage-layers settings page, to show "computed" vs. "adjusted")."""
+    base_ms = chuteSettleMsForLayer(layer_index)
+    if layer_index is None or layer_index < 0:
+        return base_ms  # no per-layer adjustment to apply without a known layer
+    return max(MIN_SETTLE_MS, base_ms + adjust_ms)
+
+
 MISSING_DROP_PIECE_GRACE_MS = 1500
 
 
@@ -32,6 +77,7 @@ class Sending(BaseState):
         self.start_time: float = 0.0
         self._occupancy_state: str | None = None
         self._committed: bool = False
+        self._settle_ms: float = FALLBACK_SETTLE_MS
 
     def _setOccupancyState(self, state_name: str) -> None:
         if self._occupancy_state == state_name:
@@ -70,9 +116,13 @@ class Sending(BaseState):
                     self.shared.set_distribution_gate(True, reason=None)
                     return DistributionState.IDLE
                 return None
+            self._settle_ms = chuteSettleMsForPiece(
+                getattr(self.piece, "intended_layer_index", None),
+                self._settleAdjustMsForLayer(getattr(self.piece, "intended_layer_index", None)),
+            )
 
         elapsed_ms = (now - self.start_time) * 1000
-        settle_ms = CHUTE_SETTLE_MS
+        settle_ms = self._settle_ms
         self._setOccupancyState("sending.wait_chute_settle")
         if elapsed_ms < settle_ms:
             return None
@@ -118,13 +168,25 @@ class Sending(BaseState):
         self.shared.set_distribution_gate(True, reason=None)
         return DistributionState.IDLE
 
+    def _settleAdjustMsForLayer(self, layer_index: Optional[int]) -> int:
+        if layer_index is None or layer_index < 0:
+            return 0
+        try:
+            layers = self.irl.distribution_layout.layers
+            if 0 <= layer_index < len(layers):
+                adjust = getattr(layers[layer_index], "settle_adjust_ms", 0)
+                return int(adjust) if isinstance(adjust, int) and not isinstance(adjust, bool) else 0
+        except Exception:
+            pass
+        return 0
+
     @staticmethod
     def _alreadyCommitted(piece) -> bool:
         return piece.stage == PieceStage.distributed or piece.distributed_at is not None
 
     def _shouldReopenGate(self) -> bool:
         elapsed_since_drop = time.time() - self.start_time
-        required_s = (CHUTE_SETTLE_MS / 1000.0) + self._cooldown_s
+        required_s = (self._settle_ms / 1000.0) + self._cooldown_s
         if elapsed_since_drop < required_s:
             return False
         return True
@@ -134,3 +196,4 @@ class Sending(BaseState):
         self.piece = None
         self.start_time = 0.0
         self._committed = False
+        self._settle_ms = FALLBACK_SETTLE_MS

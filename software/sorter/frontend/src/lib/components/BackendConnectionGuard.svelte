@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import {
@@ -52,26 +53,29 @@
 
 <Modal
 	open={outage && !machineDowntime.deliberate}
-	title="The backend is not responding"
+	title={$_('components.backendConnectionGuard.title')}
 	size="sm"
 	dismissible={!restarting}
-	status={restarting ? 'Waiting for the backend to come back' : undefined}
+	status={restarting ? $_('components.backendConnectionGuard.statusWaiting') : undefined}
 >
 	{#if restarting}
-		<p>The backend is restarting. This closes by itself when it answers again.</p>
+		<p>{$_('components.backendConnectionGuard.restartingBody')}</p>
 	{:else}
 		<p>
-			The sorter backend is not responding. The service may have crashed or still be starting up, or
-			the network connection may have been lost. This closes by itself when it answers again.
+			{$_('components.backendConnectionGuard.notRespondingBody')}
 		</p>
 		<p class="mt-2 text-ink-muted">
-			Check that the machine is powered on and the backend service is running.
+			{$_('components.backendConnectionGuard.checkPowerBody')}
 		</p>
 	{/if}
 	{#snippet footer()}
 		{#if !restarting}
-			<Button icon={Power} onclick={() => void restartBackend()}>Restart the backend</Button>
-			<Button variant="primary" icon={RefreshCw} onclick={retryNow}>Check the connection</Button>
+			<Button icon={Power} onclick={() => void restartBackend()}
+				>{$_('components.backendConnectionGuard.restartBackendButton')}</Button
+			>
+			<Button variant="primary" icon={RefreshCw} onclick={retryNow}
+				>{$_('components.backendConnectionGuard.checkConnectionButton')}</Button
+			>
 		{/if}
 	{/snippet}
 </Modal>

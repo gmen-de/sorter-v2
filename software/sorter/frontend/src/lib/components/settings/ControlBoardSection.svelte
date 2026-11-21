@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import Upload from '@lucide/svelte/icons/upload';
 	import RefreshCcw from '@lucide/svelte/icons/refresh-ccw';
 	import Zap from '@lucide/svelte/icons/zap';
@@ -117,17 +118,17 @@
 	let flashError = $state<string | null>(null);
 	let resetting = $state(false);
 
-	const PHASE_LABELS: Record<string, string> = {
-		queued: 'Queued',
-		downloading: 'Downloading firmware',
-		identifying: 'Identifying board',
-		rebooting: 'Rebooting into bootloader',
-		waiting_bootloader: 'Waiting for bootloader drive',
-		copying: 'Copying firmware',
-		waiting_reboot: 'Waiting for board reboot',
-		verifying: 'Verifying new firmware',
-		done: 'Done'
-	};
+	const PHASE_LABELS = $derived<Record<string, string>>({
+		queued: $_('components.settings.controlBoardSection.phase.queued'),
+		downloading: $_('components.settings.controlBoardSection.phase.downloading'),
+		identifying: $_('components.settings.controlBoardSection.phase.identifying'),
+		rebooting: $_('components.settings.controlBoardSection.phase.rebooting'),
+		waiting_bootloader: $_('components.settings.controlBoardSection.phase.waitingBootloader'),
+		copying: $_('components.settings.controlBoardSection.phase.copying'),
+		waiting_reboot: $_('components.settings.controlBoardSection.phase.waitingReboot'),
+		verifying: $_('components.settings.controlBoardSection.phase.verifying'),
+		done: $_('components.settings.controlBoardSection.phase.done')
+	});
 
 	function baseUrl(): string {
 		return (

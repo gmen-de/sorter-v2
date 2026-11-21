@@ -2,6 +2,7 @@
 	// Where a piece would go under the profile this machine runs now, kit counts
 	// included. Nothing moves: it only asks.
 	import Search from '@lucide/svelte/icons/search';
+	import { _ } from 'svelte-i18n';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
@@ -21,10 +22,12 @@
 			.catch(() => (colors = []));
 	});
 	const colorOptions = $derived([
-		{ value: '', label: 'Any color' },
+		{ value: '', label: $_('components.profiles.routeCheckPanel.anyColorOption') },
 		...colors.map((c) => ({ value: String(c.id), label: c.name, hint: String(c.id) }))
 	]);
-	const colorName = (id: string) => colors.find((c) => String(c.id) === id)?.name ?? `color ${id}`;
+	const colorName = (id: string) =>
+		colors.find((c) => String(c.id) === id)?.name ??
+		$_('components.profiles.routeCheckPanel.colorFallback', { values: { id } });
 
 	type Answer = { category_id: string; category_name: string; bin: Partial<Bin> | null };
 
@@ -54,7 +57,7 @@
 			answer = { part: partId, color: colorId, result: (await res.json()) as Answer };
 		} catch (e: unknown) {
 			answer = null;
-			error = e instanceof Error ? e.message : 'Could not ask the profile';
+			error = e instanceof Error ? e.message : $_('components.profiles.routeCheckPanel.couldNotAsk');
 		} finally {
 			checking = false;
 		}
@@ -72,15 +75,24 @@
 </script>
 
 <Panel
-	title="Where would a piece go?"
-	description="Asks the profile this machine runs. Nothing moves."
+	title={$_('components.profiles.routeCheckPanel.panelTitle')}
+	description={$_('components.profiles.routeCheckPanel.panelDescription')}
 >
 	<form class="flex flex-col gap-3" onsubmit={check}>
 		<div class="grid gap-3 sm:grid-cols-[1fr_12rem]">
-			<Field label="BrickLink part" for="route-part">
-				<Input id="route-part" placeholder="Like 3001" autocomplete="off" bind:value={part} />
+			<Field label={$_('components.profiles.routeCheckPanel.partFieldLabel')} for="route-part">
+				<Input
+					id="route-part"
+					placeholder={$_('components.profiles.routeCheckPanel.partPlaceholder')}
+					autocomplete="off"
+					bind:value={part}
+				/>
 			</Field>
-			<Field label="Color" for="route-color" help="Type a name to jump to it.">
+			<Field
+				label={$_('components.profiles.routeCheckPanel.colorFieldLabel')}
+				for="route-color"
+				help={$_('components.profiles.routeCheckPanel.colorFieldHelp')}
+			>
 				<Select id="route-color" options={colorOptions} bind:value={color} />
 			</Field>
 		</div>
@@ -92,7 +104,7 @@
 				loading={checking}
 				disabled={!String(part ?? '').trim()}
 			>
-				Where does it go
+				{$_('components.profiles.routeCheckPanel.submitButton')}
 			</Button>
 		</div>
 	</form>
@@ -103,8 +115,10 @@
 		<div class="mt-3 flex flex-col gap-1.5">
 			<p class="text-sm text-ink-muted">
 				<span class="num font-medium text-ink">{answer.part}</span>{answer.color
-					? ` in ${colorName(answer.color)}`
-					: ''} goes to
+					? $_('components.profiles.routeCheckPanel.inColor', {
+							values: { color: colorName(answer.color) }
+						})
+					: ''}{$_('components.profiles.routeCheckPanel.goesTo')}
 			</p>
 			<div class="overflow-hidden rounded-control bg-well">
 				<ProfileBin layout="row" {bin} plane="well" />

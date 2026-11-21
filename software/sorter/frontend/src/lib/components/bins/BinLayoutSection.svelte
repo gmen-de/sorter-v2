@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -50,7 +51,7 @@
 	const isDirty = $derived(active?.dirty ?? false);
 
 	function profileLabel(id: string | null): string {
-		return (id ?? '').replace(/\.json$/, '') || 'no profile';
+		return (id ?? '').replace(/\.json$/, '') || $_('components.bins.binLayoutSection.noProfile');
 	}
 
 	async function reload() {
@@ -63,7 +64,7 @@
 			active = act.active;
 			error = null;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load bin layouts';
+			error = e instanceof Error ? e.message : $_('components.bins.binLayoutSection.loadError');
 		}
 	}
 
@@ -108,7 +109,7 @@
 			status = successMsg;
 			await reload();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Something went wrong';
+			error = e instanceof Error ? e.message : $_('components.bins.binLayoutSection.somethingWentWrong');
 		} finally {
 			busy = false;
 		}
@@ -125,15 +126,15 @@
 			const res = await applyBinLayout(baseUrl, layout.id);
 			if (res.restart_required) {
 				restarting = true;
-				status = `Switching to "${layout.name}" — restarting…`;
+				status = $_('components.bins.binLayoutSection.switchingStatus', { values: { name: layout.name } });
 				// The new process remounts the page, which loads the new layout.
 				const machine = manager.selectedMachine;
 				if (await requestBackendRestart(baseUrl)) await manager.waitForNewRun(machine, 90_000);
 			}
 			await reload();
-			status = `Switched to "${layout.name}".`;
+			status = $_('components.bins.binLayoutSection.switchedStatus', { values: { name: layout.name } });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to switch bin layout';
+			error = e instanceof Error ? e.message : $_('components.bins.binLayoutSection.switchError');
 		} finally {
 			busy = false;
 			restarting = false;
@@ -146,7 +147,7 @@
 		if (!name) return;
 		await run(
 			() => createBinLayout(baseUrl, name).then(() => {}),
-			`Saved current bins as "${name}".`
+			$_('components.bins.binLayoutSection.savedAsStatus', { values: { name } })
 		);
 	}
 
@@ -157,7 +158,7 @@
 		if (!layout || !name) return;
 		await run(
 			() => renameBinLayout(baseUrl, layout.id, name).then(() => {}),
-			`Renamed to "${name}".`
+			$_('components.bins.binLayoutSection.renamedStatus', { values: { name } })
 		);
 	}
 
@@ -167,7 +168,7 @@
 		if (!layout) return;
 		await run(
 			() => deleteBinLayout(baseUrl, layout.id).then(() => {}),
-			`Deleted "${layout.name}".`
+			$_('components.bins.binLayoutSection.deletedStatus', { values: { name: layout.name } })
 		);
 	}
 
@@ -176,34 +177,41 @@
 		if (!layout) return;
 		await run(
 			() => saveBinLayout(baseUrl, layout.id).then(() => {}),
-			'Saved changes to the current bin layout.'
+			$_('components.bins.binLayoutSection.savedChangesStatus')
 		);
 	}
 </script>
 
 <Panel
-	title="Bin layout"
-	description="Saved bin configurations. Switch between them; bin contents are kept unless you empty the bins."
+	title={$_('components.bins.binLayoutSection.panelTitle')}
+	description={$_('components.bins.binLayoutSection.panelDescription')}
 >
 	<div class="flex flex-col gap-3">
 		<div class="flex flex-wrap items-center gap-2">
-			<Popover label="Bin layouts" bind:open={dropdownOpen} width="22rem" padded={false}>
+			<Popover
+				label={$_('components.bins.binLayoutSection.layoutsPopoverLabel')}
+				bind:open={dropdownOpen}
+				width="22rem"
+				padded={false}
+			>
 				{#snippet trigger(props)}
 					<Button {...props} class="w-64 max-w-full" disabled={layouts.length === 0 && !active}>
 						<span class="flex w-full min-w-0 items-center justify-between gap-2">
 							<span class="flex min-w-0 items-center gap-2">
-								<span class="truncate">{active?.name ?? 'No layout'}</span>
-								{#if isDirty}<Badge tone="warning">Unsaved</Badge>{/if}
+								<span class="truncate">{active?.name ?? $_('components.bins.binLayoutSection.noLayout')}</span>
+								{#if isDirty}<Badge tone="warning">{$_('components.bins.binLayoutSection.unsavedBadge')}</Badge>{/if}
 							</span>
 							<ChevronDown size={16} class="shrink-0" />
 						</span>
 					</Button>
 				{/snippet}
 				<p class="px-3 py-2 text-sm text-ink-muted">
-					Each layout belongs to a profile and only works with that profile.
+					{$_('components.bins.binLayoutSection.belongsToProfileHelp')}
 				</p>
 				{#if layouts.length === 0}
-					<p class="border-t border-line px-3 py-2 text-sm text-ink-muted">No saved layouts yet.</p>
+					<p class="border-t border-line px-3 py-2 text-sm text-ink-muted">
+						{$_('components.bins.binLayoutSection.noSavedLayouts')}
+					</p>
 				{:else}
 					<ul class="divide-y divide-line border-t border-line">
 						{#each layouts as layout (layout.id)}
@@ -213,7 +221,9 @@
 									type="button"
 									class="flex min-h-(--size-menu-item) min-w-0 flex-1 items-center gap-2.5 rounded-item px-2 text-left hover:bg-hover disabled:pointer-events-none"
 									disabled={busy || layout.is_active || !matches}
-									title={matches ? undefined : 'Switch to this layout’s profile first'}
+									title={matches
+										? undefined
+										: $_('components.bins.binLayoutSection.switchProfileFirst')}
 									onclick={() => openSwitch(layout)}
 								>
 									<Check
@@ -231,7 +241,7 @@
 									size="sm"
 									variant="ghost"
 									icon={Pencil}
-									label="Rename {layout.name}"
+									label={$_('components.bins.binLayoutSection.renameButton', { values: { name: layout.name } })}
 									onclick={() => openRename(layout)}
 								/>
 								<Button
@@ -239,8 +249,8 @@
 									variant="ghost"
 									icon={Trash2}
 									label={layout.is_active
-										? 'The active layout cannot be deleted'
-										: `Delete ${layout.name}`}
+										? $_('components.bins.binLayoutSection.activeCannotBeDeleted')
+										: $_('components.bins.binLayoutSection.deleteButton', { values: { name: layout.name } })}
 									disabled={layout.is_active}
 									onclick={() => openDelete(layout)}
 								/>
@@ -249,9 +259,9 @@
 					</ul>
 				{/if}
 			</Popover>
-			<Button disabled={busy} onclick={openSaveAs}>Save as new</Button>
+			<Button disabled={busy} onclick={openSaveAs}>{$_('components.bins.binLayoutSection.saveAsNewButton')}</Button>
 			<Button variant="primary" disabled={busy || !isDirty} onclick={() => void saveChanges()}>
-				Save changes
+				{$_('components.bins.binLayoutSection.saveChangesButton')}
 			</Button>
 		</div>
 		{#if status}<Alert tone="success">{status}</Alert>{/if}
@@ -259,51 +269,72 @@
 	</div>
 </Panel>
 
-<Modal bind:open={switchOpen} title="Switch the bin layout" size="sm">
+<Modal bind:open={switchOpen} title={$_('components.bins.binLayoutSection.switchModal.title')} size="sm">
 	<p>
-		Switch to <span class="font-medium">{target?.name}</span>? This restarts the backend, which
-		takes a few seconds. Bin contents are kept.
+		{$_('components.bins.binLayoutSection.switchModal.confirm', { values: { name: target?.name ?? '' } })}
 	</p>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (switchOpen = false)}>Cancel</Button>
-		<Button variant="primary" onclick={() => void confirmSwitch()}>Switch</Button>
+		<Button variant="ghost" onclick={() => (switchOpen = false)}>
+			{$_('components.bins.binLayoutSection.cancelButton')}
+		</Button>
+		<Button variant="primary" onclick={() => void confirmSwitch()}>
+			{$_('components.bins.binLayoutSection.switchModal.switchButton')}
+		</Button>
 	{/snippet}
 </Modal>
 
 <Modal
 	open={restarting}
-	title="Switching the bin layout"
+	title={$_('components.bins.binLayoutSection.restartModal.title')}
 	size="sm"
 	dismissible={false}
-	status="Restarting the backend"
+	status={$_('components.bins.binLayoutSection.restartModal.status')}
 >
-	<p>This page carries on by itself when the backend is back.</p>
+	<p>{$_('components.bins.binLayoutSection.restartModal.body')}</p>
 </Modal>
 
-<Modal bind:open={saveAsOpen} title="Save as a new bin layout" size="sm">
-	<Input aria-label="Layout name" placeholder="Layout name" bind:value={draftName} />
+<Modal bind:open={saveAsOpen} title={$_('components.bins.binLayoutSection.saveAsModal.title')} size="sm">
+	<Input
+		aria-label={$_('components.bins.binLayoutSection.layoutNameLabel')}
+		placeholder={$_('components.bins.binLayoutSection.layoutNameLabel')}
+		bind:value={draftName}
+	/>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (saveAsOpen = false)}>Cancel</Button>
+		<Button variant="ghost" onclick={() => (saveAsOpen = false)}>
+			{$_('components.bins.binLayoutSection.cancelButton')}
+		</Button>
 		<Button variant="primary" disabled={!draftName.trim()} onclick={() => void confirmSaveAs()}
-			>Save</Button
+			>{$_('components.bins.binLayoutSection.saveAsModal.saveButton')}</Button
 		>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={renameOpen} title="Rename the bin layout" size="sm">
-	<Input aria-label="Layout name" placeholder="Layout name" bind:value={draftName} />
+<Modal bind:open={renameOpen} title={$_('components.bins.binLayoutSection.renameModal.title')} size="sm">
+	<Input
+		aria-label={$_('components.bins.binLayoutSection.layoutNameLabel')}
+		placeholder={$_('components.bins.binLayoutSection.layoutNameLabel')}
+		bind:value={draftName}
+	/>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (renameOpen = false)}>Cancel</Button>
+		<Button variant="ghost" onclick={() => (renameOpen = false)}>
+			{$_('components.bins.binLayoutSection.cancelButton')}
+		</Button>
 		<Button variant="primary" disabled={!draftName.trim()} onclick={() => void confirmRename()}
-			>Rename</Button
+			>{$_('components.bins.binLayoutSection.renameModal.renameButton')}</Button
 		>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={deleteOpen} title="Delete the bin layout" size="sm">
-	<p>Delete <span class="font-medium">{target?.name}</span>? This cannot be undone.</p>
+<Modal bind:open={deleteOpen} title={$_('components.bins.binLayoutSection.deleteModal.title')} size="sm">
+	<p>
+		{$_('components.bins.binLayoutSection.deleteModal.confirm', { values: { name: target?.name ?? '' } })}
+	</p>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (deleteOpen = false)}>Cancel</Button>
-		<Button variant="danger" onclick={() => void confirmDelete()}>Delete layout</Button>
+		<Button variant="ghost" onclick={() => (deleteOpen = false)}>
+			{$_('components.bins.binLayoutSection.cancelButton')}
+		</Button>
+		<Button variant="danger" onclick={() => void confirmDelete()}>
+			{$_('components.bins.binLayoutSection.deleteModal.deleteButton')}
+		</Button>
 	{/snippet}
 </Modal>

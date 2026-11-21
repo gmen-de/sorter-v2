@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { chartFont, token } from '$lib/theme';
 	// Canvas time-series chart for chute-stress TMC2209 telemetry. The signals have
 	// very different native scales (SG_RESULT 0..512, CS_ACTUAL 0..31, PWM_SCALE
@@ -113,7 +114,11 @@
 			ctx.fillStyle = colMuted;
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
-			ctx.fillText('No samples', x0 + plotW / 2, y0 + plotH / 2);
+			ctx.fillText(
+				$_('components.settings.stepper.chuteStressTelemetryChart.noSamples'),
+				x0 + plotW / 2,
+				y0 + plotH / 2
+			);
 			return;
 		}
 

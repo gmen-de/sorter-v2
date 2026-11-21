@@ -1,0 +1,45 @@
+{
+	"components": {
+		"settings": {
+			"benchmarkPanel": {
+				"panelTitle": "Bin-to-bin benchmark",
+				"panelDescription": "Move the chute from one bin to another while closing one layer's gate and opening another's, timed as one operation.",
+				"startBin": "Start bin",
+				"targetBin": "Target bin",
+				"closeGate": "Close gate",
+				"closeGateInfo": "Which layer's gate closes during the timed move.",
+				"openGate": "Open gate",
+				"openGateInfo": "Which layer's gate opens during the timed move.",
+				"layerOption": "Layer {layer}",
+				"sectionOption": "Section {section}",
+				"binOption": "Bin {bin}",
+				"runButton": "Run benchmark",
+				"preparing": "Preparing (not timed)…",
+				"randomTitle": "Random test",
+				"randomDescription": "Drives to random bins in random layers, one after another, timing each move and reporting the spread.",
+				"randomRunsLabel": "Runs",
+				"randomStartButton": "Start",
+				"randomStopButton": "Stop",
+				"randomProgress": "Run {current} / {total}",
+				"randomRunLabel": "Run {n}",
+				"stat": {
+					"total": "Total",
+					"chute": "Chute",
+					"close": "Close",
+					"open": "Open",
+					"count": "Runs",
+					"min": "Fastest",
+					"max": "Slowest",
+					"avg": "Average"
+				},
+				"errors": {
+					"loadLayout": "Failed to load the bin layout.",
+					"chuteTimeout": "Timed out waiting for the chute to stop.",
+					"runFailed": "Benchmark failed.",
+					"sameLayer": "Pick two different layers to close and open — the same gate can't be measured opening and closing at once.",
+					"noBins": "No bins are configured."
+				}
+			}
+		}
+	}
+}

@@ -1,17 +1,18 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import StepperPanel from '$lib/components/settings/StepperPanel.svelte';
 </script>
 
-<svelte:head><title>Sorter - Chute</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.chute.page.pageTitle')}</title></svelte:head>
 
 <PageHeader
-	title="Chute"
-	description="Move the chute's stepper by hand, home it, and set its driver."
+	title={$_('routes.settings.chute.page.title')}
+	description={$_('routes.settings.chute.page.description')}
 />
 <StepperPanel
 	stepperKey="chute"
-	label="Chute stepper"
+	label={$_('routes.settings.chute.page.stepperLabel')}
 	endstop={{
 		configEndpoint: '/api/hardware-config/chute',
 		liveEndpoint: '/api/hardware-config/chute/live',

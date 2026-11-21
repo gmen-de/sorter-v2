@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getMachineContext } from '$lib/machines/context';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import NudgeControl from '$lib/components/ui/NudgeControl.svelte';
@@ -59,12 +60,14 @@
 		} catch {
 			// fall through to status
 		}
-		return `Request failed with status ${res.status}`;
+		return $_('components.cameraChannelControls.requestFailedWithStatus', {
+			values: { status: res.status }
+		});
 	}
 
 	function humanizeStepperError(message: string): string {
 		if (message.includes('Controller not initialized')) {
-			return 'Hardware not started. Press Home in the dashboard first.';
+			return $_('components.cameraChannelControls.hardwareNotStarted');
 		}
 		return message;
 	}
@@ -99,7 +102,7 @@
 				throw new Error(humanizeStepperError(await readErrorMessage(res)));
 			}
 		} catch (e: any) {
-			errorMessage = e?.message ?? 'Could not shake the channel';
+			errorMessage = e?.message ?? $_('components.cameraChannelControls.couldNotShake');
 		} finally {
 			shaking = false;
 		}
@@ -125,7 +128,7 @@
 				throw new Error(humanizeStepperError(await readErrorMessage(res)));
 			}
 		} catch (e: any) {
-			errorMessage = e?.message ?? 'Could not move channel';
+			errorMessage = e?.message ?? $_('components.cameraChannelControls.couldNotMove');
 		} finally {
 			pendingSide = null;
 		}
@@ -141,21 +144,27 @@
 	bind:value={jogDegrees}
 	presets={[10, 180]}
 	max={MAX_JOG_DEGREES}
-	label="Turn the channel"
-	leftLabel="Turn the channel {jogDegrees}° {DIRECTION_WORDS.ccw}"
-	rightLabel="Turn the channel {jogDegrees}° {DIRECTION_WORDS.cw}"
-	amountLabel="Each press turns"
+	label={$_('components.cameraChannelControls.turnTheChannel')}
+	leftLabel={$_('components.cameraChannelControls.turnTheChannelBy', {
+		values: { degrees: jogDegrees, direction: DIRECTION_WORDS.ccw }
+	})}
+	rightLabel={$_('components.cameraChannelControls.turnTheChannelBy', {
+		values: { degrees: jogDegrees, direction: DIRECTION_WORDS.cw }
+	})}
+	amountLabel={$_('components.cameraChannelControls.eachPressTurns')}
 	busy={pendingSide}
 	onnudge={(side) => void moveOutputDegrees(side, side === 'left' ? -jogDegrees : jogDegrees)}
 	onchange={(degrees) => persistStoredStepperPulseSetting(stepperKey, JOG_FIELD, degrees)}
 />
 {#if shakes.length}
 	<Menu
-		label="Shake the channel"
+		label={$_('components.cameraChannelControls.shakeTheChannel')}
 		items={shakes.map((s) => ({ label: s.label, hint: s.blurb, onselect: () => void shake(s.key) }))}
 	>
 		{#snippet trigger(props)}
-			<Button {...props} size="sm" loading={shaking}>Shake</Button>
+			<Button {...props} size="sm" loading={shaking}
+				>{$_('components.cameraChannelControls.shakeButton')}</Button
+			>
 		{/snippet}
 	</Menu>
 {/if}

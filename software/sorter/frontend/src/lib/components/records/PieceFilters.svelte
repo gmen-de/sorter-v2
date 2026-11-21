@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import X from '@lucide/svelte/icons/x';
 	import { categoryLabel } from '$lib/components/bins/pieces';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -73,15 +74,15 @@
 	});
 
 	const runOptions = $derived([
-		{ value: '', label: 'Any run or lot' },
+		{ value: '', label: $_('components.records.pieceFilters.anyRunOrLot') },
 		...lots.map((l) => ({
 			value: `lot:${l.id}`,
-			label: `Lot: ${l.name}`,
+			label: $_('components.records.pieceFilters.lotOption', { values: { name: l.name } }),
 			hint: l.pieces.toLocaleString()
 		})),
 		...runs.map((r) => ({
 			value: `run:${r.id}`,
-			label: `Run: ${r.name}`,
+			label: $_('components.records.pieceFilters.runOption', { values: { name: r.name } }),
 			hint: r.pieces.toLocaleString()
 		}))
 	]);
@@ -97,7 +98,7 @@
 
 	// A bin as the pieces' rows write it (L1 · S2 · B2, counted from 1), with what it takes.
 	const binOptions = $derived([
-		{ value: '', label: 'Any bin' },
+		{ value: '', label: $_('components.records.pieceFilters.anyBin') },
 		...bins.map((b) => {
 			const categories = categoryLabel(b.categoryIds);
 			return {
@@ -115,8 +116,8 @@
 				bind:value={search}
 				size="sm"
 				class="w-full sm:w-80"
-				placeholder="Search part number, name, color or piece id"
-				aria-label="Search the pieces"
+				placeholder={$_('components.records.pieceFilters.searchPlaceholder')}
+				aria-label={$_('components.records.pieceFilters.searchAria')}
 				autocomplete="off"
 				spellcheck={false}
 				oninput={searchSoon}
@@ -128,7 +129,7 @@
 							size="sm"
 							variant="ghost"
 							icon={X}
-							label="Clear the search"
+							label={$_('components.records.pieceFilters.clearSearchButton')}
 							onclick={() => {
 								search = '';
 								searchNow();
@@ -139,7 +140,7 @@
 			</Input>
 			<Select
 				size="sm"
-				label="Status"
+				label={$_('components.records.pieceFilters.statusLabel')}
 				class="min-w-[9rem] flex-1 sm:w-36 sm:flex-none"
 				value={filters.status ?? ''}
 				options={statusOptions}
@@ -147,7 +148,7 @@
 			/>
 			<Select
 				size="sm"
-				label="Run or lot"
+				label={$_('components.records.pieceFilters.runOrLotLabel')}
 				class="min-w-[9rem] flex-1 sm:w-48 sm:flex-none"
 				value={runValue}
 				options={runOptions}
@@ -155,7 +156,7 @@
 			/>
 			<Select
 				size="sm"
-				label="Bin"
+				label={$_('components.records.pieceFilters.binLabel')}
 				class="min-w-[9rem] flex-1 sm:w-44 sm:flex-none"
 				value={filters.bin ?? ''}
 				options={binOptions}
@@ -166,7 +167,7 @@
 			<label
 				class="flex min-w-[9rem] flex-1 items-center gap-2 text-sm text-ink-muted sm:flex-none"
 			>
-				From
+				{$_('components.records.pieceFilters.fromLabel')}
 				<Input
 					type="date"
 					size="sm"
@@ -180,7 +181,7 @@
 			<label
 				class="flex min-w-[9rem] flex-1 items-center gap-2 text-sm text-ink-muted sm:flex-none"
 			>
-				To
+				{$_('components.records.pieceFilters.toLabel')}
 				<Input
 					type="date"
 					size="sm"
@@ -193,7 +194,7 @@
 			</label>
 			<Select
 				size="sm"
-				label="Review"
+				label={$_('components.records.pieceFilters.reviewLabel')}
 				class="min-w-[9rem] flex-1 sm:w-36 sm:flex-none"
 				value={filters.reviewed ?? ''}
 				options={reviewedOptions}
@@ -201,14 +202,16 @@
 			/>
 			<Select
 				size="sm"
-				label="Order"
+				label={$_('components.records.pieceFilters.orderLabel')}
 				class="min-w-[9rem] flex-1 sm:w-36 sm:flex-none"
 				value={filters.sort ?? ''}
 				options={sortOptions}
 				onchange={(sort) => list.setFilters({ sort: sort || null })}
 			/>
 			{#if filtering}
-				<Button size="sm" variant="ghost" icon={X} onclick={clear}>Clear filters</Button>
+				<Button size="sm" variant="ghost" icon={X} onclick={clear}>
+					{$_('components.records.pieceFilters.clearFiltersButton')}
+				</Button>
 			{/if}
 		</div>
 	</div>

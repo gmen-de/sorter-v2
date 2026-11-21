@@ -44,6 +44,7 @@
 	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import Upload from '@lucide/svelte/icons/upload';
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 
 	const manager = getMachinesContext();
 	const PROFILE_PAGE_SIZE_OPTIONS = [12, 24, 48] as const;
@@ -144,7 +145,7 @@
 			};
 			void loadLocalMetas();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to load sorting profile library';
+			error = e instanceof Error ? e.message : $_('routes.profiles.loadLibraryFailedFallback');
 		}
 	}
 
@@ -186,7 +187,7 @@
 			}
 			forgetChangedDetails(targetId, result.profiles);
 		} catch (e: unknown) {
-			const message = e instanceof Error ? e.message : 'Failed to load profiles';
+			const message = e instanceof Error ? e.message : $_('routes.profiles.loadProfilesFailedFallback');
 			if (library) {
 				library = {
 					...library,
@@ -264,7 +265,7 @@
 		} catch (e: unknown) {
 			detailErrors = {
 				...detailErrors,
-				[key]: e instanceof Error ? e.message : 'Failed to load profile versions'
+				[key]: e instanceof Error ? e.message : $_('routes.profiles.loadVersionsFailedFallback')
 			};
 			return null;
 		} finally {
@@ -293,7 +294,7 @@
 		} catch (e: unknown) {
 			versionDetailErrors = {
 				...versionDetailErrors,
-				[key]: e instanceof Error ? e.message : 'Failed to load this profile version'
+				[key]: e instanceof Error ? e.message : $_('routes.profiles.loadVersionFailedFallback')
 			};
 			return null;
 		} finally {
@@ -314,14 +315,14 @@
 		const key = detailKey(target.id, profile.id);
 		const detail = detailCache[key] ?? (await loadProfileDetail(target.id, profile));
 		if (!detail) {
-			error = detailErrors[key] ?? 'Failed to load profile versions.';
+			error = detailErrors[key] ?? $_('routes.profiles.loadVersionsFailedMessage');
 			return;
 		}
 		const version = versionId
 			? visibleVersions(detail).find((entry) => entry.id === versionId)
 			: visibleVersions(detail)[0];
 		if (!version) {
-			error = 'No version available for this profile.';
+			error = $_('routes.profiles.noVersionAvailable');
 			return;
 		}
 
@@ -350,15 +351,21 @@
 		try {
 			const payload = await applyProfile(baseUrl(), applyRequest);
 			if (payload.activation_error) {
-				success = `Using ${applyRequest.profile_name} locally. Bin assignments were reset.`;
-				warning = `Hive activation could not be confirmed: ${payload.activation_error}`;
+				success = $_('routes.profiles.usingProfileLocallyMsg', {
+					values: { name: applyRequest.profile_name }
+				});
+				warning = $_('routes.profiles.hiveActivationUnconfirmedMsg', {
+					values: { error: payload.activation_error }
+				});
 			} else {
-				success = `Using ${applyRequest.profile_name} on this machine. Bin assignments were reset.`;
+				success = $_('routes.profiles.usingProfileOnMachineMsg', {
+					values: { name: applyRequest.profile_name }
+				});
 			}
 			await sortingProfileStore.reload(baseUrl());
 			await loadLibrary();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to apply sorting profile';
+			error = e instanceof Error ? e.message : $_('routes.profiles.applyProfileFailedFallback');
 		} finally {
 			pendingApply = null;
 			applyingKey = null;
@@ -392,7 +399,7 @@
 		try {
 			await sortingProfileStore.reload(baseUrl());
 		} catch (e: unknown) {
-			metadataError = e instanceof Error ? e.message : 'Could not load the bins of this profile.';
+			metadataError = e instanceof Error ? e.message : $_('routes.profiles.loadBinsFailedFallback');
 		} finally {
 			metadataLoading = false;
 		}
@@ -427,14 +434,18 @@
 				},
 				{ keepBins: true }
 			);
-			success = `Updated ${info.profile.name} to v${version.version_number}. The bins kept what was in them.`;
+			success = $_('routes.profiles.updatedProfileMsg', {
+				values: { name: info.profile.name, version: version.version_number }
+			});
 			if (payload.activation_error) {
-				warning = `Hive activation could not be confirmed: ${payload.activation_error}`;
+				warning = $_('routes.profiles.hiveActivationUnconfirmedMsg', {
+					values: { error: payload.activation_error }
+				});
 			}
 			await sortingProfileStore.reload(baseUrl());
 			await loadLibrary();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to update the sorting profile';
+			error = e instanceof Error ? e.message : $_('routes.profiles.updateProfileFailedFallback');
 		} finally {
 			updating = false;
 		}
@@ -459,7 +470,7 @@
 			try {
 				artifact = JSON.parse(text);
 			} catch {
-				throw new Error('That file is not valid JSON.');
+				throw new Error($_('routes.profiles.invalidJsonError'));
 			}
 			const fallbackName = file.name.replace(/\.json$/i, '');
 			const artifactName =
@@ -468,9 +479,9 @@
 					: null;
 			await uploadLocalProfile(baseUrl(), artifact, artifactName || fallbackName);
 			await loadLibrary();
-			success = `Uploaded ${artifactName || fallbackName}.`;
+			success = $_('routes.profiles.uploadedMsg', { values: { name: artifactName || fallbackName } });
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to upload sorting profile';
+			error = e instanceof Error ? e.message : $_('routes.profiles.uploadFailedFallback');
 		} finally {
 			uploading = false;
 		}
@@ -494,14 +505,17 @@
 			const label = profile.name || profile.filename;
 			const preassigned = payload?.preassigned_count as number | undefined;
 			if (mode === 'rules' && preassigned) {
-				success = `Using ${label}. Pre-assigned ${preassigned} bin${preassigned === 1 ? '' : 's'}.`;
+				success =
+					preassigned === 1
+						? $_('routes.profiles.preassignedMsgSingular', { values: { label, count: preassigned } })
+						: $_('routes.profiles.preassignedMsgPlural', { values: { label, count: preassigned } });
 			} else {
-				success = `Using ${label} on this machine. Bin assignments were reset.`;
+				success = $_('routes.profiles.usingProfileOnMachineMsg', { values: { name: label } });
 			}
 			await sortingProfileStore.reload(baseUrl());
 			await loadLibrary();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to apply local sorting profile';
+			error = e instanceof Error ? e.message : $_('routes.profiles.applyLocalFailedFallback');
 		} finally {
 			localApplyingFilename = null;
 		}
@@ -516,9 +530,9 @@
 		try {
 			await deleteLocalProfile(baseUrl(), profile.filename);
 			await loadLibrary();
-			success = `Deleted ${profile.name || profile.filename}.`;
+			success = $_('routes.profiles.deletedMsg', { values: { name: profile.name || profile.filename } });
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to delete local sorting profile';
+			error = e instanceof Error ? e.message : $_('routes.profiles.deleteLocalFailedFallback');
 		} finally {
 			deletingFilename = null;
 		}
@@ -533,9 +547,9 @@
 			await callReloadRuntime(baseUrl());
 			await sortingProfileStore.reload(baseUrl());
 			await loadLibrary();
-			success = 'Reloaded the current sorting profile from disk.';
+			success = $_('routes.profiles.reloadedMsg');
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to reload sorting profile';
+			error = e instanceof Error ? e.message : $_('routes.profiles.reloadFailedFallback');
 		} finally {
 			reloadingRuntime = false;
 		}
@@ -610,14 +624,16 @@
 
 	function paginationSummary(): string {
 		const filtered = filteredProfileEntries();
-		if (filtered.length === 0) return '0 profiles';
+		if (filtered.length === 0) return $_('routes.profiles.noProfilesSummary');
 		if (filtered.length <= pageSize) {
-			return `${filtered.length} profile${filtered.length === 1 ? '' : 's'}`;
+			return filtered.length === 1
+				? $_('routes.profiles.profileCountSingular', { values: { count: filtered.length } })
+				: $_('routes.profiles.profileCountPlural', { values: { count: filtered.length } });
 		}
 		const page = currentListPage();
 		const start = (page - 1) * pageSize + 1;
 		const end = Math.min(page * pageSize, filtered.length);
-		return `${start}-${end} of ${filtered.length}`;
+		return $_('routes.profiles.rangeOfTotal', { values: { start, end, total: filtered.length } });
 	}
 
 	function visiblePageNumbers(): number[] {
@@ -805,23 +821,23 @@
 	});
 </script>
 
-<svelte:head><title>Sorting profiles - Sorter</title></svelte:head>
+<svelte:head><title>{$_('routes.profiles.pageTitle')}</title></svelte:head>
 
 <AppShell>
 	<div class="mx-auto flex w-full max-w-[1500px] flex-col gap-(--gap-panels) px-4 py-6 sm:px-6">
-		<PageHeader title="Sorting profiles" description="The rules that decide which bin each piece goes to.">
+		<PageHeader title={$_('routes.profiles.title')} description={$_('routes.profiles.description')}>
 			{#snippet actions()}
 				<Input
 					type="search"
-					aria-label="Search profiles"
-					placeholder="Search profiles, sets, tags, owners"
+					aria-label={$_('routes.profiles.searchAriaLabel')}
+					placeholder={$_('routes.profiles.searchPlaceholder')}
 					class="w-72 max-w-full"
 					bind:value={searchQuery}
 					oninput={() => (currentPage = 1)}
 				/>
 				<Button
 					icon={RotateCw}
-					label="Reload the runtime profile from disk"
+					label={$_('routes.profiles.reloadButtonLabel')}
 					loading={reloadingRuntime}
 					onclick={reloadRuntime}
 				/>
@@ -859,9 +875,9 @@
 
 		<section class="flex flex-col gap-3">
 			<div class="flex items-center justify-between gap-3">
-				<h2 class="text-base font-semibold text-ink">Local profiles</h2>
+				<h2 class="text-base font-semibold text-ink">{$_('routes.profiles.localProfilesHeading')}</h2>
 				<Button size="sm" icon={Upload} loading={uploading} onclick={() => fileInput?.click()}>
-					Upload JSON
+					{$_('routes.profiles.uploadJsonButton')}
 				</Button>
 			</div>
 
@@ -872,8 +888,8 @@
 					{/each}
 				</div>
 			{:else if localProfiles().length === 0}
-				<EmptyState title="No local profiles are saved yet">
-					Upload a profile JSON to keep it on this machine.
+				<EmptyState title={$_('routes.profiles.noLocalProfilesTitle')}>
+					{$_('routes.profiles.noLocalProfilesBody')}
 				</EmptyState>
 			{:else}
 				<div class="grid grid-cols-1 gap-(--gap-panels) sm:grid-cols-2 xl:grid-cols-3">
@@ -895,7 +911,7 @@
 		</section>
 
 		<section class="flex flex-col gap-3">
-			<h2 class="text-base font-semibold text-ink">Profiles from Hive</h2>
+			<h2 class="text-base font-semibold text-ink">{$_('routes.profiles.hiveProfilesHeading')}</h2>
 
 			{#if library == null}
 				{#if !error}
@@ -906,13 +922,18 @@
 					</div>
 				{/if}
 			{:else if library.targets.length === 0}
-				<EmptyState title="No Hive targets are configured on this machine">
-					{#if library.local_profile.name}The active local profile above still works. {/if}Add one in
-					<a href="/settings" class="text-primary-ink hover:underline">Settings</a>.
+				<EmptyState title={$_('routes.profiles.noHiveTargetsTitle')}>
+					{#if library.local_profile.name}{$_('routes.profiles.activeProfileStillWorksNote')} {/if}{$_(
+						'routes.profiles.addOneInPrefix'
+					)}
+					<a href="/settings" class="text-primary-ink hover:underline">{$_('routes.profiles.settingsLinkLabel')}</a
+					>.
 				</EmptyState>
 			{:else}
 				{#if normalizedSearchQuery() && filteredProfileEntries().length === 0}
-					<EmptyState title="No profiles match “{searchQuery.trim()}”" />
+					<EmptyState
+						title={$_('routes.profiles.noProfilesMatchTitle', { values: { query: searchQuery.trim() } })}
+					/>
 				{/if}
 
 				{#each targetErrors() as target}
@@ -997,45 +1018,45 @@
 	error={metadataError}
 />
 
-<Modal bind:open={localApplyOpen} title="Activate the local profile">
+<Modal bind:open={localApplyOpen} title={$_('routes.profiles.activateLocalModalTitle')}>
 	{#if pendingLocal !== null}
 		{@const profile = pendingLocal}
 		<div class="flex flex-col gap-4">
 			<p>
-				Activate <span class="font-semibold">{profile.name || profile.filename}</span>? Choose how the bins
-				start.
+				{$_('routes.profiles.activatePrefix')} <span class="font-semibold">{profile.name || profile.filename}</span
+				>{$_('routes.profiles.activateSuffix')}
 			</p>
 			<dl class="flex flex-col gap-2 rounded-control bg-well p-3 text-ink-muted">
 				<div>
-					<dt class="inline font-medium text-ink">Reset (dynamic):</dt>
-					<dd class="inline">clear every bin; categories are assigned as pieces arrive.</dd>
+					<dt class="inline font-medium text-ink">{$_('routes.profiles.resetDynamicTerm')}</dt>
+					<dd class="inline">{$_('routes.profiles.resetDynamicDesc')}</dd>
 				</div>
 				<div>
-					<dt class="inline font-medium text-ink">Pre-assign (rule order):</dt>
-					<dd class="inline">seed the bins in the order of the profile's rules.</dd>
+					<dt class="inline font-medium text-ink">{$_('routes.profiles.preassignRuleOrderTerm')}</dt>
+					<dd class="inline">{$_('routes.profiles.preassignRuleOrderDesc')}</dd>
 				</div>
 			</dl>
 		</div>
 	{/if}
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (localApplyOpen = false)}>Cancel</Button>
-		<Button onclick={() => void confirmApplyLocal('empty')}>Reset the bins</Button>
+		<Button variant="ghost" onclick={() => (localApplyOpen = false)}>{$_('routes.profiles.cancelButton')}</Button>
+		<Button onclick={() => void confirmApplyLocal('empty')}>{$_('routes.profiles.resetBinsButton')}</Button>
 		<Button variant="primary" onclick={() => void confirmApplyLocal('rules')}>
-			Pre-assign from the rules
+			{$_('routes.profiles.preassignFromRulesButton')}
 		</Button>
 	{/snippet}
 </Modal>
 
-<Modal bind:open={localDeleteOpen} title="Delete the local profile" size="sm">
+<Modal bind:open={localDeleteOpen} title={$_('routes.profiles.deleteLocalModalTitle')} size="sm">
 	{#if pendingDelete !== null}
 		{@const profile = pendingDelete}
 		<p>
-			Delete <span class="font-semibold">{profile.name || profile.filename}</span> from this machine? This
-			removes the saved JSON file.
+			{$_('routes.profiles.deletePrefix')} <span class="font-semibold">{profile.name || profile.filename}</span>
+			{$_('routes.profiles.deleteSuffix')}
 		</p>
 	{/if}
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (localDeleteOpen = false)}>Cancel</Button>
-		<Button variant="danger" onclick={() => void confirmDeleteLocal()}>Delete profile</Button>
+		<Button variant="ghost" onclick={() => (localDeleteOpen = false)}>{$_('routes.profiles.cancelButton')}</Button>
+		<Button variant="danger" onclick={() => void confirmDeleteLocal()}>{$_('routes.profiles.deleteProfileButton')}</Button>
 	{/snippet}
 </Modal>

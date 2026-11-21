@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
 	import Switch from '$lib/components/ui/Switch.svelte';
@@ -156,7 +157,7 @@
 			applyStatus(await res.json());
 			errorMsg = null;
 		} catch (e: any) {
-			errorMsg = e?.message ?? 'Failed to load sample-capture status.';
+			errorMsg = e?.message ?? $_('components.settings.sampleCaptureSection.errors.loadFailed');
 		} finally {
 			if (showLoading) loading = false;
 		}
@@ -174,7 +175,7 @@
 			if (!res.ok) throw new Error(await res.text());
 			applyStatus(await res.json());
 		} catch (e: any) {
-			errorMsg = e?.message ?? 'Failed to update sample capture.';
+			errorMsg = e?.message ?? $_('components.settings.sampleCaptureSection.errors.saveFailed');
 		} finally {
 			saving = false;
 		}
@@ -232,9 +233,16 @@
 	const hiveRampH = $derived(hive ? round(hive.sample_ramp_hours, 2) : null);
 	const hiveCapGb = $derived(hive ? round(hive.sample_store_max_bytes / GB, 2) : null);
 
-	const hint = (n: number | null) => (n === null ? undefined : `Hive: ${n}`);
+	const hint = (n: number | null) =>
+		n === null
+			? undefined
+			: $_('components.settings.sampleCaptureSection.hiveHintLabel', { values: { value: n } });
 	const followText = (n: number | null, unit: string) =>
-		n === null ? undefined : `Hive (${n} ${unit})`;
+		n === null
+			? undefined
+			: $_('components.settings.sampleCaptureSection.followHiveLabel', {
+					values: { value: n, unit }
+				});
 
 	// Decay curve for the graph: geometric growth of the interval from burst to
 	// floor across the ramp — a straight line in log space, plotted as rate.
@@ -276,46 +284,52 @@
 
 <div class="divide-y divide-line">
 	<SettingRow
-		label="Capture training frames"
-		info="Takes the latest frame from every live camera at the rate below, only while the machine is sorting. Frames are saved to a capped store on this machine and uploaded to Hive in the background. It never changes how the machine sorts."
+		label={$_('components.settings.sampleCaptureSection.captureTrainingFrames.label')}
+		info={$_('components.settings.sampleCaptureSection.captureTrainingFrames.info')}
 		changed={enabled !== defaults.enabled}
-		defaultText={defaults.enabled ? 'on' : 'off'}
+		defaultText={defaults.enabled
+			? $_('components.settings.sampleCaptureSection.onOffLabels.on')
+			: $_('components.settings.sampleCaptureSection.onOffLabels.off')}
 		onreset={() => saveEnabled(defaults.enabled)}
 	>
 		<Switch
 			checked={enabled}
-			label="Capture training frames"
+			label={$_('components.settings.sampleCaptureSection.captureTrainingFrames.label')}
 			disabled={loading || saving || !initialized}
 			onchange={(on) => saveEnabled(on)}
 		/>
 	</SettingRow>
 
 	<SettingRow
-		label="Annotate with OpenRouter"
-		info="Runs the Gemini (gemini_sam) detector on each frame before it is saved, so samples reach Hive as teacher captures. It makes one OpenRouter call per frame per camera. Off, or with no API key, frames are saved and uploaded raw."
+		label={$_('components.settings.sampleCaptureSection.annotateOpenRouter.label')}
+		info={$_('components.settings.sampleCaptureSection.annotateOpenRouter.info')}
 		changed={annotate !== defaults.annotate}
-		defaultText={defaults.annotate ? 'on' : 'off'}
+		defaultText={defaults.annotate
+			? $_('components.settings.sampleCaptureSection.onOffLabels.on')
+			: $_('components.settings.sampleCaptureSection.onOffLabels.off')}
 		onreset={() => saveAnnotate(defaults.annotate)}
 	>
 		<Switch
 			checked={annotate}
-			label="Annotate with OpenRouter"
+			label={$_('components.settings.sampleCaptureSection.annotateOpenRouter.label')}
 			disabled={loading || saving || !initialized}
 			onchange={(on) => saveAnnotate(on)}
 		/>
 	</SettingRow>
 
 	<SettingRow
-		label="Decay capture rate"
-		info="Takes a burst of frames when a run starts, then slows down to a floor over the ramp, with random jitter, so the same rig stops saving near-identical frames forever. Reset decay starts the burst again."
+		label={$_('components.settings.sampleCaptureSection.decayCaptureRate.label')}
+		info={$_('components.settings.sampleCaptureSection.decayCaptureRate.info')}
 		changed={decayEnabled !== defaults.decayEnabled}
-		defaultText={defaults.decayEnabled ? 'on' : 'off'}
+		defaultText={defaults.decayEnabled
+			? $_('components.settings.sampleCaptureSection.onOffLabels.on')
+			: $_('components.settings.sampleCaptureSection.onOffLabels.off')}
 		onreset={() => saveDecayEnabled(defaults.decayEnabled)}
 		below={decayEnabled ? decayDetails : undefined}
 	>
 		<Switch
 			checked={decayEnabled}
-			label="Decay capture rate"
+			label={$_('components.settings.sampleCaptureSection.decayCaptureRate.label')}
 			disabled={loading || saving || !initialized}
 			onchange={(on) => saveDecayEnabled(on)}
 		/>
@@ -323,8 +337,8 @@
 
 	{#if !decayEnabled}
 		<SettingRow
-			label="Capture rate"
-			info="Frames per minute per camera: at most 0.5, one every 2 minutes."
+			label={$_('components.settings.sampleCaptureSection.captureRate.label')}
+			info={$_('components.settings.sampleCaptureSection.captureRate.info')}
 			for="sample-capture-rate"
 			changed={perMinute !== defaults.perMinute}
 			defaultText={String(defaults.perMinute)}
@@ -346,12 +360,12 @@
 	{/if}
 
 	<SettingRow
-		label="Sample store size"
-		info="Keep at most this much on this machine, never more than Hive allows. When it is full, samples every Hive already has are deleted first, then the oldest."
+		label={$_('components.settings.sampleCaptureSection.sampleStoreSize.label')}
+		info={$_('components.settings.sampleCaptureSection.sampleStoreSize.info')}
 		for="sample-capture-storage-cap"
 		changed={local.store_max_mb !== null}
 		defaultText={followText(hiveCapGb, 'GB')}
-		defaultHelp="Follow the size Hive sets again."
+		defaultHelp={$_('components.settings.sampleCaptureSection.sampleStoreSize.defaultHelp')}
 		onreset={() => followHive('storage_cap_mb')}
 	>
 		<Input
@@ -374,28 +388,38 @@
 
 	<div class="flex flex-col gap-1 px-(--pad-panel) py-(--pad-row) text-sm text-ink-muted">
 		{#if !initialized && !loading}
-			<p>The sample collector hasn't started on this machine (no camera service yet).</p>
+			<p>{$_('components.settings.sampleCaptureSection.notInitialized')}</p>
 		{/if}
 		{#if store && store.dropped_queue_full > 0}
 			<p class="text-warning-ink">
-				<span class="num font-medium">{store.dropped_queue_full.toLocaleString()}</span> frames dropped since
-				startup because saving could not keep up.
+				{$_('components.settings.sampleCaptureSection.droppedQueueFull', {
+					values: { count: store.dropped_queue_full.toLocaleString() }
+				})}
 			</p>
 		{/if}
 		{#if store && store.skipped_low_disk > 0}
 			<p class="text-warning-ink">
-				<span class="num font-medium">{store.skipped_low_disk.toLocaleString()}</span> frames skipped since
-				startup because the disk was low on space.
+				{$_('components.settings.sampleCaptureSection.skippedLowDisk', {
+					values: { count: store.skipped_low_disk.toLocaleString() }
+				})}
 			</p>
 		{/if}
 		<p>
-			Saved since startup: <span class="num font-medium text-ink">{savedCount}</span>{#if enabled && lastSavedAgeS !== null},
-				the last one {lastSavedAgeS.toFixed(1)} s ago{/if}.
+			{$_('components.settings.sampleCaptureSection.savedSinceStartup', {
+				values: { count: savedCount }
+			})}{#if enabled && lastSavedAgeS !== null}{$_(
+					'components.settings.sampleCaptureSection.lastSavedAgo',
+					{ values: { seconds: lastSavedAgeS.toFixed(1) } }
+				)}{/if}.
 		</p>
 		{#if errorMsg}
 			<p class="text-danger-ink">{errorMsg}</p>
 		{:else if lastError}
-			<p class="text-danger-ink">The last capture failed: {lastError}</p>
+			<p class="text-danger-ink">
+				{$_('components.settings.sampleCaptureSection.lastCaptureFailed', {
+					values: { message: lastError }
+				})}
+			</p>
 		{/if}
 	</div>
 </div>
@@ -404,10 +428,16 @@
 	<div class="flex flex-col gap-3 px-(--pad-panel) py-3 sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex min-w-0 flex-col items-start gap-1">
 			<p class="num text-sm text-ink-muted">
-				Every <span class="font-medium text-ink">{formatInterval(burstS)}</span>, slowing to every
-				<span class="font-medium text-ink">{formatInterval(floorS)}</span> over
-				<span class="font-medium text-ink">{formatInterval(rampH * 3600)}</span>{#if currentIntervalS !== null}.
-					Now every <span class="font-medium text-ink">{formatInterval(currentIntervalS)}</span>{/if}.
+				{$_('components.settings.sampleCaptureSection.decayDetails.sentence', {
+					values: {
+						burst: formatInterval(burstS),
+						floor: formatInterval(floorS),
+						ramp: formatInterval(rampH * 3600)
+					}
+				})}{#if currentIntervalS !== null}{$_(
+						'components.settings.sampleCaptureSection.decayDetails.sentenceNow',
+						{ values: { current: formatInterval(currentIntervalS) } }
+					)}{/if}
 			</p>
 			<Button
 				variant="ghost"
@@ -416,14 +446,14 @@
 				disabled={loading || saving || !initialized}
 				onclick={resetDecay}
 			>
-				Reset decay
+				{$_('components.settings.sampleCaptureSection.decayDetails.resetDecayButton')}
 			</Button>
 		</div>
 		<svg
 			viewBox="0 0 {GRAPH_W} {GRAPH_H}"
 			class="block h-16 w-52 shrink-0"
 			role="img"
-			aria-label="The capture rate falling from the burst rate to the floor over the ramp"
+			aria-label={$_('components.settings.sampleCaptureSection.decayDetails.graphAriaLabel')}
 		>
 			<line
 				x1={PAD_X}
@@ -468,12 +498,12 @@
 	</div>
 	<div class="divide-y divide-line">
 		<SettingRow
-			label="Burst interval"
-			info="Seconds between frames per camera right after a reset. Never faster than Hive allows, nor than one every 2 minutes."
+			label={$_('components.settings.sampleCaptureSection.burstInterval.label')}
+			info={$_('components.settings.sampleCaptureSection.burstInterval.info')}
 			for="decay-burst"
 			changed={local.burst_interval_s !== null}
 			defaultText={followText(hiveBurst, 's')}
-			defaultHelp="Follow the interval Hive sets again."
+			defaultHelp={$_('components.settings.sampleCaptureSection.burstInterval.defaultHelp')}
 			onreset={() => followHive('burst_interval_s')}
 		>
 			<Input
@@ -494,12 +524,12 @@
 		</SettingRow>
 
 		<SettingRow
-			label="Floor interval"
-			info="Minutes between frames per camera once the decay has settled."
+			label={$_('components.settings.sampleCaptureSection.floorInterval.label')}
+			info={$_('components.settings.sampleCaptureSection.floorInterval.info')}
 			for="decay-floor"
 			changed={local.floor_interval_s !== null}
 			defaultText={followText(hiveFloorMin, 'min')}
-			defaultHelp="Follow the interval Hive sets again."
+			defaultHelp={$_('components.settings.sampleCaptureSection.floorInterval.defaultHelp')}
 			onreset={() => followHive('floor_interval_s')}
 		>
 			<Input
@@ -518,12 +548,12 @@
 		</SettingRow>
 
 		<SettingRow
-			label="Ramp"
-			info="Hours to go from the burst interval to the floor interval."
+			label={$_('components.settings.sampleCaptureSection.ramp.label')}
+			info={$_('components.settings.sampleCaptureSection.ramp.info')}
 			for="decay-ramp"
 			changed={local.ramp_hours !== null}
 			defaultText={followText(hiveRampH, 'h')}
-			defaultHelp="Follow the ramp Hive sets again."
+			defaultHelp={$_('components.settings.sampleCaptureSection.ramp.defaultHelp')}
 			onreset={() => followHive('ramp_hours')}
 		>
 			<Input
@@ -541,8 +571,8 @@
 		</SettingRow>
 
 		<SettingRow
-			label="Jitter"
-			info="Random wobble on each interval so captures aren't perfectly periodic."
+			label={$_('components.settings.sampleCaptureSection.jitter.label')}
+			info={$_('components.settings.sampleCaptureSection.jitter.info')}
 			for="decay-jitter"
 			changed={jitterPct !== DEFAULT_JITTER_PCT}
 			defaultText="{DEFAULT_JITTER_PCT}%"

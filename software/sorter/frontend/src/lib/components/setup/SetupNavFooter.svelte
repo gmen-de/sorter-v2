@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import CheckCircle2 from '@lucide/svelte/icons/circle-check';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
@@ -35,7 +36,9 @@
 	{#if blockerReason}<p class="text-sm text-ink-muted sm:mr-auto">{blockerReason}</p>{/if}
 	<div class="flex flex-wrap items-center gap-2">
 		{#if showBack}
-			<Button variant="ghost" icon={ChevronLeft} onclick={onBack}>Back</Button>
+			<Button variant="ghost" icon={ChevronLeft} onclick={onBack}
+				>{$_('components.setup.setupNavFooter.back')}</Button
+			>
 		{/if}
 		{#if showFinish}
 			<Button variant="primary" icon={CheckCircle2} disabled={finishDisabled} onclick={onFinish}>

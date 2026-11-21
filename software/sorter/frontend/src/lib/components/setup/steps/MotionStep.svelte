@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Cable from '@lucide/svelte/icons/cable';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -93,7 +94,12 @@
 					: family === 'generic_sorter_interface'
 						? 'Generic'
 						: family;
-		const roleShort = role === 'feeder' ? 'Feeder' : role === 'distribution' ? 'Distributor' : role;
+		const roleShort =
+			role === 'feeder'
+				? $_('components.setup.steps.motionStep.boardRole.feeder')
+				: role === 'distribution'
+					? $_('components.setup.steps.motionStep.boardRole.distributor')
+					: role;
 		return `${familyShort} ${roleShort}`;
 	}
 
@@ -106,7 +112,9 @@
 	function stepperLocationLabel(entry: StepperDirectionEntry): string {
 		const board = stepperBoardForEntry(entry);
 		if (!board) {
-			return entry.available ? 'Live stepper available' : 'Not connected';
+			return entry.available
+				? $_('components.setup.steps.motionStep.stepperAvailable')
+				: $_('components.setup.steps.motionStep.notConnected');
 		}
 		const boardLabel = boardShortLabel(board.family, board.role);
 		const port = STEPPER_BOARD_PORT_LABELS[board.family]?.[entry.name];
@@ -124,30 +132,39 @@
 		<Alert tone="danger">
 			{hardwareError}
 			{#snippet actions()}
-				<Button size="sm" icon={RotateCcw} disabled={steppersInitializing} onclick={onInitialize}>Retry</Button>
+				<Button size="sm" icon={RotateCcw} disabled={steppersInitializing} onclick={onInitialize}
+					>{$_('components.setup.steps.motionStep.retry')}</Button
+				>
 			{/snippet}
 		</Alert>
 	{/if}
 	{#if hardwareState === 'standby' && !hardwareError && !steppersInitializing}
-		<Alert tone="info" title="The steppers are off.">
+		<Alert tone="info" title={$_('components.setup.steps.motionStep.steppersOff.title')}>
 			{#snippet actions()}
-				<Button size="sm" onclick={onInitialize}>Power on the steppers</Button>
+				<Button size="sm" onclick={onInitialize}
+					>{$_('components.setup.steps.motionStep.steppersOff.powerOnButton')}</Button
+				>
 			{/snippet}
 		</Alert>
 	{/if}
 	{#if steppersInitializing}
-		<Alert tone="warning" title="Powering on the steppers…">
-			{homingStep ?? 'Finding the hardware'}. The jog buttons unlock once the boards are ready.
+		<Alert tone="warning" title={$_('components.setup.steps.motionStep.poweringOn.title')}>
+			{homingStep ?? $_('components.setup.steps.motionStep.poweringOn.fallbackStep')}.
+			{$_('components.setup.steps.motionStep.poweringOn.unlockHint')}
 		</Alert>
 	{/if}
 
 	<Panel
-		title="Each axis"
-		description="Use very short jogs on an empty machine to check that each axis turns the expected way. Reverse any that runs the wrong way, then mark this step done; the next step covers endstops and homing."
+		title={$_('components.setup.steps.motionStep.axisPanel.title')}
+		description={$_('components.setup.steps.motionStep.axisPanel.description')}
 	>
 		{#snippet actions()}
 			<Button size="sm" variant="ghost" icon={Cable} onclick={() => (showStepperWiringHelp = !showStepperWiringHelp)}>
-				<span class="max-sm:sr-only">{showStepperWiringHelp ? 'Hide the wiring' : 'Show the wiring'}</span>
+				<span class="max-sm:sr-only"
+					>{showStepperWiringHelp
+						? $_('components.setup.steps.motionStep.wiring.hide')
+						: $_('components.setup.steps.motionStep.wiring.show')}</span
+				>
 			</Button>
 		{/snippet}
 		{#if showStepperWiringHelp}
@@ -155,19 +172,19 @@
 				<a href={SKR_PICO_WIRING_DIAGRAM_URL} target="_blank" rel="noopener noreferrer" class="block">
 					<img
 						src={SKR_PICO_WIRING_DIAGRAM_URL}
-						alt="SKR Pico V1.0 wiring diagram"
+						alt={$_('components.setup.steps.motionStep.wiringDiagram.imageAlt')}
 						loading="lazy"
 						class="block h-auto w-full rounded-control"
 					/>
 				</a>
 				<div class="flex flex-col gap-2 text-sm">
-					<h3 class="font-medium text-ink">SKR Pico stepper wiring</h3>
+					<h3 class="font-medium text-ink">{$_('components.setup.steps.motionStep.wiringDiagram.heading')}</h3>
 					<p class="text-ink-muted">
-						The SKR Pico V1.0 stepper headers the feeder and distributor boards use.
+						{$_('components.setup.steps.motionStep.wiringDiagram.description')}
 					</p>
 					<table class="data-table">
 						<tbody>
-							{#each [['C-channel 1', 'SKR feeder · E0'], ['C-channel 2', 'SKR feeder · X'], ['C-channel 3', 'SKR feeder · Y'], ['Carousel', 'SKR feeder · Z1'], ['Chute', 'SKR distributor · E0']] as [axis, port] (axis)}
+							{#each [[$_('components.setup.steps.motionStep.axisNames.cChannel1'), 'SKR feeder · E0'], [$_('components.setup.steps.motionStep.axisNames.cChannel2'), 'SKR feeder · X'], [$_('components.setup.steps.motionStep.axisNames.cChannel3'), 'SKR feeder · Y'], [$_('components.setup.steps.motionStep.axisNames.carousel'), 'SKR feeder · Z1'], [$_('components.setup.steps.motionStep.axisNames.chute'), 'SKR distributor · E0']] as [axis, port] (axis)}
 								<tr><td>{axis}</td><td class="font-mono text-ink-muted">{port}</td></tr>
 							{/each}
 						</tbody>
@@ -190,16 +207,18 @@
 							<p class="text-ink-muted">{stepperLocationLabel(entry)}</p>
 						</div>
 						<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
-							{#if isVerified}<Badge tone="success">Checked</Badge>{/if}
+							{#if isVerified}<Badge tone="success">{$_('components.setup.steps.motionStep.checked')}</Badge>{/if}
 							<Badge tone={entry.inverted ? 'warning' : undefined}>
-								{entry.inverted ? 'Inverted' : 'Normal'}
+								{entry.inverted
+									? $_('components.setup.steps.motionStep.direction.inverted')
+									: $_('components.setup.steps.motionStep.direction.normal')}
 							</Badge>
 						</div>
 					</div>
 					{#if picture}
 						<img
 							src={picture}
-							alt={`${entry.label} seen from above, with an arrow showing clockwise`}
+							alt={$_('components.setup.steps.motionStep.pictureAlt', { values: { label: entry.label } })}
 							loading="lazy"
 							class="aspect-4/3 w-full rounded-control object-cover"
 						/>
@@ -210,21 +229,23 @@
 						disabled={!steppersLive || !!stepperBusy[`${entry.name}:cw`]}
 						onclick={() => onPulse(entry.name, 'cw')}
 					>
-						Jog
+						{$_('components.setup.steps.motionStep.jog')}
 					</Button>
-					<p class="text-center text-sm text-ink-muted">Which way did it turn, seen from above?</p>
+					<p class="text-center text-sm text-ink-muted">
+						{$_('components.setup.steps.motionStep.whichWayHint')}
+					</p>
 					<div class="grid grid-cols-2 gap-2">
 						<Button
 							disabled={!steppersLive || togglingStepper === entry.name}
 							onclick={() => onRecordObservedDirection(entry, 'cw')}
 						>
-							Clockwise
+							{$_('components.setup.steps.motionStep.clockwise')}
 						</Button>
 						<Button
 							disabled={!steppersLive || togglingStepper === entry.name}
 							onclick={() => onRecordObservedDirection(entry, 'ccw')}
 						>
-							Counterclockwise
+							{$_('components.setup.steps.motionStep.counterclockwise')}
 						</Button>
 					</div>
 				</section>

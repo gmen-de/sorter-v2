@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import ArchiveX from '@lucide/svelte/icons/archive-x';
 	import Crosshair from '@lucide/svelte/icons/crosshair';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -87,20 +88,27 @@
 	// which drops the bin's assignment, comes last.
 	const menuItems = $derived.by((): MenuEntry[] => {
 		const items: MenuEntry[] = [
-			{ label: 'Assign categories', icon: Tag, onselect: onOpenDetails },
+			{ label: $_('components.bins.binCard.menu.assignCategories'), icon: Tag, onselect: onOpenDetails },
 			{
-				label: bin.not_in_inventory ? 'Back to normal sorting' : 'Use for not in inventory',
+				label: bin.not_in_inventory
+					? $_('components.bins.binCard.menu.backToNormalSorting')
+					: $_('components.bins.binCard.menu.useForNotInInventory'),
 				icon: PackageX,
 				onselect: () => onToggleNii(!bin.not_in_inventory),
 				disabled: niiDisabled
 			}
 		];
 		if (contents && contents.piece_count > 0) {
-			items.push({ label: 'Empty this bin', icon: FolderOutput, onselect: onEmpty, disabled: clearDisabled });
+			items.push({
+				label: $_('components.bins.binCard.menu.emptyThisBin'),
+				icon: FolderOutput,
+				onselect: onEmpty,
+				disabled: clearDisabled
+			});
 		}
 		if (bin.category_ids.length > 0) {
 			items.push('separator', {
-				label: 'Reset this bin and clear its assignment',
+				label: $_('components.bins.binCard.menu.resetThisBin'),
 				icon: ArchiveX,
 				onselect: onReset,
 				disabled: clearDisabled,
@@ -134,7 +142,9 @@
 				class="num shrink-0 rounded-badge bg-hover px-1.5 text-xs leading-5 font-medium {isCurrent
 					? 'text-success-ink'
 					: 'text-ink-muted'}"
-				title={`Bin ${bin.global_index + 1}: section ${bin.section_index + 1}, slot ${bin.bin_index + 1}`}
+				title={$_('components.bins.binCard.binTitle', {
+					values: { global: bin.global_index + 1, section: bin.section_index + 1, slot: bin.bin_index + 1 }
+				})}
 			>
 				{bin.global_index + 1}
 			</span>
@@ -143,13 +153,16 @@
 					class="line-clamp-2 min-w-0 text-sm leading-5 {catLabel
 						? `font-medium ${isCurrent ? 'text-success-ink' : 'text-ink'}`
 						: 'text-ink-muted'}"
-					title={catLabel || 'No category assigned'}
+					title={catLabel || $_('components.bins.binCard.category.none')}
 				>
-					{catLabel || (bin.not_in_inventory ? 'Any category' : 'Unassigned')}
+					{catLabel ||
+						(bin.not_in_inventory
+							? $_('components.bins.binCard.category.anyCategory')
+							: $_('components.bins.binCard.category.unassigned'))}
 				</span>
 				{#if bin.not_in_inventory}
-					<span title="Takes only pieces missing from the active BrickLink inventory (.bsx)">
-						<Badge tone="info">Not in inventory</Badge>
+					<span title={$_('components.bins.binCard.notInInventory.title')}>
+						<Badge tone="info">{$_('components.bins.binCard.notInInventory.badge')}</Badge>
 					</span>
 				{/if}
 			</div>
@@ -159,19 +172,19 @@
 				size="sm"
 				variant="ghost"
 				icon={Crosshair}
-				label="Move the chute to bin {bin.global_index + 1}"
+				label={$_('components.bins.binCard.moveButton', { values: { n: bin.global_index + 1 } })}
 				loading={isMoving}
 				disabled={moveDisabled}
 				onclick={onMoveTo}
 			/>
-			<Menu label="Bin {bin.global_index + 1} actions" items={menuItems}>
+			<Menu label={$_('components.bins.binCard.menuLabel', { values: { n: bin.global_index + 1 } })} items={menuItems}>
 				{#snippet trigger(props)}
 					<Button
 						{...props}
 						size="sm"
 						variant="ghost"
 						icon={Ellipsis}
-						label="More actions for bin {bin.global_index + 1}"
+						label={$_('components.bins.binCard.moreActionsButton', { values: { n: bin.global_index + 1 } })}
 					/>
 				{/snippet}
 			</Menu>
@@ -186,7 +199,7 @@
 				<ProgressBar
 					value={fillCount}
 					max={maxPiecesPerBin}
-					label="Pieces in the bin"
+					label={$_('components.bins.binCard.piecesInBinLabel')}
 					tone={isFull ? 'danger' : isNearFull ? 'warning' : 'primary'}
 				/>
 			</div>
@@ -196,7 +209,9 @@
 	<button
 		type="button"
 		onclick={onOpenDetails}
-		aria-label="Open bin {bin.global_index + 1}{catLabel ? `, ${catLabel}` : ''}"
+		aria-label="{$_('components.bins.binCard.openBinAria', {
+			values: { n: bin.global_index + 1 }
+		})}{catLabel ? `, ${catLabel}` : ''}"
 		class="-mx-1 flex min-h-[5rem] flex-1 flex-col items-stretch justify-start rounded-item p-1 text-left transition-colors {layerEnabled
 			? 'hover:bg-hover'
 			: 'cursor-not-allowed'}"
@@ -233,7 +248,9 @@
 				</div>
 			</div>
 		{:else}
-			<div class="flex w-full flex-1 items-center justify-center py-4 text-sm text-ink-muted">Empty</div>
+			<div class="flex w-full flex-1 items-center justify-center py-4 text-sm text-ink-muted">
+				{$_('components.bins.binCard.empty')}
+			</div>
 		{/if}
 	</button>
 	{#if setProgress && setProgress.total_needed > 0}
@@ -243,12 +260,14 @@
 				<ProgressBar
 					value={setProgress.total_found}
 					max={setProgress.total_needed}
-					label="Parts of the set found"
+					label={$_('components.bins.binCard.partsFoundLabel')}
 					tone={isDone ? 'success' : 'primary'}
 				/>
 			</div>
 			<span class="num shrink-0 text-xs text-ink-muted">
-				{setProgress.total_found} / {setProgress.total_needed} parts
+				{$_('components.bins.binCard.partsOf', {
+					values: { found: setProgress.total_found, needed: setProgress.total_needed }
+				})}
 			</span>
 		</div>
 	{/if}
@@ -259,12 +278,21 @@
 		{:else}
 			<div class="num">
 				{contents?.unique_item_count ?? 0}
-				{(contents?.unique_item_count ?? 0) === 1 ? 'type' : 'types'} · {contents?.piece_count ?? 0} total
+				{(contents?.unique_item_count ?? 0) === 1
+					? $_('components.bins.binCard.typeSingular')
+					: $_('components.bins.binCard.typePlural')}
+				· {contents?.piece_count ?? 0} {$_('components.bins.binCard.totalLabel')}
 			</div>
 			{#if !sectionOn}
-				<Badge>Section off</Badge>
+				<Badge>{$_('components.bins.binCard.sectionOff')}</Badge>
 			{:else if lastDropRelative}
-				<div title={`Last piece ${formatLastSeen(contents?.last_distributed_at)}`}>{lastDropRelative}</div>
+				<div
+					title={$_('components.bins.binCard.lastPiece', {
+						values: { relative: formatLastSeen(contents?.last_distributed_at) }
+					})}
+				>
+					{lastDropRelative}
+				</div>
 			{/if}
 		{/if}
 	</div>

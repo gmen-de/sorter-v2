@@ -1,0 +1,462 @@
+{
+	"components": {
+		"setup": {
+			"chuteEncoderPanel": {
+				"panelTitle": "Chute magnet-ring encoder",
+				"panelDescription": "This board has no mechanical endstop — the chute's position comes from a magnet-ring Hall encoder instead.",
+				"badge": {
+					"connected": "Connected",
+					"notConnected": "Not connected"
+				},
+				"warningBeforeCode": "Not yet bench-verified against real hardware — see",
+				"warningAfterCode": "for the known caveats (direction sign, counts-per-revolution are a nominal guess).",
+				"findIndexExplanation": "\"Find the index\" rotates the chute slowly until the magnet ring's one index gap passes the sensors, then moves to bin 1 — the encoder equivalent of finding an endstop.",
+				"stats": {
+					"indexSynced": "Index synced",
+					"homed": "Homed",
+					"rawCount": "Raw count"
+				},
+				"status": {
+					"yes": "Yes",
+					"notYet": "Not yet",
+					"no": "No"
+				},
+				"countsPerRevolution": {
+					"label": "Counts per revolution",
+					"help": "Nominal guess, not bench-calibrated — adjust once real hardware confirms the real figure."
+				},
+				"buttons": {
+					"stopMotion": "Stop the motion",
+					"findIndex": "Find the index"
+				}
+			},
+			"setupCameraAreaCard": {
+				"defaultSelectedLabel": "No camera selected",
+				"badge": {
+					"required": "Required",
+					"optional": "Optional"
+				},
+				"empty": {
+					"title": "No camera chosen yet",
+					"description": "Refresh the cameras to find them, then choose one here."
+				},
+				"status": {
+					"cameraChosen": "Camera chosen",
+					"noCameraChosen": "No camera chosen",
+					"zoneReviewed": "Zone reviewed",
+					"zoneNotReviewed": "Zone not reviewed",
+					"pictureTuned": "Picture tuned",
+					"pictureNotTuned": "Picture not tuned"
+				},
+				"actions": {
+					"change": "Change",
+					"review": "Review",
+					"tune": "Tune"
+				},
+				"modal": {
+					"title": "Change the camera",
+					"pickSource": "Pick a different live source for {label}.",
+					"clear": "Clear the camera",
+					"close": "Close"
+				}
+			},
+			"setupNavFooter": {
+				"back": "Back"
+			},
+			"setupPictureSettingsModal": {
+				"noCameraMessage": "Choose a camera first to preview its picture.",
+				"confirm": "Confirm"
+			},
+			"setupServoOnboardingSection": {
+				"servoState": {
+					"factory": {
+						"title": "Promote ID before continuing",
+						"description": "Factory ID 1 detected. Promote it to ID {nextId} before connecting the next servo."
+					},
+					"needsCalibration": {
+						"title": "Needs calibration",
+						"description": "Run auto-calibration before testing movement or assigning direction."
+					},
+					"needsAssignment": {
+						"title": "Ready for assignment",
+						"description": "Calibration is done. Assign this servo to a storage layer next."
+					},
+					"ready": {
+						"title": "Setup complete",
+						"description": "Calibrated and assigned to Layer {layer}. Test the motion if you want a final check."
+					}
+				},
+				"errors": {
+					"loadFailed": "Failed to load servo setup",
+					"scanBusFailed": "Failed to scan Waveshare bus",
+					"calibrateServoFailed": "Failed to calibrate servo {servoId}",
+					"moveServoFailed": "Failed to move servo {servoId}",
+					"nudgeServoFailed": "Failed to nudge servo {servoId}",
+					"changeIdFailed": "Failed to change servo ID",
+					"bleUnreachable": "Failed to reach the BLE bridge",
+					"learnFailed": "Failed to learn a new servo",
+					"resetFailed": "Failed to reset the servos",
+					"moveGateFailed": "Failed to move gate {gate}",
+					"calibrateGateFailed": "Failed to calibrate gate {gate}",
+					"saveFailed": "Failed to save servo setup"
+				},
+				"status": {
+					"servoCalibrated": "Servo {servoId} calibrated.",
+					"servoIdChanged": "Servo {currentId} → {newId}.",
+					"servoLearned": "Servo learned.",
+					"servosReset": "Servos reset to factory defaults.",
+					"gateCalibrated": "Gate {gate} calibrated.",
+					"setupSaved": "Servo setup saved."
+				},
+				"loadError": {
+					"title": "The servo configuration did not load"
+				},
+				"buttons": {
+					"retry": "Retry",
+					"saveServos": "Save the servos"
+				},
+				"loading": "Loading the servo configuration…",
+				"backendPanel": {
+					"title": "Servo backend",
+					"useDetectedOne": "Use the detected one ({name})",
+					"status": {
+						"bleBackend": "Using Waveshare SC15 servos over the ESP32 BLE gate bridge.",
+						"noWaveshareBus": "No Waveshare servo bus found, so a PCA9685 on a control board is assumed.",
+						"waveshareFoundWithCount": "The Waveshare SC serial bus was found, with {count} {unit} on it.",
+						"waveshareFoundPlain": "The Waveshare SC serial bus was found.",
+						"usingWaveshareBus": "Using the Waveshare SC serial bus."
+					},
+					"unit": {
+						"servoSingular": "servo",
+						"servoPlural": "servos"
+					},
+					"options": {
+						"waveshareWired": "Waveshare (wired)",
+						"waveshareBle": "Waveshare (BLE)"
+					}
+				}
+			},
+			"setupStepperNav": {
+				"ariaLabel": "Setup steps"
+			},
+			"steps": {
+				"advancedStep": {
+					"readyMessage": "The sorter is configured and ready. Open the dashboard, home the machine if it is still in standby, and give it a first run."
+				},
+				"calibrationStep": {
+					"endstop": {
+						"readError": "Read error",
+						"offline": "Offline",
+						"triggered": "Triggered",
+						"notTriggered": "Not triggered"
+					},
+					"status": {
+						"directionSet": "Chute direction set to {state}.",
+						"chuteSettingsSaved": "Chute settings saved.",
+						"chuteReferenceFound": "Chute reference found.",
+						"chuteMotionCanceled": "Chute motion canceled."
+					},
+					"direction": {
+						"inverted": "inverted",
+						"normal": "normal"
+					},
+					"errors": {
+						"flipDirectionFailed": "Failed to flip chute direction",
+						"saveSettingsFailed": "Failed to save chute settings",
+						"findReferenceFailed": "Failed to find the chute reference",
+						"saveEncoderCalibrationFailed": "Failed to save the encoder calibration",
+						"cancelMotionFailed": "Failed to cancel chute motion"
+					},
+					"poweringOn": {
+						"title": "Powering on the steppers…",
+						"fallbackStep": "Finding the hardware",
+						"unlockHint": "The endstop checks unlock once the boards are ready."
+					},
+					"steppersOff": {
+						"title": "The steppers are off.",
+						"powerOnButton": "Power on the steppers"
+					},
+					"connectionFailed": {
+						"title": "The hardware connection failed",
+						"fallbackMessage": "The steppers could not start. Check the USB cables and reset the wizard."
+					},
+					"endstopPanel": {
+						"title": "Chute endstop and home",
+						"description": "Check the chute's endstop before homing: set its polarity, and make sure the chute can find its mechanical reference."
+					},
+					"wiring": {
+						"hide": "Hide the wiring",
+						"show": "Show the wiring"
+					},
+					"wiringDiagram": {
+						"imageAlt": "SKR Pico V1.0 board with labeled headers",
+						"heading": "SKR Pico endstop wiring",
+						"description": "The SKR Pico V1.0 endstop header the distributor board uses.",
+						"chuteEndstopLabel": "Chute endstop"
+					},
+					"triggerHint": "First, trigger the chute's endstop by hand and check that it reads Triggered below. If it stays Not triggered, flip the polarity.",
+					"chuteEndstopLabel": "Chute endstop",
+					"inputChannelLabel": "Input channel",
+					"rawSignalLabel": "raw signal",
+					"signal": {
+						"high": "high",
+						"low": "low"
+					},
+					"liveReadFailed": "The live endstop read failed: {error}",
+					"firstBinCenter": {
+						"label": "First bin center"
+					},
+					"savedWhenContinueHelp": "Saved when you continue.",
+					"pillarWidth": {
+						"label": "Pillar width"
+					},
+					"buttons": {
+						"flipPolarity": "Flip the polarity",
+						"flipDirection": "Flip the direction",
+						"stopMotion": "Stop the motion",
+						"findChuteEndstop": "Find the chute endstop"
+					},
+					"polarityHint": "If the trigger looks inverted. The input reads as",
+					"polarity": {
+						"activeHigh": "active-high",
+						"activeLow": "active-low"
+					},
+					"directionHint": "If the chute moves the wrong way. Its direction is"
+				},
+				"motionStep": {
+					"boardRole": {
+						"feeder": "Feeder",
+						"distributor": "Distributor"
+					},
+					"stepperAvailable": "Live stepper available",
+					"notConnected": "Not connected",
+					"retry": "Retry",
+					"steppersOff": {
+						"title": "The steppers are off.",
+						"powerOnButton": "Power on the steppers"
+					},
+					"poweringOn": {
+						"title": "Powering on the steppers…",
+						"fallbackStep": "Finding the hardware",
+						"unlockHint": "The jog buttons unlock once the boards are ready."
+					},
+					"axisPanel": {
+						"title": "Each axis",
+						"description": "Use very short jogs on an empty machine to check that each axis turns the expected way. Reverse any that runs the wrong way, then mark this step done; the next step covers endstops and homing."
+					},
+					"wiring": {
+						"hide": "Hide the wiring",
+						"show": "Show the wiring"
+					},
+					"wiringDiagram": {
+						"imageAlt": "SKR Pico V1.0 wiring diagram",
+						"heading": "SKR Pico stepper wiring",
+						"description": "The SKR Pico V1.0 stepper headers the feeder and distributor boards use."
+					},
+					"axisNames": {
+						"cChannel1": "C-channel 1",
+						"cChannel2": "C-channel 2",
+						"cChannel3": "C-channel 3",
+						"carousel": "Carousel",
+						"chute": "Chute"
+					},
+					"checked": "Checked",
+					"direction": {
+						"inverted": "Inverted",
+						"normal": "Normal"
+					},
+					"pictureAlt": "{label} seen from above, with an arrow showing clockwise",
+					"jog": "Jog",
+					"whichWayHint": "Which way did it turn, seen from above?",
+					"clockwise": "Clockwise",
+					"counterclockwise": "Counterclockwise"
+				},
+				"camerasStep": {
+					"saveCameras": "Save the cameras"
+				},
+				"identityStep": {
+					"machineIdLabel": "Machine ID",
+					"machineName": {
+						"label": "Machine name",
+						"placeholder": "Sorting bench A"
+					}
+				},
+				"hiveStep": {
+					"checkingConnection": "Checking the Hive connection…",
+					"connected": {
+						"title": "Connected to Hive",
+						"registeredWith": "This sorter is registered with",
+						"machineIdLabel": "Machine ID",
+						"manageHint": "You can manage the connection later in Settings > Hive; Continue finishes the setup."
+					},
+					"linkPanel": {
+						"title": "Link to Hive",
+						"description": "Continue takes you to the Hive server below. Sign in there (or make an account first) and confirm the machine's name; Hive brings you straight back here and finishes the link. No password is ever stored on this sorter.",
+						"serverLabel": "Hive server",
+						"serverHelp": "The official community platform by default; a local or custom Hive for development.",
+						"machineNameLabel": "Machine name",
+						"appearanceHint": "This is how the sorter appears in Hive. Change it in the first step if it needs to.",
+						"skipButton": "Skip for now",
+						"openingButton": "Opening Hive…",
+						"continueButton": "Continue on Hive"
+					},
+					"connectionFailedTitle": "The Hive connection failed"
+				},
+				"discoveryStep": {
+					"category": {
+						"controller": "Controller",
+						"servoBus": "Servo bus",
+						"unrecognised": "Unrecognised",
+						"unknown": "Unknown"
+					},
+					"controlBoardFallback": "Control board",
+					"servoBusName": "Waveshare servo bus · {count, plural, one {# servo} other {# servos}}",
+					"serialDeviceFallback": "Serial device",
+					"noBoard": {
+						"waitingTitle": "The control board is waiting for its firmware.",
+						"noneTitle": "No control board answered.",
+						"waitingBefore": "It shows up as a drive called RPI-RP2, which is what a Pico does before it has ever been flashed. Open",
+						"settingsLink": "Settings > Control board",
+						"waitingTickBefore": "tick",
+						"recoveryFlash": "Recovery flash",
+						"waitingTickAfter": ", pick the newest firmware release (the file for the kit's board is",
+						"waitingAfter": ") and flash it. Then come back and rescan.",
+						"noneBefore": "On a new machine this usually means the Pico has no firmware yet. Unplug the Pico's USB cable, hold down the BOOTSEL button (the white button on top of the Pico), plug the cable back in and let go. Then open",
+						"noneAfter": "), flash it, and come back to rescan. If the board has been flashed before, check its power and USB cable instead."
+					},
+					"usbDevices": {
+						"panelTitle": "USB devices",
+						"panelDescription": "{count, plural, one {# controller in use.} other {# controllers in use.}}",
+						"inUse": "In use",
+						"notUsed": "Not used",
+						"none": "No USB devices found."
+					},
+					"rescan": "Rescan"
+				},
+				"sharingStep": {
+					"loadErrorPrefix": "Couldn't load what this sorter shares: {message}",
+					"tryAgain": "Try again",
+					"loading": "Loading",
+					"alwaysTitle": "Always",
+					"always": {
+						"brickognize": "Piece photos go to Brickognize, which recognizes each part. Only the photo is sent.",
+						"statusReport": "Once an hour a status report goes to basically: the software version, the hardware and how much this sorter has sorted. No pictures and no piece records."
+					},
+					"withHiveTitle": "With a Hive connected",
+					"trainingHint": "Pictures and piece records train the recognition models every sorter uses. Keeping them on helps the most.",
+					"docsLabel": "Everything that leaves the machine",
+					"cancelButton": "Cancel",
+					"agreeButton": "Agree and continue",
+					"continueButton": "Continue"
+				}
+			},
+			"servo": {
+				"bleGatePanel": {
+					"gateState": {
+						"open": "Open",
+						"closed": "Closed",
+						"blocked": "Blocked",
+						"error": "Error",
+						"unknown": "Unknown",
+						"untested": "Untested"
+					},
+					"panelTitle": "ESP32 BLE gate bridge",
+					"badge": {
+						"connected": "Connected",
+						"notConnected": "Not connected"
+					},
+					"deviceAddress": {
+						"label": "BLE device address"
+					},
+					"rescan": "Rescan",
+					"gatesPanel": {
+						"title": "Gates on the bridge",
+						"description": "{count} reachable right now",
+						"emptyHint": "No gates reachable yet. Connect one new servo at a time and press \"Learn next servo\" below — it gets the next gate number automatically and calibrates itself."
+					},
+					"gateLabel": "Gate {gate}",
+					"layerSelect": {
+						"label": "Storage layer for gate {gate}",
+						"unassigned": "Unassigned",
+						"layer": "Layer {layer}"
+					},
+					"inverted": "Inverted",
+					"buttons": {
+						"open": "Open",
+						"close": "Close",
+						"calibrate": "Calibrate",
+						"learnNext": "Learn next servo",
+						"factoryResetAll": "Factory-reset all"
+					},
+					"footerHint": "Connect one new servo at a time, then \"Learn next servo\" — it gets the next gate number (11, 12, 13, …) and calibrates itself. \"Factory-reset all\" clears every reachable servo's ID and calibration so onboarding can start over."
+				},
+				"serialPortPanel": {
+					"panelTitle": "Serial port",
+					"selectLabel": "Serial port",
+					"detectOption": "Detect it, or keep the current one",
+					"refreshPorts": "Refresh the ports",
+					"scanBus": "Scan the bus"
+				},
+				"servoInventoryCard": {
+					"unknownModel": "Unknown model",
+					"layer": {
+						"label": "Layer",
+						"unassigned": "Unassigned",
+						"layerOption": "Layer {layer}"
+					},
+					"badges": {
+						"calibrated": "Calibrated, {min} to {max}",
+						"notCalibrated": "Not calibrated",
+						"layer": "Layer {layer}",
+						"noLayer": "No layer",
+						"direction": "Direction {state}"
+					},
+					"direction": {
+						"reversed": "reversed",
+						"normal": "normal",
+						"setAfterLayer": "set after a layer"
+					},
+					"factory": {
+						"title": "Factory ID found",
+						"message": "Promote this servo before plugging in the next one.",
+						"promoteButton": "Promote to ID {nextId}"
+					},
+					"angles": {
+						"heading": "Angles for layer {layer}",
+						"open": "Open",
+						"closed": "Closed",
+						"blankHint": "Blank uses the defaults ({openAngle}° and {closedAngle}°)."
+					},
+					"buttons": {
+						"calibrateAgain": "Calibrate again",
+						"calibrate": "Calibrate",
+						"testClose": "Test close",
+						"testOpen": "Test open",
+						"directionReversed": "Direction reversed",
+						"reverseDirection": "Reverse the direction"
+					},
+					"needsLayerHint": "Give it a layer first: the direction is kept for the layer.",
+					"nudge": {
+						"label": "Nudge",
+						"moveLeft": "Move left",
+						"ariaLabel": "Nudge by",
+						"moveRight": "Move right",
+						"selectedHint": "Selected: the left and right arrows nudge it.",
+						"unselectedHint": "Click the servo to nudge it with the arrow keys."
+					}
+				},
+				"servoInventoryList": {
+					"panelTitle": "Servos on the bus",
+					"panelDescription": "{count} on the bus · the highest ID seen is {highestSeenId}{nextIdHint}",
+					"nextIdHint": " · the next free ID is {nextId}",
+					"emptyHint": "No servos found yet. Connect the first one; the bus scans itself every few seconds.",
+					"oneAtATime": {
+						"title": "Connect one servo at a time",
+						"message": "New Waveshare servos all ship with the factory ID 1, and the bus can only talk to one device at that ID. Plug them in one by one: as soon as a new one shows up it is promoted to the next free ID{nowHint}, so the next one can connect without a clash.",
+						"nowHint": " (now {nextId})"
+					}
+				}
+			}
+		}
+	}
+}

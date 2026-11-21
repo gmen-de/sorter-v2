@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import C4SectorOccupancyPanel from '$lib/components/settings/C4SectorOccupancyPanel.svelte';
 	import StepperPanel from '$lib/components/settings/StepperPanel.svelte';
@@ -8,7 +9,7 @@
 	let { data }: { data: PageData } = $props();
 </script>
 
-<svelte:head><title>Sorter - {data.station.label}</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.station.pageTitle', { values: { label: data.station.label } })}</title></svelte:head>
 
 <PageHeader title={data.station.label} description={data.station.description} />
 

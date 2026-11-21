@@ -20,6 +20,7 @@ from irl.bin_layout import (
 from server import shared_state
 from server.routers.chute import _chute_settings_from_config
 from server.routers.servos import _servo_hardware_issues, _servo_settings_from_config
+from subsystems.distribution.sending import MIN_SETTLE_MS, chuteSettleMsForLayer, chuteSettleMsForPiece
 
 router = APIRouter()
 
@@ -31,6 +32,7 @@ class StorageLayerPayload(BaseModel):
     servo_closed_angle: Optional[int] = None
     max_pieces_per_bin: Optional[int] = None
     max_dimension_mm: Optional[float] = None
+    settle_adjust_ms: Optional[int] = None
 
 
 class StorageLayerSettingsPayload(BaseModel):
@@ -83,6 +85,11 @@ def _storage_layer_settings_from_layout(layout: Any) -> Dict[str, Any]:
             if isinstance(max_dimension, (int, float)) and not isinstance(max_dimension, bool) and max_dimension > 0
             else None
         )
+        settle_adjust = getattr(layer, "settle_adjust_ms", 0)
+        settle_adjust = int(settle_adjust) if isinstance(settle_adjust, int) and not isinstance(settle_adjust, bool) else 0
+        layer_entry["settle_base_ms"] = round(chuteSettleMsForLayer(index - 1))
+        layer_entry["settle_adjust_ms"] = settle_adjust
+        layer_entry["settle_total_ms"] = round(chuteSettleMsForPiece(index - 1, settle_adjust))
         layers.append(layer_entry)
 
     return {
@@ -144,6 +151,12 @@ def _apply_live_storage_layer_enabled(layers: List[Dict[str, Any]]) -> bool:
             if isinstance(max_dimension, (int, float)) and not isinstance(max_dimension, bool) and max_dimension > 0
             else None,
         )
+        settle_adjust = layer.get("settle_adjust_ms")
+        setattr(
+            runtime_layer,
+            "settle_adjust_ms",
+            int(settle_adjust) if isinstance(settle_adjust, int) and not isinstance(settle_adjust, bool) else 0,
+        )
     return True
 
 
@@ -177,6 +190,7 @@ def save_storage_layer_hardware_config(
                 "servo_closed_angle": layer.servo_closed_angle,
                 "max_pieces_per_bin": layer.max_pieces_per_bin,
                 "max_dimension_mm": layer.max_dimension_mm,
+                "settle_adjust_ms": layer.settle_adjust_ms,
             }
             for layer in requested_layers
         ]
@@ -189,6 +203,7 @@ def save_storage_layer_hardware_config(
                 "servo_closed_angle": layer.get("servo_closed_angle"),
                 "max_pieces_per_bin": layer.get("max_pieces_per_bin"),
                 "max_dimension_mm": layer.get("max_dimension_mm"),
+                "settle_adjust_ms": layer.get("settle_adjust_ms"),
             }
             for count, layer in zip(payload.layer_bin_counts, current["layers"])
         ]
@@ -242,6 +257,19 @@ def save_storage_layer_hardware_config(
             if isinstance(max_dim, (int, float)) and not isinstance(max_dim, bool) and max_dim > 0
             else None
         )
+        settle_adjust = layer_update.get("settle_adjust_ms")
+        if not isinstance(settle_adjust, int) or isinstance(settle_adjust, bool):
+            settle_adjust = prior_layer.settle_adjust_ms if prior_layer else 0
+        settle_base_ms = chuteSettleMsForLayer(i)
+        if round(settle_base_ms) + settle_adjust < MIN_SETTLE_MS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Layer {i + 1}'s settle time adjustment ({settle_adjust:+d}ms) would bring the "
+                    f"wait below {MIN_SETTLE_MS}ms (computed {round(settle_base_ms)}ms) - a piece "
+                    "might not have fallen clear before the chute moves again."
+                ),
+            )
 
         # Section count is preserved across this rebuild, so carry the existing
         # per-section on/off flags through rather than resetting them to all-on.
@@ -259,6 +287,7 @@ def save_storage_layer_hardware_config(
             max_pieces_per_bin=max_per_bin_value,
             max_dimension_mm=max_dim_value,
             section_enabled=prior_section_enabled,
+            settle_adjust_ms=settle_adjust,
         ))
         if cur_layer:
             layout_changed = layout_changed or count != int(cur_layer["bin_count"])
@@ -266,6 +295,8 @@ def save_storage_layer_hardware_config(
             if max_per_bin_value != cur_layer.get("max_pieces_per_bin"):
                 enabled_changed = True
             if max_dim_value != cur_layer.get("max_dimension_mm"):
+                enabled_changed = True
+            if settle_adjust != cur_layer.get("settle_adjust_ms"):
                 enabled_changed = True
         else:
             layout_changed = True

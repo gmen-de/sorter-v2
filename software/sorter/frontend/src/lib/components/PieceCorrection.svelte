@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import type { IssueGlyph } from '$lib/components/ui/IssueIcon.svelte';
 	import PieceReview from '$lib/components/ui/PieceReview.svelte';
 	import type { LikelyColor } from '$lib/components/ui/ColorChoice.svelte';
@@ -45,14 +46,22 @@
 	// piece_rejections vocabulary (no_piece / multiple_pieces / not_lego /
 	// assembly / pieces_entangled) so the two systems agree on what they mean
 	// once synced. "blurry" is Sorter-only and rides along unvalidated.
-	const ISSUES: { code: string; label: string; glyph: IssueGlyph }[] = [
-		{ code: 'not_lego', label: 'Not LEGO', glyph: 'not-lego' },
-		{ code: 'multiple_pieces', label: 'Multiple pieces in frame', glyph: 'multiple-pieces' },
-		{ code: 'no_piece', label: 'No piece in frame', glyph: 'no-piece' },
-		{ code: 'assembly', label: 'Assembly', glyph: 'assembly' },
-		{ code: 'pieces_entangled', label: 'Pieces entangled', glyph: 'entangled' },
-		{ code: 'blurry', label: 'Blurry', glyph: 'blurry' }
-	];
+	const ISSUES = $derived.by<{ code: string; label: string; glyph: IssueGlyph }[]>(() => [
+		{ code: 'not_lego', label: $_('components.pieceCorrection.issues.notLego'), glyph: 'not-lego' },
+		{
+			code: 'multiple_pieces',
+			label: $_('components.pieceCorrection.issues.multiplePieces'),
+			glyph: 'multiple-pieces'
+		},
+		{ code: 'no_piece', label: $_('components.pieceCorrection.issues.noPiece'), glyph: 'no-piece' },
+		{ code: 'assembly', label: $_('components.pieceCorrection.issues.assembly'), glyph: 'assembly' },
+		{
+			code: 'pieces_entangled',
+			label: $_('components.pieceCorrection.issues.piecesEntangled'),
+			glyph: 'entangled'
+		},
+		{ code: 'blurry', label: $_('components.pieceCorrection.issues.blurry'), glyph: 'blurry' }
+	]);
 
 	let palette = $state<BrickLinkColor[]>([]);
 	let likely = $state<LikelyColor[] | null>(null);
@@ -72,12 +81,20 @@
 		if (!isColorId(piece.color_id)) return null;
 		const id = Number(piece.color_id);
 		const known = palette.find((c) => c.id === id);
-		return known ?? { id, name: piece.color_name ?? `Color ${id}`, rgb: null };
+		return (
+			known ?? {
+				id,
+				name: piece.color_name ?? $_('components.pieceCorrection.colorFallback', { values: { id } }),
+				rgb: null
+			}
+		);
 	});
 	const predictedMark = $derived(
 		typeof piece.color_confidence === 'number'
-			? `Predicted ${Math.round(piece.color_confidence * 100)}%`
-			: 'Predicted'
+			? $_('components.pieceCorrection.predictedPct', {
+					values: { pct: Math.round(piece.color_confidence * 100) }
+				})
+			: $_('components.pieceCorrection.predicted')
 	);
 	const correctedId = $derived(
 		isColorId(piece.color_corrected_id) ? Number(piece.color_corrected_id) : null
@@ -92,12 +109,12 @@
 				if (colors.length === 0 && layout === 'full') {
 					notice = {
 						tone: 'warning',
-						text: 'The color list is not here yet: this machine has not reached Hive.'
+						text: $_('components.pieceCorrection.colorListNotHere')
 					};
 				}
 			})
 			.catch(() => {
-				notice = { tone: 'danger', text: 'Could not load the color list from the machine.' };
+				notice = { tone: 'danger', text: $_('components.pieceCorrection.colorListLoadFailed') };
 			});
 	});
 
@@ -117,16 +134,16 @@
 			likely = body.colors;
 			likelyNote =
 				body.fallback === 'hive_unreachable' || body.fallback === 'no_hive'
-					? 'By color alone: the machine cannot reach Hive.'
+					? $_('components.pieceCorrection.likelyNote.hiveUnreachable')
 					: body.fallback === 'hive_too_old'
-						? 'By color alone: this Hive does not rank colors yet.'
+						? $_('components.pieceCorrection.likelyNote.hiveTooOld')
 						: body.source === 'none'
-							? 'By color alone: no BrickLink numbers for this part.'
+							? $_('components.pieceCorrection.likelyNote.noBrickLinkNumbers')
 							: null;
 		} catch {
 			if (likelyFor !== key) return;
 			likely = [];
-			likelyNote = 'Could not rank the colors; pick from every color below.';
+			likelyNote = $_('components.pieceCorrection.likelyNote.couldNotRank');
 			likelyFor = '';
 		}
 	}
@@ -157,14 +174,19 @@
 	function applyResponse(resp: CorrectionResponse) {
 		onUpdated?.(resp.summary);
 		notice = resp.submit_error
-			? { tone: 'warning', text: `Saved, but Brickognize did not accept it: ${resp.submit_error}` }
+			? {
+					tone: 'warning',
+					text: $_('components.pieceCorrection.savedButNotAccepted', {
+						values: { error: resp.submit_error }
+					})
+				}
 			: null;
 	}
 
-	const failed = {
-		tone: 'danger',
-		text: 'Could not reach the machine; nothing was saved.'
-	} as const;
+	const failed = $derived({
+		tone: 'danger' as const,
+		text: $_('components.pieceCorrection.couldNotReachMachine')
+	});
 
 	async function setPart(correct: boolean) {
 		if (partBusy) return;

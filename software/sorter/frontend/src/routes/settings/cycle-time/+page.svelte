@@ -7,6 +7,7 @@
 		piece cycles (/runtime-stats/cycles), one row per piece. Cycles that
 		overlap an incident are counted apart: they are stops, not the flow.
 	*/
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
 	import { RUNTIME_SPANS, type RuntimeSpan } from '$lib/components/RuntimeStats.svelte';
@@ -98,42 +99,52 @@
 	const clock = (t: number) =>
 		new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }).toLowerCase();
 	function where(w: Wait): string {
-		if (w.c3_head_deg != null) return `${Math.max(0, Math.round(w.c3_head_deg))}° from C3's edge`;
-		if (w.c3_hidden) return 'Only out of view on C3';
-		return w.c2_pieces ? 'None on C3, some on C2' : 'None on C3 or C2';
+		if (w.c3_head_deg != null) {
+			return $_('routes.settings.cycleTime.longestWaits.where.degFromEdge', {
+				values: { deg: Math.max(0, Math.round(w.c3_head_deg)) }
+			});
+		}
+		if (w.c3_hidden) return $_('routes.settings.cycleTime.longestWaits.where.onlyOutOfView');
+		return w.c2_pieces
+			? $_('routes.settings.cycleTime.longestWaits.where.noneOnC3SomeOnC2')
+			: $_('routes.settings.cycleTime.longestWaits.where.noneOnC3OrC2');
 	}
-	const OUTCOME: Record<string, string> = {
-		freed: 'Moved again',
-		gone: 'Left the channel',
-		stopped: 'Sorting stopped first'
-	};
+	const OUTCOME = $derived<Record<string, string>>({
+		freed: $_('routes.settings.cycleTime.heldPieces.outcomes.freed'),
+		gone: $_('routes.settings.cycleTime.heldPieces.outcomes.gone'),
+		stopped: $_('routes.settings.cycleTime.heldPieces.outcomes.stopped')
+	});
 	function fedHint(s: Summary): string {
-		const pieces = `${s.pieces} pieces${s.held ? `, ${s.held} during stops` : ''}`;
+		const pieces = s.held
+			? $_('routes.settings.cycleTime.fedHint.piecesWithHeld', { values: { count: s.pieces, held: s.held } })
+			: $_('routes.settings.cycleTime.fedHint.pieces', { values: { count: s.pieces } });
 		if (s.per_minute_fed == null || s.per_minute == null || s.per_minute_fed - s.per_minute < 0.2) return pieces;
-		return `${s.per_minute_fed.toFixed(1)} while the hopper kept up`;
+		return $_('routes.settings.cycleTime.fedHint.keptUp', { values: { value: s.per_minute_fed.toFixed(1) } });
 	}
 
 	const phases = $derived(
 		summary
 			? [
-					{ label: 'Landing confirmed', q: summary.c4.confirm },
-					{ label: 'Photos', q: summary.c4.photos },
-					{ label: 'Waiting for the piece ahead (classified, chute aimed)', q: summary.c4.head_ready },
-					{ label: 'Turn (eject the piece ahead, stage this one)', q: summary.c4.turn },
-					{ label: 'All of C4’s own work', q: summary.c4.total }
+					{ label: $_('routes.settings.cycleTime.phases.confirm'), q: summary.c4.confirm },
+					{ label: $_('routes.settings.cycleTime.phases.photos'), q: summary.c4.photos },
+					{ label: $_('routes.settings.cycleTime.phases.headReady'), q: summary.c4.head_ready },
+					{ label: $_('routes.settings.cycleTime.phases.turn'), q: summary.c4.turn },
+					{ label: $_('routes.settings.cycleTime.phases.total'), q: summary.c4.total }
 				]
 			: []
 	);
 </script>
 
-<svelte:head><title>Sorter - Cycle time</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.cycleTime.pageTitle')}</title></svelte:head>
 
-<PageHeader
-	title="Cycle time"
-	description="Where each piece's seconds go on the classification channel: its own work, and its waits for the feeder."
->
+<PageHeader title={$_('routes.settings.cycleTime.title')} description={$_('routes.settings.cycleTime.description')}>
 	{#snippet actions()}
-		<SegmentedControl bind:value={span} options={RUNTIME_SPANS} label="Time span" size="sm" />
+		<SegmentedControl
+			bind:value={span}
+			options={RUNTIME_SPANS}
+			label={$_('routes.settings.cycleTime.timeSpanLabel')}
+			size="sm"
+		/>
 	{/snippet}
 </PageHeader>
 
@@ -142,36 +153,52 @@
 		<div class="grid grid-cols-2 gap-px bg-line md:grid-cols-4">
 			<div class="bg-surface">
 				<Stat
-					label="Pieces a minute"
+					label={$_('routes.settings.cycleTime.stats.piecesPerMinute')}
 					value={summary?.per_minute != null ? summary.per_minute.toFixed(1) : '—'}
 					hint={summary ? fedHint(summary) : undefined}
 				/>
 			</div>
 			<div class="bg-surface">
-				<Stat label="Per piece, on average" value={secs(summary?.cycle.mean)} hint={`Median ${secs(summary?.cycle.median)}`} />
-			</div>
-			<div class="bg-surface">
-				<Stat label="C4's own work" value={secs(summary?.c4.total.mean)} hint={`Median ${secs(summary?.c4.total.median)}`} />
+				<Stat
+					label={$_('routes.settings.cycleTime.stats.perPiece')}
+					value={secs(summary?.cycle.mean)}
+					hint={$_('routes.settings.cycleTime.stats.medianHint', { values: { value: secs(summary?.cycle.median) } })}
+				/>
 			</div>
 			<div class="bg-surface">
 				<Stat
-					label="Waiting for the feeder"
+					label={$_('routes.settings.cycleTime.stats.c4Work')}
+					value={secs(summary?.c4.total.mean)}
+					hint={$_('routes.settings.cycleTime.stats.medianHint', { values: { value: secs(summary?.c4.total.median) } })}
+				/>
+			</div>
+			<div class="bg-surface">
+				<Stat
+					label={$_('routes.settings.cycleTime.stats.waitingForFeeder')}
 					value={secs(summary?.wait.mean)}
-					hint={summary ? `Median ${secs(summary.wait.median)}, ${pct(summary.long_waits.share)} in waits over 4 s` : undefined}
+					hint={summary
+						? $_('routes.settings.cycleTime.stats.waitingHint', {
+								values: { median: secs(summary.wait.median), pct: pct(summary.long_waits.share) }
+							})
+						: undefined}
 				/>
 			</div>
 		</div>
 	</Panel>
 
-	<Panel title="C4's own work" description="From the moment a piece lands until C4 asks for the next one." flush>
+	<Panel
+		title={$_('routes.settings.cycleTime.c4Panel.title')}
+		description={$_('routes.settings.cycleTime.c4Panel.description')}
+		flush
+	>
 		<div class="overflow-x-auto">
 			<table class="data-table">
 				<thead>
 					<tr>
-						<th>Phase</th>
-						<th class="num">Median</th>
-						<th class="num">Average</th>
-						<th class="num">Slowest 10%</th>
+						<th>{$_('routes.settings.cycleTime.c4Panel.columns.phase')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.c4Panel.columns.median')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.c4Panel.columns.average')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.c4Panel.columns.slowest')}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -189,21 +216,21 @@
 	</Panel>
 
 	<Panel
-		title="Waiting for the feeder"
-		description="Each wait, by where C3's next piece was when C4 asked. Moving is the share of the wait C3 (or the chute) was turning."
+		title={$_('routes.settings.cycleTime.waitPanel.title')}
+		description={$_('routes.settings.cycleTime.waitPanel.description')}
 		flush
 	>
 		<div class="overflow-x-auto">
 			<table class="data-table">
 				<thead>
 					<tr>
-						<th>When C4 asked</th>
-						<th class="num">Asks</th>
-						<th class="num">Median</th>
-						<th class="num">Average</th>
-						<th class="num">Seconds in all</th>
-						<th class="num">C3 moving</th>
-						<th class="num">Chute moving</th>
+						<th>{$_('routes.settings.cycleTime.waitPanel.columns.when')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.waitPanel.columns.asks')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.waitPanel.columns.median')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.waitPanel.columns.average')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.waitPanel.columns.totalSeconds')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.waitPanel.columns.c3Moving')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.waitPanel.columns.chuteMoving')}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -223,23 +250,31 @@
 		</div>
 	</Panel>
 
-	<Panel title="Longest waits" description="Waits over 4 s, longest first." flush>
+	<Panel
+		title={$_('routes.settings.cycleTime.longestWaits.title')}
+		description={$_('routes.settings.cycleTime.longestWaits.description')}
+		flush
+	>
 		<div class="overflow-x-auto">
 			<table class="data-table">
 				<thead>
 					<tr>
-						<th>When</th>
-						<th class="num">Wait</th>
-						<th>C3's next piece</th>
-						<th class="num">On C3</th>
-						<th class="num">On C2</th>
-						<th class="num">C3 moving</th>
-						<th class="num">Chute moving</th>
+						<th>{$_('routes.settings.cycleTime.longestWaits.columns.when')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.longestWaits.columns.wait')}</th>
+						<th>{$_('routes.settings.cycleTime.longestWaits.columns.c3NextPiece')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.longestWaits.columns.onC3')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.longestWaits.columns.onC2')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.longestWaits.columns.c3Moving')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.longestWaits.columns.chuteMoving')}</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#if waits.length === 0}
-						<tr><td class="text-center text-ink-muted" colspan="7">No waits over 4 s.</td></tr>
+						<tr>
+							<td class="text-center text-ink-muted" colspan="7"
+								>{$_('routes.settings.cycleTime.longestWaits.empty')}</td
+							>
+						</tr>
 					{:else}
 						{#each waits as w (w.id)}
 							{@const wait = w.landed_at - w.asked_at}
@@ -260,32 +295,44 @@
 	</Panel>
 
 	<Panel
-		title="Pieces C2 or C3 could not move"
-		description="Its channel turned under it and it stayed put, so the channel next to it was turned. After three turns the feeder gives up and sorts around it."
+		title={$_('routes.settings.cycleTime.heldPieces.title')}
+		description={$_('routes.settings.cycleTime.heldPieces.description')}
 		flush
 	>
 		<div class="overflow-x-auto">
 			<table class="data-table">
 				<thead>
 					<tr>
-						<th>When</th>
-						<th>Where</th>
-						<th class="num">Held for</th>
-						<th class="num">Turns</th>
-						<th>How it ended</th>
+						<th>{$_('routes.settings.cycleTime.heldPieces.columns.when')}</th>
+						<th>{$_('routes.settings.cycleTime.heldPieces.columns.where')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.heldPieces.columns.heldFor')}</th>
+						<th class="num">{$_('routes.settings.cycleTime.heldPieces.columns.turns')}</th>
+						<th>{$_('routes.settings.cycleTime.heldPieces.columns.outcome')}</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#if held.length === 0}
-						<tr><td class="text-center text-ink-muted" colspan="5">None.</td></tr>
+						<tr>
+							<td class="text-center text-ink-muted" colspan="5"
+								>{$_('routes.settings.cycleTime.heldPieces.empty')}</td
+							>
+						</tr>
 					{:else}
 						{#each held as h (h.id)}
 							<tr>
 								<td class="whitespace-nowrap text-ink-muted">{clock(h.started_at)}</td>
-								<td>C{h.channel}, {h.zone === 'landing' ? 'landing area' : 'exit'}</td>
+								<td
+									>C{h.channel}, {h.zone === 'landing'
+										? $_('routes.settings.cycleTime.heldPieces.landingArea')
+										: $_('routes.settings.cycleTime.heldPieces.exit')}</td
+								>
 								<td class="num">{secs(h.ended_at - h.started_at)}</td>
 								<td class="num">{h.turns}</td>
-								<td>{OUTCOME[h.outcome] ?? h.outcome}{h.gave_up ? ', after the feeder gave up on it' : ''}</td>
+								<td
+									>{OUTCOME[h.outcome] ?? h.outcome}{h.gave_up
+										? $_('routes.settings.cycleTime.heldPieces.gaveUpSuffix')
+										: ''}</td
+								>
 							</tr>
 						{/each}
 					{/if}

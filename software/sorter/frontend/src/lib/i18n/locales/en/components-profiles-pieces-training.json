@@ -1,0 +1,234 @@
+{
+	"components": {
+		"profiles": {
+			"activeProfileBinsModal": {
+				"modalTitle": "What this machine sorts into",
+				"loadingBins": "Loading the bins",
+				"noProfile": "This machine has no profile to show."
+			},
+			"activeProfilePanel": {
+				"panelTitle": "On this machine",
+				"panelDescription": "The profile this machine sorts with now.",
+				"seeCategories": "See its categories",
+				"noName": "A profile with no name",
+				"savedAsFile": "Saved on this machine as {filename}",
+				"aFile": "a file",
+				"fromTarget": "From {target}",
+				"fromHiveTarget": "From Hive, {target}",
+				"appliedAt": "applied {applied}",
+				"category": "category",
+				"categories": "categories",
+				"allSorted": "{bins}; all {total} known parts are sorted.",
+				"partialSorted": "{bins}; {sorted} of {total} known parts are sorted, the rest go to Everything else.",
+				"updateAlertTitle": "v{latest} is on Hive; this machine runs v{current}",
+				"updateAlertBody": "The bins keep what is in them.",
+				"updateButton": "Update"
+			},
+			"bsxSection": {
+				"loadFailed": "Failed to load inventories",
+				"uploadSuccess": "Uploaded {name} ({count} parts).",
+				"uploadFailed": "Failed to upload inventory",
+				"deactivated": "Deactivated {name}.",
+				"nowActive": "{name} is now the active inventory.",
+				"setActiveFailed": "Failed to change active inventory",
+				"deleted": "Deleted {name}.",
+				"deleteFailed": "Failed to delete inventory",
+				"panelTitle": "BrickLink inventories (.bsx)",
+				"panelDescription": "A store's on-hand inventory. One can be active; a profile with inventory routing sends pieces not in the active inventory to the not-in-inventory bin.",
+				"uploadButton": "Upload .bsx",
+				"loadingInventories": "Loading the inventories",
+				"noInventories": "No inventories uploaded yet.",
+				"activeBadge": "Active",
+				"errorBadge": "Error",
+				"partsSummary": "{parts} parts · {items} items · uploaded {date}",
+				"deactivateButton": "Deactivate",
+				"setActiveButton": "Set active",
+				"deleteLabel": "Delete {name}"
+			},
+			"localProfileCard": {
+				"rule": "rule",
+				"rules": "rules",
+				"category": "category",
+				"categories": "categories",
+				"activeBadge": "Active",
+				"activateButton": "Activate",
+				"deleteLabel": "Delete this local profile",
+				"unreadable": "Unreadable: {error}",
+				"seeCategories": "See its categories"
+			},
+			"profileApplyModal": {
+				"modalTitle": "Activate the profile on this machine",
+				"warningTitle": "Empty all physical bins first.",
+				"warningBody": "Activating a different sorting profile resets every learned bin assignment on this machine. After that, bins are assigned again as parts are sorted.",
+				"targetLabel": "Target",
+				"profileLabel": "Profile",
+				"versionLabel": "Version",
+				"cancelButton": "Cancel",
+				"confirmButton": "Empty the bins and activate"
+			},
+			"profileBinsView": {
+				"binsLabel": "Bins",
+				"partsWithBinLabel": "Parts with a bin of their own",
+				"everyKnownPartHint": "every known part",
+				"ofKnownPartsHint": "of {total} known parts",
+				"knownPartsLabel": "Known parts",
+				"noBins": "This version has no bins.",
+				"namesOnlyNotice": "This version was saved before bins were described, so only their names are known.",
+				"bin": "bin",
+				"bins": "bins"
+			},
+			"profileCard": {
+				"activeBadge": "Active",
+				"hiveDefaultBadge": "Hive default",
+				"publicBadge": "Public",
+				"updateNotice": "v{latest} is on Hive; this machine runs v{current}.",
+				"activateButton": "Activate",
+				"versionsMenuLabel": "Versions of {name}",
+				"chooseVersionLabel": "Choose a version to activate",
+				"loadingLabel": "Loading",
+				"unavailableBadge": "Unavailable",
+				"seeAllCategories": "See all categories",
+				"moreRules": "+{count} more rules",
+				"noRulesDefined": "No rules defined",
+				"lastUsed": "Last used {time}",
+				"recentlyFallback": "recently",
+				"versionDraftHint": "draft",
+				"updatedLabel": "Updated {time}",
+				"couldNotLoadVersions": "Could not load versions: {error}",
+				"currentlyActive": "Currently active on this machine.",
+				"activeOnVersion": "This profile is active on v{version}."
+			},
+			"profileDetailsModal": {
+				"modalTitle": "Profile details",
+				"noDetailsTitle": "No profile details are loaded",
+				"hiveDefaultBadge": "Hive default",
+				"setProfileBadge": "Set profile",
+				"ownerLabel": "Owner: {name}",
+				"unknownOwner": "Unknown",
+				"tagsLabel": "Tags: {tags}",
+				"versionFieldLabel": "Version",
+				"draftSuffix": " (draft)",
+				"loadingBins": "Loading the bins",
+				"noVersionDetails": "No version details are available for this profile.",
+				"recentlyFallback": "recently",
+				"versionHelp": "{note}Updated {time}{by}."
+			},
+			"profilePagination": {
+				"perPageLabel": "Per page",
+				"selectLabel": "Profiles per page",
+				"pagesNavLabel": "Pages",
+				"previousButton": "Previous",
+				"nextButton": "Next"
+			},
+			"routeCheckPanel": {
+				"anyColorOption": "Any color",
+				"colorFallback": "color {id}",
+				"couldNotAsk": "Could not ask the profile",
+				"panelTitle": "Where would a piece go?",
+				"panelDescription": "Asks the profile this machine runs. Nothing moves.",
+				"partFieldLabel": "BrickLink part",
+				"partPlaceholder": "Like 3001",
+				"colorFieldLabel": "Color",
+				"colorFieldHelp": "Type a name to jump to it.",
+				"submitButton": "Where does it go",
+				"inColor": " in {color}",
+				"goesTo": " goes to"
+			}
+		},
+		"pieces": {
+			"noPieceImage": {
+				"ariaLabel": "No picture of this piece"
+			},
+			"pieceOverview": {
+				"noFrames": "No burst frames for this piece.",
+				"brickognizeLabel": "Brickognize's picture of this part",
+				"enlargeBrickognizeLabel": "Enlarge Brickognize's picture of this part",
+				"brickognizeCaption": "Brickognize",
+				"brickognizeZoomLabel": "Brickognize: {name}"
+			},
+			"piecePredictions": {
+				"partLabel": "Part",
+				"colorLabel": "Color",
+				"combinedLabel": "Combined (fused set)",
+				"singleBurstLabel": "Single burst frame",
+				"whileSortingLabel": "While sorting",
+				"linkLabel": "Link",
+				"burstLabel": "Burst",
+				"panelTitle": "Predictions",
+				"panelDescription": "{count} {requestWord} from {sources} {sourceWord}.",
+				"requestWord": "request",
+				"requestsWord": "requests",
+				"sourceWord": "source",
+				"sourcesWord": "sources",
+				"appliedTitle": "The piece took this answer",
+				"appliedBadge": "Applied",
+				"sawLabel": "Saw",
+				"notRecorded": "Not recorded",
+				"noStoredImages": "No stored images",
+				"imageGoneTitle": "This image is no longer on the machine"
+			},
+			"pieceProblems": {
+				"labels": {
+					"timedOut": "Timed out",
+					"trackLost": "Lost by the camera",
+					"lateDoubleFeed": "Second piece came in late",
+					"doubleFeed": "Double feed",
+					"stray": "Never photographed",
+					"bucketHold": "Held for misc",
+					"ejectTimeout": "Didn't fall",
+					"pushedOff": "Pushed off the exit",
+					"circling": "Came back around",
+					"swept": "Swept off",
+					"classifyFailed": "Identification failed",
+					"colorFallback": "Color model didn't answer"
+				}
+			}
+		},
+		"training": {
+			"colorDropdown": {
+				"popoverLabel": "The color being fed",
+				"pickColor": "Pick a color",
+				"loadingColors": "Loading the colors",
+				"noColorsLoaded": "The color list has not loaded: the machine has not reached Hive yet.",
+				"noteUsedLately": "Used lately first, then the commonest"
+			},
+			"pieceFeed": {
+				"piece": "piece",
+				"pieces": "pieces",
+				"fromTime": "from {start}",
+				"toTime": " to {end}",
+				"outsideSegment": "Outside a segment"
+			},
+			"runButton": {
+				"endRun": "End run",
+				"startRun": "Start run",
+				"pickColorFirstTitle": "Pick a color first"
+			},
+			"runColors": {
+				"colorFallback": "Color {id}"
+			},
+			"trainingPanel": {
+				"piece": "piece",
+				"pieces": "pieces",
+				"runLabel": "Run:",
+				"sinceLabel": "since",
+				"noRun": "No run",
+				"allRunsButton": "All runs",
+				"fixedBinPrefix": "All pieces to:",
+				"noPiecesYet": "No pieces yet.",
+				"lastRunLabel": "Last run:",
+				"excludedFromLabel": "excluded, from"
+			},
+			"trainingPieceRow": {
+				"excludedTitle": "Excluded. Click to bring it back.",
+				"includeTitle": "Click to exclude it.",
+				"unknownPart": "Unknown part",
+				"colorFallback": "Color {id}",
+				"noLabel": "No label",
+				"machineSawTitle": "The machine saw it as {name}",
+				"machineLabel": "Machine",
+				"excludedBadge": "Excluded"
+			}
+		}
+	}
+}

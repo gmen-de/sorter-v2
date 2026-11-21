@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { getMachineContext } from '$lib/machines/context';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
@@ -22,13 +23,13 @@
 		procedure: { title: string; steps: string[] } | null;
 	};
 
-	const MODE_NAMES: Record<IncidentHandlingMode, string> = {
-		off: 'Off',
-		manual: 'Manual',
-		automatic: 'Automatic'
-	};
-
 	const machine = getMachineContext();
+
+	const MODE_NAMES = $derived<Record<IncidentHandlingMode, string>>({
+		off: $_('components.settings.incidentHandlingSection.modeNames.off'),
+		manual: $_('components.settings.incidentHandlingSection.modeNames.manual'),
+		automatic: $_('components.settings.incidentHandlingSection.modeNames.automatic')
+	});
 
 	let incidentDefinitions = $state<IncidentDefinition[]>([]);
 	let incidentHandling = $state<Record<string, IncidentHandlingMode>>({});
@@ -69,12 +70,21 @@
 					label: sentenceCase(raw.label),
 					scope: typeof raw.scope === 'string' ? raw.scope : '',
 					description:
-						typeof raw.description === 'string' ? raw.description : 'Operator review required.',
-					off_label: typeof raw.off_label === 'string' ? raw.off_label : 'Disabled',
+						typeof raw.description === 'string'
+							? raw.description
+							: $_('components.settings.incidentHandlingSection.defaults.description'),
+					off_label:
+						typeof raw.off_label === 'string'
+							? raw.off_label
+							: $_('components.settings.incidentHandlingSection.defaults.offLabel'),
 					manual_label:
-						typeof raw.manual_label === 'string' ? raw.manual_label : 'Operator reviews',
+						typeof raw.manual_label === 'string'
+							? raw.manual_label
+							: $_('components.settings.incidentHandlingSection.defaults.manualLabel'),
 					automatic_label:
-						typeof raw.automatic_label === 'string' ? raw.automatic_label : 'Automatic',
+						typeof raw.automatic_label === 'string'
+							? raw.automatic_label
+							: $_('components.settings.incidentHandlingSection.modeNames.automatic'),
 					automatic_supported: raw.automatic_supported === true,
 					default: normalizeIncidentMode(raw.default),
 					procedure: normalizeProcedure(raw.procedure)
@@ -133,7 +143,9 @@
 			const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
 			if (!response.ok || payload?.ok === false) {
 				throw new Error(
-					typeof payload?.detail === 'string' ? payload.detail : 'Could not save incident mode'
+					typeof payload?.detail === 'string'
+						? payload.detail
+						: $_('components.settings.incidentHandlingSection.errors.saveFailed')
 				);
 			}
 			const handling = payload?.incident_handling;
@@ -148,7 +160,8 @@
 			}
 		} catch (e: any) {
 			incidentHandling = { ...incidentHandling, [kind]: previous };
-			incidentPolicyError = e?.message ?? 'Could not save incident mode';
+			incidentPolicyError =
+				e?.message ?? $_('components.settings.incidentHandlingSection.errors.saveFailed');
 		} finally {
 			incidentPolicySaving = null;
 		}
@@ -206,10 +219,14 @@
 			>
 				{#snippet tags()}
 					{#if definition.scope}<Badge>{definition.scope}</Badge>{/if}
-					{#if incidentDefinitionActive(definition)}<Badge tone="warning" dot>Active</Badge>{/if}
+					{#if incidentDefinitionActive(definition)}<Badge tone="warning" dot
+							>{$_('components.settings.incidentHandlingSection.activeBadge')}</Badge
+						>{/if}
 				{/snippet}
 				<SegmentedControl
-					label="When {definition.label} happens"
+					label={$_('components.settings.incidentHandlingSection.whenHappens', {
+						values: { name: definition.label }
+					})}
 					size="sm"
 					value={incidentMode(definition.kind)}
 					onchange={(mode) => void saveIncidentMode(definition.kind, mode)}
@@ -224,7 +241,7 @@
 			</SettingRow>
 			{#if definition.procedure && definition.automatic_supported}
 				<div class="-mt-2 px-(--pad-panel) pb-3 text-sm text-ink-muted">
-					<p>Automatic tries these, in order, and stops as soon as the piece is free:</p>
+					<p>{$_('components.settings.incidentHandlingSection.automaticProcedureIntro')}</p>
 					<ol class="mt-1 list-decimal pl-5">
 						{#each definition.procedure.steps as step, i (i)}
 							<li>{step}</li>

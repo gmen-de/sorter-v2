@@ -30,6 +30,7 @@
 </script>
 
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { formatDayHour, formatHour } from '$lib/sharing/format';
 
@@ -42,9 +43,9 @@
 		bytes = false,
 		totalLabel = '',
 		flagged = [],
-		flagLabel = 'Some was dropped',
+		flagLabel = $_('components.data.hourlyChart.defaultFlagLabel'),
 		notes,
-		empty = 'Nothing in this time.'
+		empty = $_('components.data.hourlyChart.defaultEmptyLabel')
 	}: {
 		// The chart's name, for a screen reader and the table.
 		label: string;
@@ -176,13 +177,15 @@
 	}
 
 	function when(i: number): string {
-		const end = i === n - 1 ? 'now' : formatHour(hours[i] + 3600);
-		return `${at(hours[i])} to ${end}`;
+		const end = i === n - 1 ? $_('components.data.hourlyChart.nowWord') : formatHour(hours[i] + 3600);
+		return $_('components.data.hourlyChart.timeRange', { values: { start: at(hours[i]), end } });
 	}
 
 	// The first hour, the middle one and now, each under its own column.
 	const middle = $derived(Math.floor(n / 2));
-	const xLabels = $derived(n === 0 ? [] : [at(hours[0]), at(hours[middle]), 'Now']);
+	const xLabels = $derived(
+		n === 0 ? [] : [at(hours[0]), at(hours[middle]), $_('components.data.hourlyChart.xLabelNow')]
+	);
 
 	function rows(i: number): TipRow[] {
 		const list =
@@ -199,7 +202,10 @@
 			? null
 			: {
 					when: when(active),
-					total: series[0]?.values[active] == null && form === 'area' ? 'Unknown' : format(totals[active]),
+					total:
+						series[0]?.values[active] == null && form === 'area'
+							? $_('components.data.hourlyChart.unknownValue')
+							: format(totals[active]),
 					rows: rows(active)
 				}
 	);
@@ -276,7 +282,9 @@
 			{/if}
 		</ul>
 		<Button variant="ghost" size="sm" onclick={() => (table = !table)}>
-			{table ? 'Show as chart' : 'Show as table'}
+			{table
+				? $_('components.data.hourlyChart.showChartButton')
+				: $_('components.data.hourlyChart.showTableButton')}
 		</Button>
 	</div>
 
@@ -286,10 +294,10 @@
 				<caption class="sr-only">{label}</caption>
 				<thead>
 					<tr>
-						<th>Hour</th>
+						<th>{$_('components.data.hourlyChart.tableHour')}</th>
 						{#if form === 'columns'}
 							{#each series as s (s.key)}<th class="num">{s.label}</th>{/each}
-							<th class="num">Total</th>
+							<th class="num">{$_('components.data.hourlyChart.tableTotal')}</th>
 						{:else}
 							<th class="num">{series[0]?.label}</th>
 						{/if}
@@ -308,7 +316,9 @@
 								{/each}
 							{/if}
 							<td class="num whitespace-nowrap">
-								{form === 'area' && series[0]?.values[i] == null ? 'Unknown' : format(totals[i])}
+								{form === 'area' && series[0]?.values[i] == null
+									? $_('components.data.hourlyChart.unknownValue')
+									: format(totals[i])}
 							</td>
 							{#each notes?.(i) ?? [] as note (note.label)}
 								<td class="num whitespace-nowrap">{note.value}</td>
@@ -431,7 +441,7 @@
 					<!-- The chart's one tab stop: the arrow keys read it hour by hour. -->
 					<button
 						type="button"
-						aria-label="{label}. Use the arrow keys to read each hour."
+						aria-label="{label}. {$_('components.data.hourlyChart.ariaLabelHint')}"
 						class="absolute inset-0 cursor-default"
 						{onpointermove}
 						{onpointerdown}

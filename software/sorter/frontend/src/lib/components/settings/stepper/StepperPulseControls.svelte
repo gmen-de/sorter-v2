@@ -2,6 +2,7 @@
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Square from '@lucide/svelte/icons/square';
+	import { _ } from 'svelte-i18n';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 
@@ -50,18 +51,18 @@
 	<div class="grid gap-4 @2xl:max-w-4xl @2xl:grid-cols-2 @2xl:items-end @2xl:gap-10">
 		<div
 			role="group"
-			aria-label="Jog"
+			aria-label={$_('components.settings.stepper.stepperPulseControls.jogGroupLabel')}
 			class="grid h-(--size-control-lg) grid-cols-[1fr_auto_1fr] divide-x divide-line-strong overflow-hidden rounded-button border border-line-strong bg-field"
 		>
 			<button
 				type="button"
-				aria-label="Counterclockwise"
+				aria-label={$_('components.settings.stepper.stepperPulseControls.ccwAriaLabel')}
 				onclick={() => onPulse('ccw')}
 				disabled={Boolean(pulsing[`${stepperKey}:ccw`]) || homing || canceling}
 				class="flex h-full items-center justify-center gap-1.5 text-sm font-medium transition-colors focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45
 					{pulsing[`${stepperKey}:ccw`] ? 'bg-primary-soft text-primary-ink' : 'text-ink hover:bg-hover'}"
 			>
-				<ChevronLeft size={18} />CCW
+				<ChevronLeft size={18} />{$_('components.settings.stepper.stepperPulseControls.ccwText')}
 			</button>
 			<button
 				type="button"
@@ -69,30 +70,38 @@
 				disabled={stopping || homing || canceling}
 				class="flex h-full items-center justify-center gap-2 px-5 text-sm font-medium text-danger-ink transition-colors hover:bg-danger-soft focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45"
 			>
-				<Square size={12} fill="currentColor" />Stop
+				<Square size={12} fill="currentColor" />{$_('components.settings.stepper.stepperPulseControls.stopText')}
 			</button>
 			<button
 				type="button"
-				aria-label="Clockwise"
+				aria-label={$_('components.settings.stepper.stepperPulseControls.cwAriaLabel')}
 				onclick={() => onPulse('cw')}
 				disabled={Boolean(pulsing[`${stepperKey}:cw`]) || homing || canceling}
 				class="flex h-full items-center justify-center gap-1.5 text-sm font-medium transition-colors focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45
 					{pulsing[`${stepperKey}:cw`] ? 'bg-primary-soft text-primary-ink' : 'text-ink hover:bg-hover'}"
 			>
-				CW<ChevronRight size={18} />
+				{$_('components.settings.stepper.stepperPulseControls.cwText')}<ChevronRight size={18} />
 			</button>
 		</div>
 
 		<div class="flex flex-col gap-3">
 			<div class="flex items-center justify-between gap-3">
-				<span class="text-sm font-medium text-ink">Each press moves</span>
+				<span class="text-sm font-medium text-ink"
+					>{$_('components.settings.stepper.stepperPulseControls.eachPressMoves')}</span
+				>
 				<SegmentedControl
-					label="Move by"
+					label={$_('components.settings.stepper.stepperPulseControls.moveByLabel')}
 					size="sm"
 					bind:value={pulseMode}
 					options={[
-						{ value: 'degrees', label: 'Degrees' },
-						{ value: 'duration', label: 'Time' }
+						{
+							value: 'degrees',
+							label: $_('components.settings.stepper.stepperPulseControls.moveByDegrees')
+						},
+						{
+							value: 'duration',
+							label: $_('components.settings.stepper.stepperPulseControls.moveByTime')
+						}
 					]}
 				/>
 			</div>
@@ -105,7 +114,7 @@
 						step={0.05}
 						bind:value={pulseDuration}
 						unit="s"
-						aria-label="How long each press runs"
+						aria-label={$_('components.settings.stepper.stepperPulseControls.durationAriaLabel')}
 					/>
 				{:else}
 					<Input
@@ -115,7 +124,7 @@
 						step={1}
 						bind:value={pulseDegrees}
 						unit="°"
-						aria-label="Degrees at the output for each press"
+						aria-label={$_('components.settings.stepper.stepperPulseControls.degreesAriaLabel')}
 					/>
 				{/if}
 				<Input
@@ -124,18 +133,25 @@
 					step={50}
 					bind:value={pulseSpeed}
 					unit="steps/s"
-					aria-label="Speed"
+					aria-label={$_('components.settings.stepper.stepperPulseControls.speedAriaLabel')}
 				/>
 			</div>
 		</div>
 	</div>
 	{#if keyboardShortcuts}
-		<p class="text-sm text-ink-muted">The arrow keys jog it too.</p>
+		<p class="text-sm text-ink-muted">
+			{$_('components.settings.stepper.stepperPulseControls.arrowKeysHint')}
+		</p>
 	{/if}
 	{#if pulseMode === 'degrees' && gearRatio !== 1}
 		<p class="num text-sm text-ink-muted">
-			Gear ratio {gearRatio.toFixed(2)}:1, so {pulseDegrees}° at the output is
-			{(pulseDegrees * gearRatio).toFixed(1)}° at the motor.
+			{$_('components.settings.stepper.stepperPulseControls.gearRatioNote', {
+				values: {
+					ratio: gearRatio.toFixed(2),
+					outputDeg: pulseDegrees,
+					motorDeg: (pulseDegrees * gearRatio).toFixed(1)
+				}
+			})}
 		</p>
 	{/if}
 </div>

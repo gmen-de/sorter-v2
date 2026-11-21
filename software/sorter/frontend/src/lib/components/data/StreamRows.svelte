@@ -9,6 +9,7 @@
 	with a button that puts it back.
 -->
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import SettingRow from '$lib/components/ui/SettingRow.svelte';
 	import Switch from '$lib/components/ui/Switch.svelte';
@@ -43,7 +44,7 @@
 		onreset={back?.onreset}
 	>
 		{#if stream.required}
-			<Badge>Always</Badge>
+			<Badge>{$_('components.data.streamRows.alwaysLabel')}</Badge>
 		{:else}
 			<Switch
 				checked={value(stream)}

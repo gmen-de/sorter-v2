@@ -1,0 +1,585 @@
+{
+	"components": {
+		"settings": {
+			"incidentHandlingSection": {
+				"modeNames": {
+					"off": "Aus",
+					"manual": "Manuell",
+					"automatic": "Automatisch"
+				},
+				"defaults": {
+					"description": "Prüfung durch den Bediener erforderlich.",
+					"offLabel": "Deaktiviert",
+					"manualLabel": "Bediener prüft"
+				},
+				"errors": {
+					"saveFailed": "Vorfallmodus konnte nicht gespeichert werden"
+				},
+				"activeBadge": "Aktiv",
+				"whenHappens": "Wenn {name} eintritt",
+				"automaticProcedureIntro": "Automatisch versucht Folgendes, der Reihe nach, und stoppt, sobald das Teil frei ist:"
+			},
+			"nextcloudSection": {
+				"panelTitle": "Nextcloud",
+				"panelDescription": "Lädt erkannte Teile (Bild + Teilenummer + Farbe) in die eigene Nextcloud hoch, sortiert, damit die Daten später ein eigenes Modell trainieren können.",
+				"errors": {
+					"loadFailed": "Die Nextcloud-Einstellungen konnten nicht geladen werden",
+					"saveFailed": "Die Nextcloud-Einstellungen konnten nicht gespeichert werden",
+					"enterServerUrl": "Zuerst die Nextcloud-Server-URL eingeben.",
+					"connectFailed": "Verbindung zu Nextcloud fehlgeschlagen",
+					"disconnectFailed": "Trennen fehlgeschlagen",
+					"loginTimedOut": "Die Anmeldung wurde nicht rechtzeitig bestätigt.",
+					"loginFailed": "Die Nextcloud-Anmeldung ist fehlgeschlagen."
+				},
+				"connectedAs": "Verbunden als",
+				"needsReconnect": "Nextcloud muss erneut verbunden werden - die gespeicherten Zugangsdaten wurden abgelehnt.",
+				"disconnectButton": "Trennen",
+				"serverUrl": {
+					"label": "Nextcloud-Server-URL",
+					"help": "z. B. https://cloud.example.com"
+				},
+				"connectButton": "Mit Nextcloud verbinden",
+				"connectingHint": "In Nextcloud im neuen Tab anmelden und den Zugriff bestätigen - diese Seite erkennt das automatisch.",
+				"uploadingActive": {
+					"label": "Upload aktiv",
+					"help": "Erkannte Teile an Nextcloud senden, sobald sie erfasst werden."
+				},
+				"targetFolder": {
+					"label": "Zielordner",
+					"help": "Pfad in der Nextcloud, unter dem die Daten gespeichert werden."
+				},
+				"minConfidence": {
+					"label": "Mindest-Konfidenz",
+					"help": "Teile unter diesem Wert gelten als nicht sicher erkannt und landen im Ordner _unidentified. Leer lassen für keinen Schwellenwert.",
+					"placeholder": "z. B. 0.8"
+				},
+				"uploadUnidentified": {
+					"label": "Nicht identifizierte Teile hochladen",
+					"help": "Auch Teile ohne sichere Zuordnung hochladen, in ihren eigenen Ordner _unidentified - oft die wertvollsten künftigen Trainingsdaten."
+				},
+				"saveButton": "Speichern",
+				"status": {
+					"pending": "Ausstehend:",
+					"lastUpload": "Letzter Upload:",
+					"loading": "Status wird geladen"
+				},
+				"neverLabel": "nie"
+			},
+			"pictureSettingsSidebar": {
+				"defaultPrimaryActionLabel": "Speichern",
+				"noCamera": "Eine Kamera wählen, um diese Änderungen live zu sehen.",
+				"errors": {
+					"loadFailed": "Die Bildeinstellungen konnten nicht geladen werden",
+					"previewFailed": "Die Kameraeinstellungen konnten nicht als Vorschau angezeigt werden",
+					"saveFailed": "Die Kameraeinstellungen konnten nicht gespeichert werden",
+					"resetFailed": "Die Kameraeinstellungen konnten nicht zurückgesetzt werden"
+				},
+				"loadingSettings": "Die Bildeinstellungen werden geladen",
+				"closeLabel": "Bildeinstellungen schließen",
+				"resetCameraButton": "Kamera auf automatisch zurücksetzen",
+				"status": {
+					"cameraSettingsSaved": "Kameraeinstellungen gespeichert.",
+					"feedOrientationSaved": "Bildausrichtung gespeichert.",
+					"confirmed": "Bildeinstellungen bestätigt.",
+					"reverted": "Änderungen zurückgesetzt.",
+					"resetUsbAndTransforms": "USB-Kamerasteuerung und Bildtransformationen auf sinnvolle Standardwerte zurückgesetzt. Zum Anwenden speichern.",
+					"resetTransforms": "Bildtransformationen auf Standardwerte zurückgesetzt. Zum Anwenden speichern.",
+					"cameraResetDefault": "Kamera auf automatische Einstellungen zurückgesetzt."
+				},
+				"undoLabel": "Änderungen rückgängig machen",
+				"backToDefaultsLabel": "Zurück zu den Standardwerten",
+				"panelTitle": "Bild"
+			},
+			"providerSelect": {
+				"inUseLabel": "{label} (in Verwendung)"
+			},
+			"sampleCaptureSection": {
+				"errors": {
+					"loadFailed": "Der Status der Beispielerfassung konnte nicht geladen werden.",
+					"saveFailed": "Die Beispielerfassung konnte nicht aktualisiert werden."
+				},
+				"onOffLabels": {
+					"on": "an",
+					"off": "aus"
+				},
+				"captureTrainingFrames": {
+					"label": "Trainingsbilder erfassen",
+					"info": "Nimmt mit der untenstehenden Rate das aktuellste Bild jeder laufenden Kamera auf, nur während die Maschine sortiert. Bilder werden in einem begrenzten Speicher auf dieser Maschine gesichert und im Hintergrund zu Hive hochgeladen. Ändert nie, wie die Maschine sortiert."
+				},
+				"annotateOpenRouter": {
+					"label": "Mit OpenRouter annotieren",
+					"info": "Lässt den Gemini-Detektor (gemini_sam) vor dem Speichern über jedes Bild laufen, damit die Beispiele als Lehrer-Aufnahmen bei Hive ankommen. Das bedeutet einen OpenRouter-Aufruf pro Bild und Kamera. Aus, oder ohne API-Schlüssel, werden Bilder unbearbeitet gespeichert und hochgeladen."
+				},
+				"decayCaptureRate": {
+					"label": "Erfassungsrate abklingen lassen",
+					"info": "Erfasst zu Beginn eines Laufs eine Serie von Bildern und verlangsamt sich dann über die Rampe bis zu einem Minimum, mit zufälligem Jitter, damit derselbe Aufbau nicht endlos fast identische Bilder speichert. \"Abklingen zurücksetzen\" startet die Serie erneut."
+				},
+				"captureRate": {
+					"label": "Erfassungsrate",
+					"info": "Bilder pro Minute und Kamera: höchstens 0,5, also eines alle 2 Minuten."
+				},
+				"sampleStoreSize": {
+					"label": "Größe des Beispielspeichers",
+					"info": "Höchstens so viel auf dieser Maschine behalten, nie mehr als Hive erlaubt. Wenn er voll ist, werden zuerst Beispiele gelöscht, die Hive bereits hat, dann die ältesten.",
+					"defaultHelp": "Wieder der Größe folgen, die Hive vorgibt."
+				},
+				"followHiveLabel": "Hive ({value} {unit})",
+				"hiveHintLabel": "Hive: {value}",
+				"notInitialized": "Der Beispielsammler ist auf dieser Maschine noch nicht gestartet (noch kein Kameradienst).",
+				"droppedQueueFull": "{count} Bilder seit dem Start verworfen, weil das Speichern nicht mithalten konnte.",
+				"skippedLowDisk": "{count} Bilder seit dem Start übersprungen, weil der Speicherplatz knapp war.",
+				"savedSinceStartup": "Seit dem Start gespeichert: {count}",
+				"lastSavedAgo": ", das letzte vor {seconds} s",
+				"lastCaptureFailed": "Die letzte Erfassung ist fehlgeschlagen: {message}",
+				"decayDetails": {
+					"sentence": "Alle {burst}, verlangsamt sich auf alle {floor} über {ramp}.",
+					"sentenceNow": " Aktuell alle {current}.",
+					"resetDecayButton": "Abklingen zurücksetzen",
+					"graphAriaLabel": "Die Erfassungsrate, die von der Burst-Rate über die Rampe auf das Minimum fällt"
+				},
+				"burstInterval": {
+					"label": "Burst-Intervall",
+					"info": "Sekunden zwischen Bildern pro Kamera direkt nach einem Reset. Nie schneller, als Hive erlaubt, noch schneller als eines alle 2 Minuten.",
+					"defaultHelp": "Wieder dem Intervall folgen, das Hive vorgibt."
+				},
+				"floorInterval": {
+					"label": "Minimal-Intervall",
+					"info": "Minuten zwischen Bildern pro Kamera, sobald das Abklingen sich eingestellt hat.",
+					"defaultHelp": "Wieder dem Intervall folgen, das Hive vorgibt."
+				},
+				"ramp": {
+					"label": "Rampe",
+					"info": "Stunden, um vom Burst-Intervall zum Minimal-Intervall zu kommen.",
+					"defaultHelp": "Wieder der Rampe folgen, die Hive vorgibt."
+				},
+				"jitter": {
+					"label": "Jitter",
+					"info": "Zufällige Schwankung bei jedem Intervall, damit Aufnahmen nicht perfekt periodisch sind."
+				}
+			},
+			"servoBackendSection": {
+				"errors": {
+					"scanFailed": "Scan fehlgeschlagen.",
+					"demoReadFailed": "Demo-Modus konnte nicht gelesen werden.",
+					"demoChangeFailed": "Demo-Modus konnte nicht geändert werden.",
+					"loadFailed": "Die Servo-Einstellungen waren nicht erreichbar.",
+					"saveFailed": "Speichern fehlgeschlagen."
+				},
+				"savedDefault": "Gespeichert.",
+				"panelTitle": "Servosteuerung",
+				"panelDescription": "Wohin Servobefehle für die Ebenenweiche gehen: zu den PCA9685-Kanälen eines Steuerboards oder zur ESP32-BLE-Gate-Bridge.",
+				"savingLabel": "Wird gespeichert",
+				"notSaved": "Nicht gespeichert",
+				"backendField": {
+					"label": "Backend",
+					"help": "Nach einer Änderung muss die Hardware neu referenziert werden."
+				},
+				"backendOptions": {
+					"pca9685": "Steuerboard (PCA9685)",
+					"waveshareBle": "BLE-Servo (ESP32-Gate-Bridge)"
+				},
+				"bleDeviceField": {
+					"label": "BLE-Gerät",
+					"help": "Die BLE-Adresse des esp32_ble_servo_bridge-Boards, z. B. AA:BB:CC:DD:EE:FF."
+				},
+				"scanButton": "Scannen",
+				"scanningLabel": "Wird gescannt",
+				"noDevicesFound": "Keine BLE-Geräte in der Nähe gefunden.",
+				"unnamedDevice": "(unbenannt)",
+				"sorterServoSuffix": " — SORTER-SERVO-BLE",
+				"demoModeField": {
+					"label": "Demo-Modus",
+					"help": "Das Bridge-Board beantwortet jeden Gate-Befehl so, als hätte sich ein echter Servo bewegt, nach derselben Verzögerung wie eine echte Bewegung — ohne den Servobus anzusteuern. Gilt sofort und bleibt über Neustarts hinweg erhalten."
+				},
+				"saveButton": "Speichern"
+			},
+			"settingsSaveBar": {
+				"unsavedChanges": "Ungespeicherte Änderungen",
+				"resetButton": "Auf gespeicherten Stand zurücksetzen",
+				"saveButton": "Speichern"
+			},
+			"stepperPanel": {
+				"hardwareNotStarted": "Hardware nicht gestartet. Zuerst im Dashboard auf Start drücken.",
+				"requestFailedStatus": "Anfrage fehlgeschlagen mit Status {status}",
+				"pulsing": "Impuls {direction}.",
+				"requestFailed": "Die Anfrage {direction} ist fehlgeschlagen.",
+				"movingDegrees": "Bewegt sich um {degrees}° {direction}.",
+				"stopped": "Gestoppt.",
+				"stopRequestFailed": "Stopp-Anfrage fehlgeschlagen.",
+				"homedAndZeroed": "Referenziert und genullt.",
+				"failedToHome": "Referenzfahrt fehlgeschlagen",
+				"homingCanceled": "Referenzfahrt abgebrochen.",
+				"failedToCancelHoming": "Referenzfahrt konnte nicht abgebrochen werden",
+				"chuteSettingsSaved": "Rutsche-Einstellungen gespeichert.",
+				"distributorSpeedSaved": "Betriebsgeschwindigkeit des Verteilers gespeichert.",
+				"failedToSaveChuteSettings": "Rutsche-Einstellungen konnten nicht gespeichert werden",
+				"failedToSaveEncoderCalibration": "Die Encoder-Kalibrierung konnte nicht gespeichert werden",
+				"endstopSettingsSaved": "Endschalter-Einstellungen gespeichert.",
+				"settingsSaved": "Einstellungen gespeichert.",
+				"failedToSaveSettings": "Einstellungen konnten nicht gespeichert werden",
+				"failedToLoadSettings": "Einstellungen konnten nicht geladen werden",
+				"stallCleared": "Blockade behoben.",
+				"failedToClearStall": "Blockade konnte nicht behoben werden",
+				"driverSettingsApplied": "Treiber-Einstellungen angewendet.",
+				"failedToSaveDriverSettings": "Treiber-Einstellungen konnten nicht gespeichert werden",
+				"tryAgainButton": "Erneut versuchen",
+				"applyDriverSettingsButton": "Treiber-Einstellungen anwenden",
+				"saveButton": "Speichern",
+				"badges": {
+					"unknown": "Unbekannt",
+					"stopped": "Gestoppt",
+					"moving": "Bewegt sich",
+					"homed": "Referenziert",
+					"notHomed": "Nicht referenziert",
+					"endstopTriggered": "Endschalter ausgelöst",
+					"endstopClear": "Endschalter frei"
+				},
+				"chuteStatusLine": "Rutsche {chute}°, Motor {motor}°, {microsteps} Mikroschritte",
+				"atStatusLine": "Bei {position}°, {microsteps} Mikroschritte",
+				"unknownMicrosteps": "unbekannt",
+				"gearRatioLine": "Getriebeübersetzung {ratio}:1",
+				"gearRatioDetail": ": {motorDeg}° am Motor entsprechen {chuteDeg}° an der Rutsche",
+				"homingFindsMagnetRing": "Die Referenzfahrt sucht langsam den Magnetring-Index.",
+				"homingFindsEndstop": "Die Referenzfahrt sucht langsam den Endschalter.",
+				"cancelStopsEveryStepper": " Abbrechen stoppt jeden Schrittmotor, falls sich der falsche Motor bewegt.",
+				"stalledTitle": "{label} blockiert",
+				"stalledBody": "Die Blockade-Erkennung hat diesen Motor angehalten. Zuerst die Blockade beseitigen, dann die Blockade löschen. Die Referenzposition ist verloren, also vor präzisen Bewegungen erneut referenzieren.",
+				"clearStallButton": "Blockade löschen",
+				"driverSettingsDisclosure": {
+					"title": "Treiber-Einstellungen",
+					"help": "Ströme, Mikroschritte, Blockade-Erkennung"
+				},
+				"panelDriverSettings": {
+					"title": "Treiber-Einstellungen",
+					"description": "Ströme, Mikroschritte, Blockade-Erkennung."
+				},
+				"endstopSettingsTitle": "Endschalter-Einstellungen",
+				"driverSettingsReadFailed": "Die Treiber-Einstellungen konnten nicht gelesen werden."
+			},
+			"stepperStallGuard": {
+				"httpStatus": "HTTP {status}",
+				"failedToReadSettings": "Die Blockade-Erkennungseinstellungen konnten nicht gelesen werden",
+				"savedLive": "Blockade-Erkennung gespeichert.",
+				"savedNextStart": "Blockade-Erkennung gespeichert. Sie gilt erst beim nächsten Start.",
+				"failedToSaveDetectionSettings": "Die Blockade-Erkennungseinstellungen konnten nicht gespeichert werden",
+				"enterSpeedAboveZero": "Eine Geschwindigkeit über 0 eingeben.",
+				"failedToLoadRuns": "Läufe konnten nicht geladen werden",
+				"failedToLoadSummary": "Zusammenfassung konnte nicht geladen werden",
+				"failedToLoadSamples": "Messwerte konnten nicht geladen werden",
+				"deleteRunDialog": {
+					"title": "Lauf löschen?",
+					"message": "Lauf {id} und seine Messwerte löschen?",
+					"action": "Lauf löschen"
+				},
+				"failedToDeleteRun": "Lauf konnte nicht gelöscht werden",
+				"failedToReadRecordingsAtSpeed": "Die bei dieser Geschwindigkeit gemachten Aufnahmen konnten nicht gelesen werden",
+				"recordingLabels": {
+					"free": "Freilauf",
+					"stall": "Blockade",
+					"check": "Prüfung"
+				},
+				"durationAboveZero": "Die Aufnahme braucht eine Dauer über 0 Sekunden.",
+				"recordingFailed": "Die Aufnahme ist fehlgeschlagen",
+				"failedToSaveThresholdSettings": "Die Einstellungen konnten nicht gespeichert werden",
+				"tuneTitle": "StallGuard einstellen",
+				"tuneDescriptionAuto": "Optional, während die Selbsteinstellung läuft: eine aufgenommene Blockade zum Vergleich.",
+				"tuneDescriptionManual": "Findet, wo eine Blockade beginnt, bei der Geschwindigkeit, mit der {label} läuft.",
+				"badges": {
+					"wouldTrip": "Würde auslösen",
+					"tuned": "Eingestellt",
+					"optional": "Optional",
+					"stepOf": "Schritt {n} von 5"
+				},
+				"readingDriverAndRecordings": "Treiber und Aufnahmen werden gelesen",
+				"step1": {
+					"title": "Geschwindigkeit prüfen",
+					"hintDone": "{speed} µSchritte/s bei 1/{microsteps} Mikroschritten"
+				},
+				"cantTripYetBadge": "Kann noch nicht auslösen",
+				"changeButton": "Ändern",
+				"recordAgainButton": "Erneut aufnehmen",
+				"reviewButton": "Prüfen",
+				"closeButton": "Schließen",
+				"typeSpeedPrompt": "Die Geschwindigkeit eingeben, mit der {label} läuft.",
+				"speedFieldLabel": "Geschwindigkeit",
+				"useOperatingSpeedButton": "Betriebsgeschwindigkeit verwenden, {value}",
+				"cantTripTitle": "Kann bei dieser Geschwindigkeit noch nicht auslösen",
+				"cantTripBody": "Cruise-TSTEP {tstep}, Geschwindigkeits-Minimum {floor}. Schritte 2 bis 4 beheben das.",
+				"stallguardOffTitle": "StallGuard ist aus",
+				"stallguardOffBody": "Schritt 4 schaltet es ein.",
+				"canTripTitle": "Kann bei dieser Geschwindigkeit auslösen",
+				"canTripBody": "Cruise-TSTEP {tstep}, Geschwindigkeits-Minimum {floor}.",
+				"tuneAtSpeedButton": "Bei {speed} µSchritte/s einstellen",
+				"step2": {
+					"title": "{label} im Freilauf aufnehmen",
+					"hintDone": "Im Freilauf liest es {floor} oder höher.",
+					"hintLocked": "Zuerst die Geschwindigkeit prüfen."
+				},
+				"normalRunningDesc": "Normaler Lauf, ohne dass etwas ihn zurückhält.",
+				"movesMotorKeepClear": "Bewegt den Motor. Abstand halten.",
+				"lastRecordingCouldNotBeUsedTitle": "Die letzte Aufnahme konnte nicht verwendet werden",
+				"recordRunningFreelyButton": "Freilauf aufnehmen",
+				"recordingAboutDuration": "Aufnahme läuft, etwa {duration} s.",
+				"step3": {
+					"title": "Eine Blockade aufnehmen",
+					"hintDone": "Zurückgehalten sinkt es auf {dip}.",
+					"hintLocked": "Zuerst den Freilauf aufnehmen."
+				},
+				"holdBackDesc": "{label} festhalten, bis es stoppt, die ganzen {duration} s. Eine echte Blockade liest nahe 0.",
+				"holdOnlyPartWarning": "Nur den drehenden Teil festhalten. Loslassen, wenn sich etwas falsch anfühlt.",
+				"recordStallButton": "Blockade aufnehmen",
+				"holdItNowText": "Jetzt festhalten, bis es stoppt.",
+				"step4": {
+					"title": "Prüfen und speichern",
+					"hintDone": "Gespeichert: Schwelle {threshold}, Geschwindigkeits-Minimum {floor}.",
+					"hintLocked": "Benötigt beide Aufnahmen."
+				},
+				"thresholdStatLabel": "Schwelle (SGTHRS)",
+				"speedFloorStatLabel": "Geschwindigkeits-Minimum (TCOOLTHRS)",
+				"savedHint": "Gespeichert",
+				"nowValueHint": "Jetzt {value}",
+				"runningFreelyLabel": "Freilauf",
+				"runningFreelyValue": "{floor} oder höher",
+				"stallLabel": "Blockade",
+				"stallValue": "{dip} oder niedriger",
+				"tripsAtLabel": "Löst aus bei",
+				"tripsAtValue": "{level} oder niedriger",
+				"checksAboveLabel": "Prüft über",
+				"checksAboveValue": "{speed} µSchritte/s",
+				"notReliableTitle": "Bei {speed} µSchritte/s nicht zuverlässig",
+				"normalMovesDip": "Normale Bewegungen sinken auf {floor}, nahe der Auslöseschwelle {level}: das würde fehlauslösen.",
+				"stallOnlyReached": " Die Blockade erreichte nur {dip}: festhalten, bis es stoppt.",
+				"recordStallAgainButton": "Blockade erneut aufnehmen",
+				"saveAndTurnOnButton": "Speichern und StallGuard einschalten",
+				"saveAnywayButton": "Trotzdem speichern",
+				"turnsAutoTuningOff": "Schaltet die automatische Einstellung aus.",
+				"step5": {
+					"title": "Prüfen",
+					"hintDone": "Nichts hätte ausgelöst.",
+					"hintLocked": "Zuerst die Einstellungen speichern."
+				},
+				"oneMoreFreeRunDesc": "Noch ein Freilauf, geprüft gegen die gespeicherten Einstellungen.",
+				"nothingToCheckTitle": "Nichts zu prüfen",
+				"nothingToCheckBody": "Es lief nie über dem Geschwindigkeits-Minimum ({floor}). Siehe Schritt 1.",
+				"nothingTrippedTitle": "Nichts hätte ausgelöst",
+				"nothingTrippedBody": "Niedrigster Wert {lowest}, löst aus bei {level}.",
+				"wouldHaveStoppedTitle": "Das hätte die Maschine gestoppt",
+				"wouldHaveStoppedBody": "{tripped} von {looked} Messwerten bei oder unter {level}. Die Blockade erneut aufnehmen oder die Schwelle unten senken.",
+				"recordCheckButton": "Prüfung aufnehmen",
+				"stressTestIntro": "Für einen Test mit aktiver Erkennung: der Belastungstest.",
+				"openStressTestButton": "Belastungstest öffnen",
+				"stallDetectionPanel": {
+					"title": "Blockade-Erkennung",
+					"description": "An oder aus, und wo eine Blockade beginnt."
+				},
+				"readingDriverText": "Treiber wird gelesen",
+				"expertToolsPanel": {
+					"title": "Experten-Tools",
+					"description": "Sweep-Optionen, frühere Aufnahmen, Rohmesswerte."
+				},
+				"sweepOptionsDisclosure": {
+					"title": "Sweep-Optionen",
+					"help": "Bewegung, Richtung, Dauer, Cruise-TSTEP, Winkel"
+				},
+				"pastRecordingsDisclosure": {
+					"title": "Frühere Aufnahmen",
+					"helpCount": "{count} insgesamt, neueste zuerst",
+					"helpEmpty": "Noch keine"
+				},
+				"recordedReadingsDisclosure": {
+					"title": "Aufgenommene Messwerte",
+					"help": "Jeder für {label} aufgenommene SG_RESULT-Messwert"
+				},
+				"samplesStatLabel": "Messwerte",
+				"lastSeenHint": "Zuletzt {time}",
+				"sgMinLabel": "SG min",
+				"sgMeanLabel": "SG Mittel",
+				"sgMaxLabel": "SG max",
+				"nothingRecordedYet": "Noch nichts aufgenommen.",
+				"tryAgainButton": "Erneut versuchen",
+				"changeHowItMovesButton": "Bewegungsart ändern"
+			},
+			"tailscaleSection": {
+				"repairMessages": {
+					"restart": "Tailscale-Dienst neu gestartet.",
+					"install": "Reparatur der Tailscale-Installation gestartet.",
+					"logout": "Vorherige Anmeldung entfernt. Einen Auth-Schlüssel eingeben, um erneut zu verbinden."
+				},
+				"headlines": {
+					"notInstalled": "Tailscale ist nicht installiert",
+					"installing": "Tailscale wird installiert",
+					"stopped": "Der Tailscale-Dienst läuft nicht",
+					"loggedOut": "Nicht verbunden",
+					"needsApproval": "Wartet auf Genehmigung",
+					"connected": "Verbunden",
+					"error": "Nicht verbunden"
+				},
+				"joinedAsWithWho": "{network} beigetreten als {who}.",
+				"joinedAsPlain": "{network} beigetreten.",
+				"defaultNetworkName": "dem Netzwerk",
+				"failedToLoadStatus": "Tailscale-Status konnte nicht geladen werden",
+				"machineJoinedNetwork": "Die Maschine ist dem Netzwerk beigetreten.",
+				"failedToApplyAuthKey": "Auth-Schlüssel konnte nicht angewendet werden",
+				"installationRepairCompleted": "Reparatur der Tailscale-Installation abgeschlossen.",
+				"repairFailed": "Tailscale-Reparatur fehlgeschlagen",
+				"connectionLostClearingSignIn": "Verbindung beim Entfernen der Anmeldung verloren. Lokal erneut verbinden, um die Maschine zu prüfen und erneut beizutreten.",
+				"repairTailscaleLabel": "Tailscale reparieren",
+				"restartServiceLabel": "Dienst neu starten",
+				"installOrRepairLabel": "Tailscale installieren oder reparieren",
+				"clearPreviousSignInLabel": "Vorherige Anmeldung entfernen",
+				"connectedLabel": "Verbunden",
+				"notConnectedFallback": "Nicht verbunden",
+				"loadingLabel": "Wird geladen",
+				"hostnameLabel": "Hostname",
+				"networkLabel": "Netzwerk",
+				"joinedAsLabel": "Beigetreten als",
+				"taggedDeviceInfo": "Ein getaggtes Gerät: Es gehört zum Netzwerk {network} statt zu einer Person, und sein Schlüssel läuft nicht ab. Die Administratoren dieses Netzwerks können diese Seite öffnen und sich per SSH mit der Maschine verbinden.",
+				"signedInAsInfo": "Angemeldet als {owner}. Der Schlüssel läuft ab, sofern der Schlüsselablauf für diese Maschine in der Tailscale-Verwaltung nicht deaktiviert ist.",
+				"tailscaleReportsWarning": "Tailscale meldet: {warning}",
+				"installTailscaleButton": "Tailscale installieren",
+				"cantInstallPrefix": "Diese Maschine kann es von hier aus nicht installieren. Auf der Maschine ausführen:",
+				"cantInstallSuffix": ", dann diese Seite neu laden.",
+				"startServiceButton": "Dienst starten",
+				"restartInterruptInfo": "Das Neustarten oder Reparieren von Tailscale kann diese Verbindung kurz unterbrechen.",
+				"serviceRepairUnavailable": " Die Dienstreparatur ist auf dieser Maschine nicht verfügbar.",
+				"authKeyWarning": "Ein Auth-Schlüssel gibt dem Eigentümer dieses Tailscale-Netzwerks SSH-Zugriff auf diese Maschine und Zugriff auf das lokale Netzwerk. Nur einen Schlüssel verwenden, den man selbst erstellt oder von einer voll vertrauten Person erhalten hat.",
+				"authKeyField": {
+					"label": "Auth-Schlüssel",
+					"help": "Einen erstellen unter tailscale.com/admin/settings/keys. Die Maschine tritt diesem Netzwerk sofort bei (oder wechselt dorthin)."
+				},
+				"applyButton": "Anwenden",
+				"restartingServiceText": "Tailscale-Dienst wird neu gestartet",
+				"repairingInstallationText": "Tailscale-Installation wird repariert",
+				"clearingSignInText": "Vorherige Anmeldung wird entfernt",
+				"installationFailedInfo": "Die Installation ist fehlgeschlagen: {error}. „Tailscale installieren oder reparieren“ im Menü versucht es erneut.",
+				"clearSignInModal": {
+					"title": "Vorherige Tailscale-Anmeldung entfernen?",
+					"body": "Dies trennt die Maschine von ihrem Tailscale-Netzwerk und entfernt jeden gespeicherten Setup-Schlüssel. Wurde diese Seite über Tailscale geöffnet, antwortet sie danach möglicherweise nicht mehr. Die Einstellungen im lokalen Netzwerk der Maschine öffnen und hier einen neuen Auth-Schlüssel eingeben, um erneut zu verbinden."
+				},
+				"cancelButton": "Abbrechen",
+				"clearSignInButton": "Anmeldung entfernen"
+			},
+			"tuningParamRow": {
+				"onOffLabels": {
+					"on": "an",
+					"off": "aus"
+				}
+			},
+			"unsavedChangesDialog": {
+				"title": "Es gibt ungespeicherte Änderungen",
+				"body": "Beim Verlassen dieser Seite gehen die noch nicht gespeicherten Änderungen verloren.",
+				"stayButton": "Auf der Seite bleiben",
+				"discardButton": "Änderungen verwerfen",
+				"saveAndLeaveButton": "Speichern und verlassen"
+			},
+			"versionsSection": {
+				"panelTitle": "Diese Maschine",
+				"localChangesBadge": "Lokale Änderungen",
+				"checkForUpdatesLabel": "Auf Updates prüfen",
+				"channelLabel": "Kanal",
+				"versionLabel": "Version",
+				"branchLabel": "Branch",
+				"commitLabel": "Commit",
+				"madeLabel": "Erstellt",
+				"loadingLabel": "Wird geladen",
+				"newVersionOutLabel": "Eine neue Version ist verfügbar:",
+				"updateButton": "Aktualisieren",
+				"upToDateLabel": "Aktuell.",
+				"notOnReleaseLabel": "Nicht auf einem Release.",
+				"couldntReachSource": "Die Quelle der Software war nicht erreichbar: {error}",
+				"failedToLoadVersions": "Versionen konnten nicht geladen werden",
+				"updateFailed": "Update fehlgeschlagen",
+				"gettingAndBuilding": "{name} wird geholt und gebaut. Das dauert ein bis zwei Minuten; die Seite lädt neu, sobald die Maschine wieder da ist.",
+				"depsChangedWarning": "Abhängigkeitsdateien haben sich geändert ({deps}). Eine manuelle Installation der Abhängigkeiten und ein Neustart des Dienstes könnten nötig sein.",
+				"onChannelNow": "Jetzt auf {channel}.",
+				"updatedRestarting": "Aktualisiert {old} → {new}. Backend wird neu gestartet…",
+				"alreadyAtVersionRestarting": "Schon auf dieser Version. Backend wird neu gestartet…",
+				"backendDidNotComeBack": "Das Backend ist nach dem Update nicht wieder zurückgekommen.",
+				"releaseChannelsPanel": {
+					"title": "Release-Kanäle",
+					"description": "Nicht auf einem Release. Der Wechsel zu einem behält die Einstellungen und Daten dieser Maschine."
+				},
+				"upToDateBadge": "Aktuell",
+				"runningBadge": "Läuft",
+				"olderThanSoftwareLine": "Älter als die Software dieser Maschine{version}. Der Wechsel ist möglich, sobald {channel} ein neueres Release hat.",
+				"thisChannelFallback": "diesen",
+				"canaryNewerInfo": "Neuer und weniger getestet. Einmal auf canary, wartet die Rückkehr zu stable, bis stable v{version} erreicht.",
+				"switchButton": "Wechseln",
+				"updatingExplanation": "Ein Update checkt die gewählte Version auf dieser Maschine aus, baut die Oberfläche und startet das Backend neu. Die Einstellungen und Sortierdaten der Maschine bleiben erhalten, und lokale Code-Änderungen werden gesichert, nicht verworfen."
+			},
+			"wifiSection": {
+				"failedToLoadStatus": "WLAN-Status konnte nicht geladen werden",
+				"scanFailed": "Scan fehlgeschlagen",
+				"failedToConnect": "Verbindung fehlgeschlagen",
+				"connectedToSsid": "Verbunden mit {ssid}",
+				"nmcliUnavailable": "NetworkManager (nmcli) ist auf dieser Maschine nicht verfügbar, daher kann ihr WLAN hier nicht verwaltet werden.",
+				"adaptersLabel": "Adapter",
+				"noAdaptersFound": "Keine WLAN-Adapter gefunden.",
+				"connectUsingLabel": "Verbinden über",
+				"networksLabel": "Netzwerke",
+				"scanButton": "Scannen",
+				"noNetworksFound": "Keine Netzwerke gefunden. Erneut scannen.",
+				"connectedBadge": "Verbunden",
+				"passwordForSsid": "Passwort für {ssid}",
+				"openNetworkNoPassword": "Ein offenes Netzwerk: kein Passwort.",
+				"connectButton": "Verbinden",
+				"connectWithDevice": "Verbinden mit {device}",
+				"switchingNetworkInfo": "Das Wechseln des Netzwerks eines Adapters kann jede Seite trennen, die diese Maschine über diesen Adapter erreicht. Über Ethernet oder Tailscale bleibt die Verbindung bestehen.",
+				"loadingWifi": "WLAN wird geladen"
+			},
+			"picture": {
+				"captureModePanel": {
+					"failedToLoad": "Aufnahmemodi konnten nicht geladen werden",
+					"failedToSave": "Aufnahmemodus konnte nicht gespeichert werden",
+					"savedStatus": "Aufnahmemodus gespeichert.",
+					"title": "Aufnahmemodus",
+					"liveResolution": "Live {width}×{height}",
+					"liveFpsSuffix": " bei {fps} fps",
+					"loadingText": "Die Aufnahmemodi werden geladen",
+					"noResolutionChoice": "Diese Kamera bietet keine Auswahl an Auflösungen.",
+					"modeFieldLabel": "Modus",
+					"pickModePlaceholder": "Einen Modus wählen",
+					"pixelFormatField": {
+						"label": "Pixelformat",
+						"help": "MJPG ist der Standard: komprimiert, etwa ein Zehntel der USB-Bandbreite von YUYV. Nur wählen, wenn diese Kamera ein anderes Format braucht."
+					},
+					"mjpgDefaultLabel": "MJPG (Standard)",
+					"nonePlaceholder": "Keiner",
+					"modeOptionLabel": "{width}×{height} bei {fps} fps"
+				},
+				"deviceControlsPanel": {
+					"manualSettingsTitle": "Manuelle Einstellungen",
+					"onLabel": "An",
+					"offLabel": "Aus",
+					"naLabel": "n/a",
+					"lessLabel": "Weniger {label}",
+					"moreLabel": "Mehr {label}",
+					"noControlsMessage": "Diese Quelle bietet keine einstellbaren Kamerasteuerungen."
+				},
+				"driftDetection": {
+					"onLabel": "an",
+					"offLabel": "aus",
+					"liveValuesSaved": "Live-Werte gespeichert.",
+					"failedToAdopt": "Live-Werte konnten nicht übernommen werden",
+					"savedSettingsRestored": "Gespeicherte Einstellungen wiederhergestellt.",
+					"failedToRestore": "Gespeicherte Werte konnten nicht wiederhergestellt werden",
+					"modalTitle": "Die Kameraeinstellungen sind abgewichen",
+					"modalIntro": "Die Kamera meldet andere Werte als die gespeicherten. Welche sollen verwendet werden?",
+					"settingHeader": "Einstellung",
+					"savedHeader": "Gespeichert",
+					"liveHeader": "Live",
+					"ignoreButton": "Ignorieren",
+					"keepLiveButton": "Live-Werte beibehalten",
+					"restoreSavedButton": "Gespeicherte Werte wiederherstellen"
+				},
+				"orientationPanel": {
+					"title": "Ausrichtung",
+					"rotateLabel": "Drehen",
+					"rotationOptionLabel": "{degrees}°",
+					"flipHorizontalLabel": "Horizontal spiegeln",
+					"flipVerticalLabel": "Vertikal spiegeln"
+				}
+			}
+		}
+	}
+}

@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachinesContext } from '$lib/machines/context';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -70,7 +71,7 @@
 			status = await res.json();
 			if (every === null && status) every = status.every;
 		} catch (e: any) {
-			error = e.message ?? 'Failed to read the position check';
+			error = e.message ?? $_('components.settings.stepper.chutePositionCheck.errors.loadFailed');
 		}
 	}
 
@@ -86,7 +87,7 @@
 			if (!res.ok) throw new Error(await readError(res));
 			await load();
 		} catch (e: any) {
-			error = e.message ?? 'Failed to save the position check';
+			error = e.message ?? $_('components.settings.stepper.chutePositionCheck.errors.saveFailed');
 		} finally {
 			saving = false;
 		}
@@ -102,7 +103,7 @@
 			if (!res.ok) throw new Error(await readError(res));
 			await load();
 		} catch (e: any) {
-			error = e.message ?? 'The check failed';
+			error = e.message ?? $_('components.settings.stepper.chutePositionCheck.errors.checkFailed');
 		} finally {
 			running = false;
 		}
@@ -121,8 +122,11 @@
 	});
 
 	function driftText(check: Check): string {
-		if (!check.ok) return 'Failed';
-		if (check.beyond_range) return `${check.drift_deg}° or more`;
+		if (!check.ok) return $_('components.settings.stepper.chutePositionCheck.drift.failed');
+		if (check.beyond_range)
+			return $_('components.settings.stepper.chutePositionCheck.drift.beyondRange', {
+				values: { deg: check.drift_deg }
+			});
 		return `${(check.drift_deg ?? 0) >= 0 ? '+' : ''}${check.drift_deg?.toFixed(2)}°`;
 	}
 
@@ -132,53 +136,74 @@
 		if (!s) return [];
 		const items: { label: string; value: string }[] = [];
 		if (last)
-			items.push({ label: 'Last check', value: `${driftText(last)}, ${fmtTime(last.checked_at)}` });
+			items.push({
+				label: $_('components.settings.stepper.chutePositionCheck.facts.lastCheck'),
+				value: `${driftText(last)}, ${fmtTime(last.checked_at)}`
+			});
 		if (s.checks > 0) {
-			items.push({ label: 'Lost steps found', value: `${s.lost_steps} of ${s.checks} checks` });
+			items.push({
+				label: $_('components.settings.stepper.chutePositionCheck.badge.lostStepsFound'),
+				value: $_('components.settings.stepper.chutePositionCheck.facts.lostStepsFoundValue', {
+					values: { lost: s.lost_steps, total: s.checks }
+				})
+			});
 			if (s.largest_deg !== null)
-				items.push({ label: 'Largest drift', value: `${s.largest_deg.toFixed(2)}°` });
+				items.push({
+					label: $_('components.settings.stepper.chutePositionCheck.facts.largestDrift'),
+					value: `${s.largest_deg.toFixed(2)}°`
+				});
 		}
 		if (s.enabled && s.pieces_since_check !== null)
 			items.push({
-				label: 'Next check',
-				value: `in ${Math.max(0, s.every - s.pieces_since_check)} pieces`
+				label: $_('components.settings.stepper.chutePositionCheck.facts.nextCheck'),
+				value: $_('components.settings.stepper.chutePositionCheck.facts.nextCheckValue', {
+					values: { count: Math.max(0, s.every - s.pieces_since_check) }
+				})
 			});
 		return items;
 	});
 </script>
 
 <Panel
-	title="Position check"
-	description="Every few pieces the chute finds its home switch, to catch steps it lost."
+	title={$_('components.settings.stepper.chutePositionCheck.panel.title')}
+	description={$_('components.settings.stepper.chutePositionCheck.panel.description')}
 	flush
 >
 	{#snippet actions()}
 		{#if status?.checking || running}
-			<Badge tone="primary">Checking</Badge>
+			<Badge tone="primary">{$_('components.settings.stepper.chutePositionCheck.badge.checking')}</Badge>
 		{:else if status && status.lost_steps > 0}
-			<Badge tone="warning">Lost steps found</Badge>
+			<Badge tone="warning"
+				>{$_('components.settings.stepper.chutePositionCheck.badge.lostStepsFound')}</Badge
+			>
 		{:else if status?.enabled}
-			<Badge tone="success">On</Badge>
+			<Badge tone="success">{$_('components.settings.stepper.chutePositionCheck.badge.on')}</Badge>
 		{:else}
-			<Badge>Off</Badge>
+			<Badge>{$_('components.settings.stepper.chutePositionCheck.badge.off')}</Badge>
 		{/if}
 	{/snippet}
 	<div class="divide-y divide-line border-t border-line">
-		<SettingRow label="Check the position" help="Each check takes about 2 seconds.">
+		<SettingRow
+			label={$_('components.settings.stepper.chutePositionCheck.checkPosition.label')}
+			help={$_('components.settings.stepper.chutePositionCheck.checkPosition.help')}
+		>
 			<Switch
 				checked={!!status?.enabled}
-				label="Check the position"
+				label={$_('components.settings.stepper.chutePositionCheck.checkPosition.label')}
 				disabled={!status || saving}
 				onchange={(checked) => save({ position_check: checked })}
 			/>
 		</SettingRow>
-		<SettingRow label="Every" for="chute-position-check-every">
+		<SettingRow
+			label={$_('components.settings.stepper.chutePositionCheck.every.label')}
+			for="chute-position-check-every"
+		>
 			<Input
 				id="chute-position-check-every"
 				type="number"
 				size="sm"
 				min={1}
-				unit="pieces"
+				unit={$_('components.settings.stepper.chutePositionCheck.every.unit')}
 				bind:value={every}
 				onchange={saveEvery}
 				class="w-32"
@@ -188,14 +213,21 @@
 			<div class="flex flex-col gap-3 px-(--pad-panel) py-(--pad-row)">
 				{#if error}<Alert tone="danger">{error}</Alert>{/if}
 				{#if last && !last.ok}
-					<Alert tone="danger" title="The last check failed">
-						{last.error}. Home the chute.
+					<Alert
+						tone="danger"
+						title={$_('components.settings.stepper.chutePositionCheck.alerts.lastCheckFailedTitle')}
+					>
+						{last.error}. {$_('components.settings.stepper.chutePositionCheck.alerts.homeTheChute')}
 					</Alert>
 				{/if}
 				{#if status && status.lost_steps > 0}
-					<Alert tone="warning" title="It lost steps {status.lost_steps} times">
-						Each time it was put back on its position. Pieces since the check before may be in the
-						wrong bins.
+					<Alert
+						tone="warning"
+						title={$_('components.settings.stepper.chutePositionCheck.alerts.lostStepsTitle', {
+							values: { count: status.lost_steps }
+						})}
+					>
+						{$_('components.settings.stepper.chutePositionCheck.alerts.lostStepsBody')}
 					</Alert>
 				{/if}
 			</div>
@@ -207,14 +239,16 @@
 		{/if}
 	</div>
 	{#snippet footer()}
-		<span class="mr-auto text-sm text-ink-muted">Pause the machine to check now.</span>
+		<span class="mr-auto text-sm text-ink-muted"
+			>{$_('components.settings.stepper.chutePositionCheck.footer.hint')}</span
+		>
 		<Button
 			variant="ghost"
 			loading={running}
 			disabled={!status || status.checking}
 			onclick={checkNow}
 		>
-			Check now
+			{$_('components.settings.stepper.chutePositionCheck.footer.checkNow')}
 		</Button>
 	{/snippet}
 </Panel>

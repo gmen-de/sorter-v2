@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
@@ -12,23 +13,25 @@
 
 <Modal
 	open={Boolean(guard.promptUrl)}
-	title="You have unsaved changes"
+	title={$_('components.settings.unsavedChangesDialog.title')}
 	size="sm"
 	onclose={() => {
 		if (guard.promptUrl) guard.stay();
 	}}
 >
-	<p class="text-ink-muted">Leaving this page discards the edits you haven't saved yet.</p>
+	<p class="text-ink-muted">{$_('components.settings.unsavedChangesDialog.body')}</p>
 	{#if guard.error}
 		<div class="mt-4"><Alert tone="danger">{guard.error}</Alert></div>
 	{/if}
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => guard.stay()} disabled={guard.busy}>Stay on the page</Button>
+		<Button variant="ghost" onclick={() => guard.stay()} disabled={guard.busy}
+			>{$_('components.settings.unsavedChangesDialog.stayButton')}</Button
+		>
 		<Button variant="danger" onclick={() => guard.discardAndLeave()} disabled={guard.busy}>
-			Discard the changes
+			{$_('components.settings.unsavedChangesDialog.discardButton')}
 		</Button>
 		<Button variant="primary" onclick={() => guard.saveAndLeave()} loading={guard.busy}>
-			Save and leave
+			{$_('components.settings.unsavedChangesDialog.saveAndLeaveButton')}
 		</Button>
 	{/snippet}
 </Modal>

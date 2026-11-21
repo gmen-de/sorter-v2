@@ -1,0 +1,373 @@
+{
+	"components": {
+		"settings": {
+			"stepper": {
+				"chutePositionCheck": {
+					"panel": {
+						"title": "Positionsprüfung",
+						"description": "Alle paar Teile sucht die Rutsche ihren Endschalter, um verlorene Schritte zu erkennen."
+					},
+					"badge": {
+						"checking": "Prüft",
+						"lostStepsFound": "Schritte verloren",
+						"on": "An",
+						"off": "Aus"
+					},
+					"checkPosition": {
+						"label": "Position prüfen",
+						"help": "Eine Prüfung dauert etwa 2 Sekunden."
+					},
+					"every": {
+						"label": "Alle",
+						"unit": "Teile"
+					},
+					"errors": {
+						"loadFailed": "Positionsprüfung konnte nicht gelesen werden",
+						"saveFailed": "Positionsprüfung konnte nicht gespeichert werden",
+						"checkFailed": "Die Prüfung ist fehlgeschlagen"
+					},
+					"drift": {
+						"failed": "Fehlgeschlagen",
+						"beyondRange": "{deg}° oder mehr"
+					},
+					"facts": {
+						"lastCheck": "Letzte Prüfung",
+						"lostStepsFoundValue": "{lost} von {total} Prüfungen",
+						"largestDrift": "Größte Abweichung",
+						"nextCheck": "Nächste Prüfung",
+						"nextCheckValue": "in {count} Teilen"
+					},
+					"alerts": {
+						"lastCheckFailedTitle": "Die letzte Prüfung ist fehlgeschlagen",
+						"homeTheChute": "Rutsche referenzieren.",
+						"lostStepsTitle": "{count}-mal Schritte verloren",
+						"lostStepsBody": "Jedes Mal wurde die Position wiederhergestellt. Teile seit der vorherigen Prüfung könnten im falschen Behälter liegen."
+					},
+					"footer": {
+						"hint": "Zum sofortigen Prüfen die Maschine anhalten.",
+						"checkNow": "Jetzt prüfen"
+					}
+				},
+				"chuteStressTelemetryChart": {
+					"noSamples": "Keine Messwerte"
+				},
+				"stepperChuteOperation": {
+					"panel": {
+						"title": "Betriebsgeschwindigkeit",
+						"description": "Wie schnell sich der Verteiler von Behälter zu Behälter bewegt."
+					},
+					"speedLabel": "Geschwindigkeit",
+					"saveButton": "Speichern"
+				},
+				"stepperChuteStressTest": {
+					"mode": {
+						"sweep": "Pendeln zwischen Referenzpunkt und Ziel",
+						"random": "Zufällig, von 0° bis zum Ziel",
+						"accelerationRamp": "Beschleunigungsrampe, zufällige Fächer bis zum Fehler"
+					},
+					"field": {
+						"pattern": "Muster",
+						"target": "Ziel",
+						"targetHelp": "Höchstens {max}°.",
+						"duration": "Dauer",
+						"speed": "Geschwindigkeit",
+						"startAcceleration": "Start-Beschleunigung",
+						"step": "Schritt",
+						"movesPerStep": "Bewegungen pro Schritt"
+					},
+					"checkbox": {
+						"useOperatingSpeed": "Betriebsgeschwindigkeit verwenden ({speed} µsteps/s)",
+						"invertDirection": "Richtung umkehren"
+					},
+					"errors": {
+						"targetRange": "Zielwinkel muss in (0, {max}] liegen",
+						"durationPositive": "Dauer muss größer als 0 Sekunden sein",
+						"requestFailed": "Anfrage fehlgeschlagen",
+						"stalled": "Rutsche blockiert — Lauf angehalten."
+					},
+					"status": {
+						"started": "Belastungstest gestartet.",
+						"pauseRequested": "Pause angefordert (aktuelle Etappe wird beendet).",
+						"resumed": "Fortgesetzt.",
+						"stopRequested": "Stopp angefordert."
+					},
+					"runStatus": {
+						"running": "Läuft",
+						"paused": "Pausiert",
+						"stopping": "Wird gestoppt",
+						"completed": "Abgeschlossen",
+						"stopped": "Gestoppt",
+						"failed": "Fehlgeschlagen",
+						"stalled": "Blockiert"
+					},
+					"panel": {
+						"stressTest": {
+							"title": "Belastungstest",
+							"description": "Bewegt die Rutsche mit Geschwindigkeit vor und zurück, um Mechanik und Schrittmotor zu belasten."
+						},
+						"runs": {
+							"title": "Belastungstest-Läufe",
+							"description": "Was jeder Lauf gemacht hat und was der Treiber während des Laufs gelesen hat."
+						}
+					},
+					"facts": {
+						"elapsed": "Verstrichen",
+						"elapsedValue": "{elapsed} von {total}",
+						"distance": "Strecke",
+						"lastTarget": "Letztes Ziel",
+						"none": "Keine",
+						"noneYet": "Noch keine",
+						"speed": "Geschwindigkeit",
+						"currentAcceleration": "Aktuelle Beschleunigung",
+						"highestClean": "Höchste saubere",
+						"started": "Gestartet",
+						"ended": "Beendet",
+						"pattern": "Muster",
+						"target": "Ziel",
+						"planned": "Geplant",
+						"ran": "Gelaufen",
+						"highestCleanAcceleration": "Höchste saubere Beschleunigung"
+					},
+					"buttons": {
+						"refresh": "Aktualisieren",
+						"startStressTest": "Belastungstest starten",
+						"resume": "Fortsetzen",
+						"pause": "Pause",
+						"stop": "Stopp"
+					},
+					"runsList": {
+						"empty": "Noch keine Belastungstests.",
+						"showLatest": "Die letzten {n} anzeigen",
+						"showAll": "Alle {n} Läufe anzeigen"
+					},
+					"telemetry": {
+						"driverReadings": "Treiberwerte",
+						"live": "Live",
+						"loadingReadings": "Werte werden geladen",
+						"noTelemetryRecorded": "Für diesen Lauf wurden noch keine Treiberdaten aufgezeichnet.",
+						"noReadingsForRun": "Keine Werte für diesen Lauf.",
+						"driverSettingsHeading": "Treibereinstellungen, zu Beginn des Laufs aus der Hardware gelesen",
+						"chopperMode": "Chopper-Modus",
+						"unknown": "Unbekannt",
+						"microsteps": "Mikroschritte",
+						"interpolation": "Interpolation auf 256",
+						"on": "An",
+						"off": "Aus",
+						"runCurrent": "Laufstrom (IRUN)",
+						"holdCurrent": "Haltestrom (IHOLD)",
+						"ofMax31": "{val} von 31",
+						"csActualAtStart": "CS_ACTUAL beim Start",
+						"heatWarningAtStart": "Wärmewarnung beim Start",
+						"yes": "Ja",
+						"no": "Nein",
+						"driverTempAtStart": "Treibertemperatur beim Start",
+						"scaleNote": "Jede Reihe ist auf ihren eigenen Bereich skaliert; die Bereiche unten sind absolut.",
+						"readingsCount": "{count} Messwerte.",
+						"rangeValue": "{min} bis {max} (aktuell {last})",
+						"rangeValueSimple": "{min} bis {max}",
+						"overheatReadings": "Überhitzungs- oder Wärmewarnungs-Messwerte"
+					}
+				},
+				"stepperDriverSettings": {
+					"loading": "Treiber wird gelesen",
+					"runCurrent": {
+						"label": "Laufstrom",
+						"help": "IRUN, 0 bis 31."
+					},
+					"holdCurrent": {
+						"label": "Haltestrom",
+						"help": "IHOLD, 0 bis 31."
+					},
+					"microstepping": {
+						"label": "Mikroschritte",
+						"lockedHelp": "Gesperrt: Die Fächer-Zielberechnung der Rutsche ist auf diesen Wert kalibriert."
+					},
+					"invertDirection": "Richtung umkehren"
+				},
+				"stepperDrvStatusGrid": {
+					"heading": "Treiberstatus (DRV_STATUS)",
+					"flags": {
+						"overheated": "Überhitzt",
+						"heatWarning": "Wärmewarnung",
+						"shortCoilA": "Kurzschluss, Spule A",
+						"shortCoilB": "Kurzschluss, Spule B",
+						"openCoilA": "Unterbrochen, Spule A",
+						"openCoilB": "Unterbrochen, Spule B"
+					},
+					"yes": "Ja",
+					"no": "Nein",
+					"stealthChopActive": "Aktiv",
+					"stealthChopOff": "Aus",
+					"standingStill": "Steht still",
+					"current": "Strom (CS_ACTUAL)",
+					"temperature": "Temperatur",
+					"temp": {
+						"above": "Über {deg} °C",
+						"aboveShutdown": "Über {deg} °C, abgeschaltet",
+						"below": "Unter {deg} °C"
+					}
+				},
+				"stepperEndstopSettings": {
+					"activeHigh": "Der Endschalter ist aktiv bei High",
+					"help": "Umkehren, falls der Endschalter verpolt liest."
+				},
+				"stepperHoming": {
+					"homeButton": "Zum Endschalter referenzieren",
+					"cancelButton": "Abbrechen"
+				},
+				"stepperPulseControls": {
+					"jogGroupLabel": "Tippbetrieb",
+					"ccwAriaLabel": "Gegen den Uhrzeigersinn",
+					"ccwText": "CCW",
+					"stopText": "Stopp",
+					"cwAriaLabel": "Im Uhrzeigersinn",
+					"cwText": "CW",
+					"eachPressMoves": "Jeder Tastendruck bewegt",
+					"moveByLabel": "Bewegen nach",
+					"moveByDegrees": "Grad",
+					"moveByTime": "Zeit",
+					"durationAriaLabel": "Wie lange jeder Tastendruck läuft",
+					"degreesAriaLabel": "Grad am Abtrieb pro Tastendruck",
+					"speedAriaLabel": "Geschwindigkeit",
+					"arrowKeysHint": "Die Pfeiltasten bewegen ihn ebenfalls.",
+					"gearRatioNote": "Übersetzung {ratio}:1, also entsprechen {outputDeg}° am Abtrieb {motorDeg}° am Motor."
+				},
+				"stepperStallGuardAuto": {
+					"errors": {
+						"readFailed": "Automatische Abstimmung konnte nicht gelesen werden",
+						"changeFailed": "Automatische Abstimmung konnte nicht geändert werden"
+					},
+					"panel": {
+						"title": "Automatische Abstimmung",
+						"description": "Setzt die Schwelle danach, wie {label} läuft."
+					},
+					"badge": {
+						"off": "Aus",
+						"workingHarder": "Arbeitet schwerer",
+						"tuned": "Abgestimmt",
+						"learning": "Lernt {readings} von {needed}",
+						"pausedForRecording": "Für Aufzeichnung pausiert"
+					},
+					"tuneAutomatically": {
+						"label": "Automatisch abstimmen",
+						"help": "Ein von Hand gespeicherter Schwellenwert schaltet dies aus."
+					},
+					"alerts": {
+						"notRunning": "Läuft nicht: StallGuard ist auf dieser Maschine ausgeschaltet.",
+						"workingHarderTitle": "Arbeitet schwerer als zuvor",
+						"workingHarderBody": "Normaler Lauf las vorher {baseline} oder höher; jetzt {normal}. Prüfen, ob {label} sich frei dreht, dann erneut lernen.",
+						"closeToStallTitle": "Normaler Lauf ist nahe an einer Blockade",
+						"closeToStallBody": "Er liest {normal} oder höher. Eine Blockade löst noch aus, aber mit wenig Spielraum."
+					},
+					"buttons": {
+						"learnAgain": "Erneut lernen"
+					},
+					"facts": {
+						"tripsAt": "Löst aus bei",
+						"tripsAtValue": "{trigger} oder niedriger",
+						"normalRunning": "Normaler Lauf",
+						"normalRunningValue": "{value} oder höher",
+						"stillLearning": "Lernt noch",
+						"speedFloor": "Geschwindigkeits-Untergrenze",
+						"speedFloorValueWithFloor": "{tcoolthrs}, prüft ab {floor} µsteps/s",
+						"learnedFrom": "Gelernt aus",
+						"learnedFromValue": "{count} Messwerten",
+						"lastChange": "Letzte Änderung",
+						"lastChangeValue": "{time}: löst aus bei {from} → {to}"
+					}
+				},
+				"stepperStallGuardCurve": {
+					"kind": {
+						"stall": "Blockade",
+						"freeRunning": "Freilauf"
+					},
+					"panel": {
+						"title": "Lastkurve",
+						"description": "SG_RESULT über die Zeit. Niedriger bedeutet mehr Last; eine Blockade lässt es gegen 0 fallen."
+					},
+					"recordingLabel": "Aufzeichnung",
+					"facts": {
+						"motor": "Motor",
+						"speed": "Geschwindigkeit",
+						"direction": "Richtung",
+						"duration": "Dauer",
+						"meanSg": "SG im Mittel",
+						"irun": "IRUN",
+						"acceleration": "Beschleunigung",
+						"microsteps": "Mikroschritte",
+						"chopper": "Chopper",
+						"loaded": "Belastet",
+						"yes": "Ja",
+						"no": "Nein",
+						"cruiseTstep": "Fahrt-TSTEP"
+					},
+					"loadingSamples": "Messwerte werden geladen",
+					"suggestion": {
+						"heading": "Schwellenwertvorschlag für {label}",
+						"unloadedFloor": "Unbelastete Untergrenze",
+						"loadedDip": "Belasteter Einbruch",
+						"triggerAtOrBelow": "Auslösen bei oder unter",
+						"measuredCruiseTstep": "Gemessenes Fahrt-TSTEP",
+						"gateTcoolthrs": "Schranke TCOOLTHRS",
+						"realMotionFloor": "Untergrenze bei echter Bewegung",
+						"explanation": "SGTHRS ist der geometrische Mittelpunkt der Lücke zwischen gemessener Untergrenze und Einbruch. TCOOLTHRS ist das gemessene Fahrt-TSTEP (das schnellste anhaltende) mal 1,75, damit die Schranke während der Fahrt offen bleibt und beim Beschleunigen oder Abbremsen geschlossen ist.",
+						"provisionalNote": "Bei dieser Geschwindigkeit gibt es noch keine Blockade zum Vergleich, daher sind diese Werte vorläufig."
+					}
+				},
+				"stepperStallGuardRuns": {
+					"emptyState": "Noch nichts aufgezeichnet.",
+					"deleteButtonLabel": "Lauf löschen",
+					"showLatest": "Die letzten {n} anzeigen",
+					"showAll": "Alle {n} Läufe anzeigen",
+					"samplesCount": "{count} Messwerte",
+					"sgRange": "SG {min} bis {max}"
+				},
+				"stepperStallGuardSettings": {
+					"tuneButton": "StallGuard einstellen",
+					"checkboxLabel": "StallGuard-Stillstandserkennung",
+					"helpBase": "Hält die Maschine an, wenn dieser Motor blockiert, bei jeder Bewegung solange dies aktiv ist.",
+					"helpTuneSuffix": "Schwellenwert im StallGuard-Tab einstellen.",
+					"setByAutoWithHref": "Von der automatischen Abstimmung gesetzt, im StallGuard-Tab.",
+					"setByAutoWithoutHref": "Von der automatischen Abstimmung gesetzt.",
+					"thresholdLabel": "Schwellenwert (SGTHRS)",
+					"thresholdAriaLabel": "Schwellenwert",
+					"speedFloorLabel": "Geschwindigkeits-Untergrenze (TCOOLTHRS)",
+					"tripNote": "Löst aus, wenn SG_RESULT {thrs} oder weniger ist, nur bei Fahrgeschwindigkeit (TSTEP bis {tcoolthrs}).",
+					"cantTripTitle": "StallGuard kann bei dieser Geschwindigkeit nicht auslösen",
+					"cantTripBody": "Bei {speed} µsteps/s und 1/{microsteps}-Mikroschritten läuft dieser Motor mit TSTEP {cruiseTstep}, langsamer als die Geschwindigkeits-Untergrenze von {floor}, sodass der Treiber nie auf eine Blockade prüft.",
+					"needsSpeedNote": "Es braucht mindestens {min} µsteps/s Betriebsgeschwindigkeit und dann einen bei dieser Geschwindigkeit abgestimmten Schwellenwert."
+				},
+				"stepperStallGuardSweepOptions": {
+					"direction": {
+						"cw": "Im Uhrzeigersinn",
+						"ccw": "Gegen den Uhrzeigersinn"
+					},
+					"profile": {
+						"constant": "Konstante Drehung",
+						"chuteRandom": "Rutsche: zufälliger Zielwinkel",
+						"pulsed": "Gepulst mit Jitter"
+					},
+					"cruiseHelp": "Nur Bewegung bei oder unter diesem TSTEP (niedriger ist schneller) zählt zu den eigenen Messwerten einer Aufzeichnung, da Beschleunigen, Abbremsen und Richtungswechsel sie auch unbelastet einbrechen lassen. Leer folgt der Geschwindigkeit: {autoCruise}. Die in Schritt 4 gespeicherte Geschwindigkeits-Untergrenze wird aus den Aufzeichnungen gemessen, nicht von hier übernommen.",
+					"field": {
+						"motion": "Bewegung",
+						"direction": "Richtung",
+						"duration": "Dauer",
+						"label": "Bezeichnung",
+						"labelHelp": "Optional. Benennt die Aufzeichnungen in der Liste.",
+						"minAngle": "Min. Winkel",
+						"maxAngle": "Max. Winkel",
+						"minAngleChange": "Min. Winkeländerung",
+						"pulseSize": "Pulsgröße",
+						"dwell": "Verweildauer",
+						"jitterEvery": "Jitter alle",
+						"jitterEveryHelp": "0 schaltet den Jitter aus.",
+						"cruiseTstep": "Fahrt-TSTEP"
+					},
+					"randomNote": "Zufälliger Zielwinkel zwischen dem minimalen und maximalen Abtriebswinkel (begrenzt auf den sicheren Verfahrweg der Rutsche, höchstens 345°), dreht bei jeder Ankunft direkt zurück. Referenziert die Rutsche zuerst falls nötig, sodass sie sich auf absoluten Winkeln bewegt und nie einen Endschalter erreichen kann.",
+					"pulsedNote": "Trennt Pulse durch eine Verweildauer dazwischen, so wie Rotoren und Karussell wirklich laufen, und einen Lösungs-Jitter alle paar Pulse. Nur die Bewegungsphasen werden erfasst.",
+					"checkboxEnterToRun": "Enter startet die Aufzeichnung des offenen Schritts"
+				}
+			}
+		}
+	}
+}

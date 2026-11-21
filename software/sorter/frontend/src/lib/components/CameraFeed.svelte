@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getMachineContext } from '$lib/machines/context';
 	import CameraPicture from '$lib/components/CameraPicture.svelte';
 	import StreamControlsOverlay from '$lib/components/StreamControlsOverlay.svelte';
@@ -109,13 +110,13 @@
 		<div class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-ink-muted">
 			{#if health === 'reconnecting'}
 				<Spinner size={24} />
-				<span class="text-sm">Reconnecting</span>
+				<span class="text-sm">{$_('components.cameraFeed.reconnecting')}</span>
 			{:else if health === 'offline'}
 				<WifiOff size={24} />
-				<span class="text-sm">Camera offline</span>
+				<span class="text-sm">{$_('components.cameraFeed.cameraOffline')}</span>
 			{:else if health === 'unassigned'}
 				<VideoOff size={24} />
-				<span class="text-sm">No camera assigned</span>
+				<span class="text-sm">{$_('components.cameraFeed.noCameraAssigned')}</span>
 			{/if}
 		</div>
 	{/if}

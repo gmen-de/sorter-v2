@@ -6,6 +6,7 @@
 <script lang="ts">
 	import Camera from '@lucide/svelte/icons/camera';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase } from '$lib/backend';
 	import CameraSourcePreview from '$lib/components/CameraSourcePreview.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -68,7 +69,8 @@
 			const payload = await res.json();
 			cameras = Array.isArray(payload.usb) ? payload.usb.filter((c: UsbCameraInfo) => c.index >= 0) : [];
 		} catch (e: any) {
-			if (e.name !== 'AbortError') error = e.message ?? 'The cameras could not be listed.';
+			if (e.name !== 'AbortError')
+				error = e.message ?? $_('components.settings.cameraPicker.loadError');
 		} finally {
 			if (abort === controller) {
 				loading = false;
@@ -94,10 +96,14 @@
 			});
 			if (!res.ok) throw new Error(await res.text());
 			assignments = { ...assignments, [target]: source };
-			onassigned?.(source === null ? 'Camera removed.' : 'Camera changed.');
+			onassigned?.(
+				source === null
+					? $_('components.settings.cameraPicker.cameraRemoved')
+					: $_('components.settings.cameraPicker.cameraChanged')
+			);
 			return true;
 		} catch (e: any) {
-			error = e.message ?? 'The camera could not be saved.';
+			error = e.message ?? $_('components.settings.cameraPicker.saveError');
 			return false;
 		} finally {
 			saving = false;
@@ -112,7 +118,12 @@
 		const other = usedBy(index);
 		if (other) {
 			const cam = cameras.find((c) => c.index === index);
-			reassign = { source: index, from: other, cameraLabel: cam?.name ?? `Camera ${index}` };
+			reassign = {
+				source: index,
+				from: other,
+				cameraLabel:
+					cam?.name ?? $_('components.settings.cameraPicker.cameraFallbackName', { values: { index } })
+			};
 			reassignOpen = true;
 			return;
 		}
@@ -128,7 +139,11 @@
 	}
 </script>
 
-<Modal bind:open title="Choose the camera for {label}" size="lg">
+<Modal
+	bind:open
+	title={$_('components.settings.cameraPicker.modalTitle', { values: { label } })}
+	size="lg"
+>
 	<div class="flex flex-col gap-4">
 		{#if error}
 			<Alert tone="danger">{error}</Alert>
@@ -136,7 +151,7 @@
 		{#if loading}
 			<div class="flex items-center justify-center gap-2 py-8 text-ink-muted">
 				<Spinner size={16} />
-				Looking for cameras
+				{$_('components.settings.cameraPicker.loading')}
 			</div>
 		{:else if cameras.length > 0}
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -154,12 +169,15 @@
 					>
 						<span class="dark block bg-media">
 							{#if cam.preview_available === false}
-								<span class="flex aspect-video items-center justify-center text-xs text-ink-muted">No preview</span>
+								<span class="flex aspect-video items-center justify-center text-xs text-ink-muted">
+									{$_('components.settings.cameraPicker.noPreview')}
+								</span>
 							{:else}
 								<CameraSourcePreview
 									source={cam.index}
 									baseUrl={getBackendHttpBase()}
-									label={cam.name ?? `Camera ${cam.index}`}
+									label={cam.name ??
+										$_('components.settings.cameraPicker.cameraFallbackName', { values: { index: cam.index } })}
 									fit="cover"
 									block
 								/>
@@ -167,15 +185,18 @@
 						</span>
 						<span class="flex items-start justify-between gap-2 px-2.5 py-2 text-sm">
 							<span class="min-w-0">
-								<span class="block truncate font-medium text-ink">{cam.name ?? `Camera ${cam.index}`}</span>
+								<span class="block truncate font-medium text-ink">
+									{cam.name ??
+										$_('components.settings.cameraPicker.cameraFallbackName', { values: { index: cam.index } })}
+								</span>
 								<span class="num block text-ink-muted">
-									{#if !cam.name}Index {cam.index}{/if}{#if !cam.name && cam.width > 0 && cam.height > 0}
+									{#if !cam.name}{$_('components.settings.cameraPicker.indexLabel', { values: { index: cam.index } })}{/if}{#if !cam.name && cam.width > 0 && cam.height > 0}
 										·
 									{/if}{#if cam.width > 0 && cam.height > 0}{cam.width}×{cam.height}{/if}
 								</span>
 							</span>
 							{#if isSelected}
-								<Badge tone="success">Active</Badge>
+								<Badge tone="success">{$_('components.settings.cameraPicker.active')}</Badge>
 							{:else if other}
 								<Badge tone="warning">{ROLE_LABELS[other]}</Badge>
 							{/if}
@@ -184,33 +205,44 @@
 				{/each}
 			</div>
 		{:else}
-			<EmptyState icon={Camera} title="No cameras found">Refresh to look again.</EmptyState>
+			<EmptyState icon={Camera} title={$_('components.settings.cameraPicker.noCamerasTitle')}>
+				{$_('components.settings.cameraPicker.noCamerasBody')}
+			</EmptyState>
 		{/if}
 	</div>
 	{#snippet footer()}
 		{#if assignments[role] !== null}
 			<Button variant="danger" class="mr-auto" disabled={saving} onclick={() => save(role, null)}>
-				Remove the camera
+				{$_('components.settings.cameraPicker.removeCamera')}
 			</Button>
 		{/if}
 		{#if loading}
-			<Button variant="ghost" onclick={cancel}>Cancel</Button>
+			<Button variant="ghost" onclick={cancel}>{$_('components.settings.cameraPicker.cancel')}</Button>
 		{:else}
-			<Button variant="ghost" icon={RefreshCw} onclick={refresh}>Refresh</Button>
+			<Button variant="ghost" icon={RefreshCw} onclick={refresh}>
+				{$_('components.settings.cameraPicker.refresh')}
+			</Button>
 		{/if}
 	{/snippet}
 </Modal>
 
 {#if reassign}
-	<Modal bind:open={reassignOpen} title="Move the camera?" size="sm">
+	<Modal bind:open={reassignOpen} title={$_('components.settings.cameraPicker.moveCamera.title')} size="sm">
 		<p>
-			<span class="font-medium">{reassign.cameraLabel}</span> is set for
-			<span class="font-medium">{ROLE_LABELS[reassign.from]}</span>. Moving it here takes it off that
-			role.
+			{$_('components.settings.cameraPicker.moveCamera.body', {
+				values: {
+					cameraLabel: reassign.cameraLabel,
+					roleLabel: ROLE_LABELS[reassign.from]
+				}
+			})}
 		</p>
 		{#snippet footer()}
-			<Button variant="ghost" onclick={() => (reassignOpen = false)}>Cancel</Button>
-			<Button variant="danger" loading={saving} onclick={confirmReassign}>Move the camera</Button>
+			<Button variant="ghost" onclick={() => (reassignOpen = false)}>
+				{$_('components.settings.cameraPicker.cancel')}
+			</Button>
+			<Button variant="danger" loading={saving} onclick={confirmReassign}>
+				{$_('components.settings.cameraPicker.moveCamera.confirm')}
+			</Button>
 		{/snippet}
 	</Modal>
 {/if}

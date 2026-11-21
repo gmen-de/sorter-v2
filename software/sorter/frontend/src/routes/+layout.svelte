@@ -11,11 +11,13 @@
 	import { settings } from '$lib/stores/settings';
 	import { loadThemeColor } from '$lib/stores/themeColor.svelte';
 	import { applyMode } from '$lib/theme';
+	import { setupI18n } from '$lib/i18n';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
 
 	let save_store = false;
+	let i18nReady = $state(false);
 
 	$effect(() => {
 		const current = $settings;
@@ -40,6 +42,8 @@
 	}
 
 	onMount(() => {
+		void setupI18n().then(() => (i18nReady = true));
+
 		try {
 			const stored = window.localStorage.getItem('settings');
 			if (stored) {
@@ -76,11 +80,13 @@
 
 <!-- Favicon links live in src/app.html, alongside the rest of the icon set. -->
 
-<MachinesProvider>
-	<MachineTitle />
-	<MachineProvider>
-		<BackendConnectionGuard />
-		{@render children()}
-		<ConfirmHost />
-	</MachineProvider>
-</MachinesProvider>
+{#if i18nReady}
+	<MachinesProvider>
+		<MachineTitle />
+		<MachineProvider>
+			<BackendConnectionGuard />
+			{@render children()}
+			<ConfirmHost />
+		</MachineProvider>
+	</MachinesProvider>
+{/if}

@@ -4,6 +4,7 @@
 	import FolderOutput from '@lucide/svelte/icons/folder-output';
 	import History from '@lucide/svelte/icons/rotate-ccw-clock';
 	import House from '@lucide/svelte/icons/house';
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	let {
@@ -30,14 +31,20 @@
 </script>
 
 <!-- The page's actions, for PageHeader's `actions`. -->
-<Button href={csvUrl} download icon={Download}>Export CSV</Button>
-<Button icon={History} onclick={onSnapshots}>Snapshots</Button>
+<Button href={csvUrl} download icon={Download}>{$_('components.bins.binsHeaderActions.exportCsv')}</Button>
+<Button icon={History} onclick={onSnapshots}>{$_('components.bins.binsHeaderActions.snapshots')}</Button>
 <Button icon={House} loading={homing} {disabled} onclick={onHome}>
-	{homing ? 'Homing…' : 'Home the chute'}
+	{homing
+		? $_('components.bins.binsHeaderActions.homingInProgress')
+		: $_('components.bins.binsHeaderActions.homeButton')}
 </Button>
 <Button icon={FolderOutput} loading={emptyBusy} {disabled} onclick={onEmptyAll}>
-	{emptyBusy ? 'Emptying…' : 'Empty all bins'}
+	{emptyBusy
+		? $_('components.bins.binsHeaderActions.emptyingInProgress')
+		: $_('components.bins.binsHeaderActions.emptyAllBins')}
 </Button>
 <Button icon={ArchiveX} loading={resetBusy} {disabled} onclick={onResetAll}>
-	{resetBusy ? 'Resetting…' : 'Reset all bins'}
+	{resetBusy
+		? $_('components.bins.binsHeaderActions.resettingInProgress')
+		: $_('components.bins.binsHeaderActions.resetAllBins')}
 </Button>

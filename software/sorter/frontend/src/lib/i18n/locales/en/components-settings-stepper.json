@@ -1,0 +1,373 @@
+{
+	"components": {
+		"settings": {
+			"stepper": {
+				"chutePositionCheck": {
+					"panel": {
+						"title": "Position check",
+						"description": "Every few pieces the chute finds its home switch, to catch steps it lost."
+					},
+					"badge": {
+						"checking": "Checking",
+						"lostStepsFound": "Lost steps found",
+						"on": "On",
+						"off": "Off"
+					},
+					"checkPosition": {
+						"label": "Check the position",
+						"help": "Each check takes about 2 seconds."
+					},
+					"every": {
+						"label": "Every",
+						"unit": "pieces"
+					},
+					"errors": {
+						"loadFailed": "Failed to read the position check",
+						"saveFailed": "Failed to save the position check",
+						"checkFailed": "The check failed"
+					},
+					"drift": {
+						"failed": "Failed",
+						"beyondRange": "{deg}° or more"
+					},
+					"facts": {
+						"lastCheck": "Last check",
+						"lostStepsFoundValue": "{lost} of {total} checks",
+						"largestDrift": "Largest drift",
+						"nextCheck": "Next check",
+						"nextCheckValue": "in {count} pieces"
+					},
+					"alerts": {
+						"lastCheckFailedTitle": "The last check failed",
+						"homeTheChute": "Home the chute.",
+						"lostStepsTitle": "It lost steps {count} times",
+						"lostStepsBody": "Each time it was put back on its position. Pieces since the check before may be in the wrong bins."
+					},
+					"footer": {
+						"hint": "Pause the machine to check now.",
+						"checkNow": "Check now"
+					}
+				},
+				"chuteStressTelemetryChart": {
+					"noSamples": "No samples"
+				},
+				"stepperChuteOperation": {
+					"panel": {
+						"title": "Operating speed",
+						"description": "How fast the distributor moves from bin to bin."
+					},
+					"speedLabel": "Speed",
+					"saveButton": "Save"
+				},
+				"stepperChuteStressTest": {
+					"mode": {
+						"sweep": "Sweep between home and the target",
+						"random": "Random, from 0° to the target",
+						"accelerationRamp": "Acceleration ramp, random bins until it fails"
+					},
+					"field": {
+						"pattern": "Pattern",
+						"target": "Target",
+						"targetHelp": "At most {max}°.",
+						"duration": "Duration",
+						"speed": "Speed",
+						"startAcceleration": "Start acceleration",
+						"step": "Step",
+						"movesPerStep": "Moves per step"
+					},
+					"checkbox": {
+						"useOperatingSpeed": "Use the operating speed ({speed} µsteps/s)",
+						"invertDirection": "Invert the direction"
+					},
+					"errors": {
+						"targetRange": "Target angle must be in (0, {max}]",
+						"durationPositive": "Duration must be > 0 seconds",
+						"requestFailed": "Request failed",
+						"stalled": "Chute stalled — run halted."
+					},
+					"status": {
+						"started": "Stress test started.",
+						"pauseRequested": "Pause requested (finishing current leg).",
+						"resumed": "Resumed.",
+						"stopRequested": "Stop requested."
+					},
+					"runStatus": {
+						"running": "Running",
+						"paused": "Paused",
+						"stopping": "Stopping",
+						"completed": "Completed",
+						"stopped": "Stopped",
+						"failed": "Failed",
+						"stalled": "Stalled"
+					},
+					"panel": {
+						"stressTest": {
+							"title": "Stress test",
+							"description": "Bounce the chute back and forth at speed to exercise the mechanics and the stepper."
+						},
+						"runs": {
+							"title": "Stress test runs",
+							"description": "What each run did, and what the driver read while it ran."
+						}
+					},
+					"facts": {
+						"elapsed": "Elapsed",
+						"elapsedValue": "{elapsed} of {total}",
+						"distance": "Distance",
+						"lastTarget": "Last target",
+						"none": "None",
+						"noneYet": "None yet",
+						"speed": "Speed",
+						"currentAcceleration": "Current acceleration",
+						"highestClean": "Highest clean",
+						"started": "Started",
+						"ended": "Ended",
+						"pattern": "Pattern",
+						"target": "Target",
+						"planned": "Planned",
+						"ran": "Ran",
+						"highestCleanAcceleration": "Highest clean acceleration"
+					},
+					"buttons": {
+						"refresh": "Refresh",
+						"startStressTest": "Start the stress test",
+						"resume": "Resume",
+						"pause": "Pause",
+						"stop": "Stop"
+					},
+					"runsList": {
+						"empty": "No stress runs yet.",
+						"showLatest": "Show the latest {n}",
+						"showAll": "Show all {n} runs"
+					},
+					"telemetry": {
+						"driverReadings": "Driver readings",
+						"live": "Live",
+						"loadingReadings": "Loading the readings",
+						"noTelemetryRecorded": "No driver telemetry recorded for this run yet.",
+						"noReadingsForRun": "No readings for this run.",
+						"driverSettingsHeading": "Driver settings, read from the hardware as the run started",
+						"chopperMode": "Chopper mode",
+						"unknown": "Unknown",
+						"microsteps": "Microsteps",
+						"interpolation": "Interpolation to 256",
+						"on": "On",
+						"off": "Off",
+						"runCurrent": "Run current (IRUN)",
+						"holdCurrent": "Hold current (IHOLD)",
+						"ofMax31": "{val} of 31",
+						"csActualAtStart": "CS_ACTUAL at the start",
+						"heatWarningAtStart": "Heat warning at the start",
+						"yes": "Yes",
+						"no": "No",
+						"driverTempAtStart": "Driver temperature at the start",
+						"scaleNote": "Each series is scaled to its own range; the ranges below are absolute.",
+						"readingsCount": "{count} readings.",
+						"rangeValue": "{min} to {max} (now {last})",
+						"rangeValueSimple": "{min} to {max}",
+						"overheatReadings": "Overheat or heat warning readings"
+					}
+				},
+				"stepperDriverSettings": {
+					"loading": "Reading the driver",
+					"runCurrent": {
+						"label": "Run current",
+						"help": "IRUN, 0 to 31."
+					},
+					"holdCurrent": {
+						"label": "Hold current",
+						"help": "IHOLD, 0 to 31."
+					},
+					"microstepping": {
+						"label": "Microstepping",
+						"lockedHelp": "Locked: the chute’s bin-aiming math is calibrated for this value."
+					},
+					"invertDirection": "Invert the direction"
+				},
+				"stepperDrvStatusGrid": {
+					"heading": "Driver status (DRV_STATUS)",
+					"flags": {
+						"overheated": "Overheated",
+						"heatWarning": "Heat warning",
+						"shortCoilA": "Short, coil A",
+						"shortCoilB": "Short, coil B",
+						"openCoilA": "Open, coil A",
+						"openCoilB": "Open, coil B"
+					},
+					"yes": "Yes",
+					"no": "No",
+					"stealthChopActive": "Active",
+					"stealthChopOff": "Off",
+					"standingStill": "Standing still",
+					"current": "Current (CS_ACTUAL)",
+					"temperature": "Temperature",
+					"temp": {
+						"above": "Above {deg} °C",
+						"aboveShutdown": "Above {deg} °C, shut down",
+						"below": "Below {deg} °C"
+					}
+				},
+				"stepperEndstopSettings": {
+					"activeHigh": "The endstop is active high",
+					"help": "Flip it if the endstop reads backwards."
+				},
+				"stepperHoming": {
+					"homeButton": "Home to the endstop",
+					"cancelButton": "Cancel"
+				},
+				"stepperPulseControls": {
+					"jogGroupLabel": "Jog",
+					"ccwAriaLabel": "Counterclockwise",
+					"ccwText": "CCW",
+					"stopText": "Stop",
+					"cwAriaLabel": "Clockwise",
+					"cwText": "CW",
+					"eachPressMoves": "Each press moves",
+					"moveByLabel": "Move by",
+					"moveByDegrees": "Degrees",
+					"moveByTime": "Time",
+					"durationAriaLabel": "How long each press runs",
+					"degreesAriaLabel": "Degrees at the output for each press",
+					"speedAriaLabel": "Speed",
+					"arrowKeysHint": "The arrow keys jog it too.",
+					"gearRatioNote": "Gear ratio {ratio}:1, so {outputDeg}° at the output is {motorDeg}° at the motor."
+				},
+				"stepperStallGuardAuto": {
+					"errors": {
+						"readFailed": "Failed to read the automatic tuning",
+						"changeFailed": "Failed to change the automatic tuning"
+					},
+					"panel": {
+						"title": "Automatic tuning",
+						"description": "Sets the trigger from how {label} runs."
+					},
+					"badge": {
+						"off": "Off",
+						"workingHarder": "Working harder",
+						"tuned": "Tuned",
+						"learning": "Learning {readings} of {needed}",
+						"pausedForRecording": "Paused for a recording"
+					},
+					"tuneAutomatically": {
+						"label": "Tune automatically",
+						"help": "A threshold saved by hand turns it off."
+					},
+					"alerts": {
+						"notRunning": "Not running: StallGuard is off on this machine.",
+						"workingHarderTitle": "Working harder than it did",
+						"workingHarderBody": "Normal running read {baseline} or higher; now {normal}. Check {label} turns freely, then learn again.",
+						"closeToStallTitle": "Normal running is close to a stall",
+						"closeToStallBody": "It reads {normal} or higher. A stall still trips it, with little room."
+					},
+					"buttons": {
+						"learnAgain": "Learn again"
+					},
+					"facts": {
+						"tripsAt": "Trips at",
+						"tripsAtValue": "{trigger} or lower",
+						"normalRunning": "Normal running",
+						"normalRunningValue": "{value} or higher",
+						"stillLearning": "Still learning",
+						"speedFloor": "Speed floor",
+						"speedFloorValueWithFloor": "{tcoolthrs}, checks above {floor} µsteps/s",
+						"learnedFrom": "Learned from",
+						"learnedFromValue": "{count} readings",
+						"lastChange": "Last change",
+						"lastChangeValue": "{time}: trips at {from} → {to}"
+					}
+				},
+				"stepperStallGuardCurve": {
+					"kind": {
+						"stall": "Stall",
+						"freeRunning": "Free running"
+					},
+					"panel": {
+						"title": "Load curve",
+						"description": "SG_RESULT over time. Lower means more load; a stall drops it toward 0."
+					},
+					"recordingLabel": "Recording",
+					"facts": {
+						"motor": "Motor",
+						"speed": "Speed",
+						"direction": "Direction",
+						"duration": "Duration",
+						"meanSg": "Mean SG",
+						"irun": "IRUN",
+						"acceleration": "Acceleration",
+						"microsteps": "Microsteps",
+						"chopper": "Chopper",
+						"loaded": "Loaded",
+						"yes": "Yes",
+						"no": "No",
+						"cruiseTstep": "Cruise TSTEP"
+					},
+					"loadingSamples": "Loading the samples",
+					"suggestion": {
+						"heading": "Threshold suggestion for {label}",
+						"unloadedFloor": "Unloaded floor",
+						"loadedDip": "Loaded dip",
+						"triggerAtOrBelow": "Trigger at or below",
+						"measuredCruiseTstep": "Measured cruise TSTEP",
+						"gateTcoolthrs": "Gate TCOOLTHRS",
+						"realMotionFloor": "Real-motion floor",
+						"explanation": "SGTHRS is the geometric midpoint of the gap between the measured floor and dip. TCOOLTHRS is the measured cruise TSTEP (the fastest sustained) times 1.75, so the gate stays open through cruise and off while speeding up or slowing down.",
+						"provisionalNote": "There is no stall at this speed to pair it with yet, so these numbers are provisional."
+					}
+				},
+				"stepperStallGuardRuns": {
+					"emptyState": "Nothing recorded yet.",
+					"deleteButtonLabel": "Delete run",
+					"showLatest": "Show the latest {n}",
+					"showAll": "Show all {n} runs",
+					"samplesCount": "{count} samples",
+					"sgRange": "SG {min} to {max}"
+				},
+				"stepperStallGuardSettings": {
+					"tuneButton": "Tune StallGuard",
+					"checkboxLabel": "StallGuard stall detection",
+					"helpBase": "Halts the machine if this motor stalls, on every move while it's on.",
+					"helpTuneSuffix": "Tune the threshold on the StallGuard tab.",
+					"setByAutoWithHref": "Set by automatic tuning, on the StallGuard tab.",
+					"setByAutoWithoutHref": "Set by automatic tuning.",
+					"thresholdLabel": "Threshold (SGTHRS)",
+					"thresholdAriaLabel": "Threshold",
+					"speedFloorLabel": "Speed floor (TCOOLTHRS)",
+					"tripNote": "Trips when SG_RESULT is {thrs} or less, only at cruising speed (TSTEP up to {tcoolthrs}).",
+					"cantTripTitle": "StallGuard can't trip at this speed",
+					"cantTripBody": "At {speed} µsteps/s and 1/{microsteps} microstepping this motor cruises at TSTEP {cruiseTstep}, slower than the speed floor of {floor}, so the driver never checks for a stall.",
+					"needsSpeedNote": "It needs an operating speed of at least {min} µsteps/s, and then a threshold tuned at that speed."
+				},
+				"stepperStallGuardSweepOptions": {
+					"direction": {
+						"cw": "Clockwise",
+						"ccw": "Counterclockwise"
+					},
+					"profile": {
+						"constant": "Constant spin",
+						"chuteRandom": "Chute: random go-to-angle",
+						"pulsed": "Pulsed with jitter"
+					},
+					"cruiseHelp": "Only motion at or under this TSTEP (lower is faster) counts toward a recording's own readings, since speeding up, slowing down and reversing dip them even unloaded. Empty follows the speed: {autoCruise}. The speed floor saved in step 4 is measured from the recordings, not taken from here.",
+					"field": {
+						"motion": "Motion",
+						"direction": "Direction",
+						"duration": "Duration",
+						"label": "Label",
+						"labelHelp": "Optional. Names the recordings in the list.",
+						"minAngle": "Min angle",
+						"maxAngle": "Max angle",
+						"minAngleChange": "Min angle change",
+						"pulseSize": "Pulse size",
+						"dwell": "Dwell",
+						"jitterEvery": "Jitter every",
+						"jitterEveryHelp": "0 turns the jitter off.",
+						"cruiseTstep": "Cruise TSTEP"
+					},
+					"randomNote": "Random go-to-angle between the min and max output angle (clamped to the chute's safe travel, 345° at most), turning straight back on each arrival. Homes the chute first if needed, so it moves on absolute angles and can never reach an endstop.",
+					"pulsedNote": "Separate pulses with a dwell between them, as the rotors and carousel really run, and an unstick jitter every few pulses. Only the moving phases are sampled.",
+					"checkboxEnterToRun": "Enter starts the recording of the step that is open"
+				}
+			}
+		}
+	}
+}

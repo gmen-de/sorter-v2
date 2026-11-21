@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { get } from 'svelte/store';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachinesContext } from '$lib/machines/context';
 	import { sortingProfileStore } from '$lib/stores/sortingProfile.svelte';
@@ -154,7 +156,7 @@
 		}
 		return {
 			target_id: syncState.target_id,
-			target_name: syncState.target_name ?? 'Hive',
+			target_name: syncState.target_name ?? get(_)('components.sortingProfileDropdown.hive'),
 			profile_id: syncState.profile_id,
 			profile_name: syncState.profile_name,
 			version_id: syncState.version_id,
@@ -226,7 +228,7 @@
 				if (!existing) {
 					byProfile.set(key, {
 						target_id: target.id,
-						target_name: target.name || target.url || 'Hive',
+						target_name: target.name || target.url || get(_)('components.sortingProfileDropdown.hive'),
 						profile_id: profile.id,
 						profile_name: profile.name,
 						version_id: version.id,
@@ -300,13 +302,16 @@
 			const res = await fetch(`${currentBackendBaseUrl()}/api/sorting-profiles/library`);
 			if (!res.ok) {
 				const body = await res.json().catch(() => null);
-				throw new Error(body?.detail ?? `HTTP ${res.status}`);
+				throw new Error(
+					body?.detail ?? get(_)('components.sortingProfileDropdown.httpStatus', { values: { status: res.status } })
+				);
 			}
 			profile_library = (await res.json()) as SortingProfileLibraryResponse;
 			quick_profiles_error = null;
 		} catch (e: unknown) {
 			profile_library = null;
-			quick_profiles_error = e instanceof Error ? e.message : 'Failed to load profile library';
+			quick_profiles_error =
+				e instanceof Error ? e.message : get(_)('components.sortingProfileDropdown.libraryLoadFailed');
 		} finally {
 			loading_quick_profiles = false;
 			rebuildQuickProfiles();
@@ -354,7 +359,9 @@
 			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => null);
-				throw new Error(body?.detail ?? `HTTP ${res.status}`);
+				throw new Error(
+					body?.detail ?? get(_)('components.sortingProfileDropdown.httpStatus', { values: { status: res.status } })
+				);
 			}
 			const payload = await res.json().catch(() => null);
 			await sortingProfileStore.reload(currentBackendBaseUrl()).catch(() => null);
@@ -363,10 +370,16 @@
 			const preassigned = payload?.preassigned_count as number | undefined;
 			action_message =
 				mode === 'rules' && preassigned
-					? `Switched to ${label}, pre-assigned ${preassigned} bin${preassigned === 1 ? '' : 's'}.`
-					: `Switched to ${label}.`;
+					? get(_)(
+							preassigned === 1
+								? 'components.sortingProfileDropdown.switchedPreassignedOne'
+								: 'components.sortingProfileDropdown.switchedPreassignedOther',
+							{ values: { label, count: preassigned } }
+						)
+					: get(_)('components.sortingProfileDropdown.switchedTo', { values: { label } });
 		} catch (e: unknown) {
-			action_error = e instanceof Error ? e.message : 'Failed to switch sorting profile';
+			action_error =
+				e instanceof Error ? e.message : get(_)('components.sortingProfileDropdown.switchFailed');
 		} finally {
 			applying_key = null;
 		}
@@ -407,7 +420,9 @@
 			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => null);
-				throw new Error(body?.detail ?? `HTTP ${res.status}`);
+				throw new Error(
+					body?.detail ?? get(_)('components.sortingProfileDropdown.httpStatus', { values: { status: res.status } })
+				);
 			}
 			const payload = await res.json().catch(() => null);
 			recent_profiles = rememberRecentSortingProfile(currentMachineKey(), { ...entry, last_used_at: null });
@@ -415,40 +430,59 @@
 			await loadQuickProfileLibrary();
 			const preassigned = payload?.preassigned_count as number | undefined;
 			if (mode === 'rules' && preassigned) {
-				action_message = `Switched to ${entry.profile_name}, pre-assigned ${preassigned} bin${preassigned === 1 ? '' : 's'}.`;
+				action_message = get(_)(
+					preassigned === 1
+						? 'components.sortingProfileDropdown.switchedPreassignedOne'
+						: 'components.sortingProfileDropdown.switchedPreassignedOther',
+					{ values: { label: entry.profile_name, count: preassigned } }
+				);
 			} else {
 				action_message = payload?.activation_error
-					? `Applied ${entry.profile_name} locally. Hive activation could not be confirmed.`
-					: `Switched to ${entry.profile_name}.`;
+					? get(_)('components.sortingProfileDropdown.appliedLocallyActivationUnconfirmed', {
+							values: { label: entry.profile_name }
+						})
+					: get(_)('components.sortingProfileDropdown.switchedTo', {
+							values: { label: entry.profile_name }
+						});
 			}
 		} catch (e: unknown) {
-			action_error = e instanceof Error ? e.message : 'Failed to switch sorting profile';
+			action_error =
+				e instanceof Error ? e.message : get(_)('components.sortingProfileDropdown.switchFailed');
 		} finally {
 			applying_key = null;
 		}
 	}
 
 	const current_entry = $derived(syncStateToRecentEntry(status?.sync_state));
-	const current_profile_name = $derived(status?.sync_state?.profile_name ?? status?.local_profile?.name ?? 'No profile');
+	const current_profile_name = $derived(
+		status?.sync_state?.profile_name ??
+			status?.local_profile?.name ??
+			$_('components.sortingProfileDropdown.noProfile')
+	);
 	const current_profile_version = $derived(status?.sync_state?.version_number ?? null);
 	const current_profile_version_label = $derived(status?.sync_state?.version_label ?? null);
 	const current_profile_target = $derived.by(() => {
 		const ss = status?.sync_state;
-		if (ss?.source === 'local') return `local:${ss.local_filename ?? ss.profile_name ?? 'profile'}`;
+		if (ss?.source === 'local')
+			return `local:${ss.local_filename ?? ss.profile_name ?? $_('components.sortingProfileDropdown.profileFallback')}`;
 		if (ss?.target_name) return `hive:${ss.target_name}`;
-		return ss?.target_name ?? 'Local';
+		return ss?.target_name ?? $_('components.sortingProfileDropdown.local');
 	});
 	const current_profile_updated = $derived(
 		formatRelativeTime(status?.sync_state?.applied_at ?? status?.local_profile?.updated_at)
 	);
 	function usedSummary(entry: QuickSwitchProfileEntry): string {
 		const used = formatRelativeTime(entry.last_used_at);
-		return used ? `Used ${used}` : '';
+		return used
+			? get(_)('components.sortingProfileDropdown.usedAt', { values: { used } })
+			: '';
 	}
 
 	function updatedSummary(entry: QuickSwitchProfileEntry): string {
 		const updated = formatRelativeTime(entry.updated_at);
-		return updated ? `Updated ${updated}` : '';
+		return updated
+			? get(_)('components.sortingProfileDropdown.updatedAt', { values: { updated } })
+			: '';
 	}
 
 	$effect(() => {
@@ -483,7 +517,13 @@
 	</span>
 {/snippet}
 
-<Popover label="Sorting profile" placement="bottom-end" width="22rem" padded={false} bind:open={dropdown_open}>
+<Popover
+	label={$_('components.sortingProfileDropdown.sortingProfile')}
+	placement="bottom-end"
+	width="22rem"
+	padded={false}
+	bind:open={dropdown_open}
+>
 	{#snippet trigger(props)}
 		<button
 			{...props}
@@ -510,13 +550,17 @@
 							: ''}
 					</span>
 				{/if}
-				<Badge tone="success">Active</Badge>
+				<Badge tone="success">{$_('components.sortingProfileDropdown.active')}</Badge>
 			</div>
 		</div>
 		{@render meta([
-			status?.local_profile?.rule_count != null && `${status.local_profile.rule_count} rules`,
+			status?.local_profile?.rule_count != null &&
+				$_('components.sortingProfileDropdown.ruleCount', {
+					values: { count: status.local_profile.rule_count }
+				}),
 			current_profile_target,
-			current_profile_updated && `Updated ${current_profile_updated}`
+			current_profile_updated &&
+				$_('components.sortingProfileDropdown.updatedAt', { values: { updated: current_profile_updated } })
 		])}
 	</div>
 
@@ -529,11 +573,11 @@
 	{/if}
 
 	<div class="max-h-[60dvh] overflow-y-auto">
-		<div class="label border-y border-line px-4 py-1.5">Recent</div>
+		<div class="label border-y border-line px-4 py-1.5">{$_('components.sortingProfileDropdown.recent')}</div>
 		{#if loading_quick_profiles && quick_profiles.length === 0}
 			<div class="flex justify-center px-4 py-3"><Spinner /></div>
 		{:else if quick_profiles.length === 0}
-			<p class="px-4 py-3 text-ink-muted">No recent profiles yet.</p>
+			<p class="px-4 py-3 text-ink-muted">{$_('components.sortingProfileDropdown.noRecentProfiles')}</p>
 		{:else}
 			<div class="divide-y divide-line">
 				{#each quick_profiles as entry}
@@ -547,15 +591,20 @@
 							<span class="min-w-0 truncate font-medium text-ink">{entry.profile_name}</span>
 							<span class="num shrink-0 text-ink-muted">
 								{#if applying_key === recentEntryKey(entry)}
-									Switching
+									{$_('components.sortingProfileDropdown.switching')}
 								{:else if entry.version_number}
 									v{entry.version_number}
 								{/if}
 							</span>
 						</span>
 						{@render meta([
-							entry.is_default ? 'Hive default' : `Hive: ${entry.target_name}`,
-							entry.rule_count != null && `${entry.rule_count} rules`,
+							entry.is_default
+								? $_('components.sortingProfileDropdown.hiveDefault')
+								: $_('components.sortingProfileDropdown.hiveTarget', {
+										values: { target: entry.target_name }
+									}),
+							entry.rule_count != null &&
+								$_('components.sortingProfileDropdown.ruleCount', { values: { count: entry.rule_count } }),
 							usedSummary(entry),
 							updatedSummary(entry)
 						])}
@@ -564,11 +613,11 @@
 			</div>
 		{/if}
 
-		<div class="label border-y border-line px-4 py-1.5">On this machine</div>
+		<div class="label border-y border-line px-4 py-1.5">{$_('components.sortingProfileDropdown.onThisMachine')}</div>
 		{#if loading_quick_profiles && local_profiles.length === 0}
 			<div class="flex justify-center px-4 py-3"><Spinner /></div>
 		{:else if local_profiles.length === 0}
-			<p class="px-4 py-3 text-ink-muted">No local profiles.</p>
+			<p class="px-4 py-3 text-ink-muted">{$_('components.sortingProfileDropdown.noLocalProfiles')}</p>
 		{:else}
 			<div class="divide-y divide-line">
 				{#each local_profiles as profile}
@@ -582,15 +631,16 @@
 							<span class="min-w-0 truncate font-medium text-ink">{profile.name || profile.filename}</span>
 							<span class="shrink-0 text-ink-muted">
 								{#if applying_key === `local::${profile.filename}`}
-									Switching
+									{$_('components.sortingProfileDropdown.switching')}
 								{:else if profile.is_active}
-									Active
+									{$_('components.sortingProfileDropdown.active')}
 								{/if}
 							</span>
 						</span>
 						{@render meta([
 							profile.filename,
-							profile.rule_count != null && `${profile.rule_count} rules`
+							profile.rule_count != null &&
+								$_('components.sortingProfileDropdown.ruleCount', { values: { count: profile.rule_count } })
 						])}
 					</button>
 				{/each}
@@ -600,37 +650,56 @@
 </Popover>
 
 {#snippet switchChoices(onpick: (mode: 'empty' | 'rules') => void, cancel: () => void)}
-	<Button variant="ghost" onclick={cancel}>Cancel</Button>
-	<Button onclick={() => onpick('empty')}>Reset bins</Button>
-	<Button variant="primary" onclick={() => onpick('rules')}>Pre-assign from rules</Button>
+	<Button variant="ghost" onclick={cancel}>{$_('components.sortingProfileDropdown.cancel')}</Button>
+	<Button onclick={() => onpick('empty')}>{$_('components.sortingProfileDropdown.resetBins')}</Button>
+	<Button variant="primary" onclick={() => onpick('rules')}
+		>{$_('components.sortingProfileDropdown.preassignFromRules')}</Button
+	>
 {/snippet}
 
-<Modal bind:open={local_modal_open} title="Switch the sorting profile" size="sm">
+<Modal
+	bind:open={local_modal_open}
+	title={$_('components.sortingProfileDropdown.switchModalTitle')}
+	size="sm"
+>
 	{#if pending_local_profile !== null}
-		<p>Switch to <span class="font-medium">{pending_local_profile.name || pending_local_profile.filename}</span>?</p>
-		<p class="mt-2 text-ink-muted">Choose how the bins start with the new profile.</p>
+		<p>
+			{$_('components.sortingProfileDropdown.switchToPrefix')}
+			<span class="font-medium">{pending_local_profile.name || pending_local_profile.filename}</span
+			>?
+		</p>
+		<p class="mt-2 text-ink-muted">{$_('components.sortingProfileDropdown.chooseHowBinsStart')}</p>
 	{/if}
 	{#snippet footer()}
 		{@render switchChoices((mode) => void confirmApplyLocalProfile(mode), cancelApplyLocalProfile)}
 	{/snippet}
 </Modal>
 
-<Modal open={pending_switch_entry !== null} title="Switch the sorting profile" size="sm" onclose={cancelApplyRecentProfile}>
+<Modal
+	open={pending_switch_entry !== null}
+	title={$_('components.sortingProfileDropdown.switchModalTitle')}
+	size="sm"
+	onclose={cancelApplyRecentProfile}
+>
 	{#if pending_switch_entry !== null}
-		<p>Switch to <span class="font-medium">{pending_switch_entry.profile_name}</span>?</p>
-		<p class="mt-2 text-ink-muted">Choose how the bins start with the new profile.</p>
+		<p>
+			{$_('components.sortingProfileDropdown.switchToPrefix')}
+			<span class="font-medium">{pending_switch_entry.profile_name}</span>?
+		</p>
+		<p class="mt-2 text-ink-muted">{$_('components.sortingProfileDropdown.chooseHowBinsStart')}</p>
 		<dl class="mt-3 divide-y divide-line rounded-control bg-well">
 			<div class="px-3 py-2">
-				<dt class="font-medium text-ink">Reset bins</dt>
+				<dt class="font-medium text-ink">{$_('components.sortingProfileDropdown.resetBins')}</dt>
 				<dd class="text-ink-muted">
-					Every bin is cleared, and categories are given bins as pieces arrive.
+					{$_('components.sortingProfileDropdown.resetBinsDescription')}
 				</dd>
 			</div>
 			<div class="px-3 py-2">
-				<dt class="font-medium text-ink">Pre-assign from rules</dt>
+				<dt class="font-medium text-ink">
+					{$_('components.sortingProfileDropdown.preassignFromRules')}
+				</dt>
 				<dd class="text-ink-muted">
-					Bins are filled in the order of the profile's rules: rule 1 in bin 1, rule 2 in bin 2, and
-					so on.
+					{$_('components.sortingProfileDropdown.preassignFromRulesDescription')}
 				</dd>
 			</div>
 		</dl>

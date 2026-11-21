@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import type { PictureSettings } from '$lib/settings/picture-settings';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
@@ -19,12 +20,17 @@
 </script>
 
 <section class="flex flex-col gap-3 px-(--pad-panel) py-4">
-	<h3 class="label">Orientation</h3>
+	<h3 class="label">{$_('components.settings.picture.orientationPanel.title')}</h3>
 	<SegmentedControl
-		label="Rotate"
+		label={$_('components.settings.picture.orientationPanel.rotateLabel')}
 		full
 		value={String(draftSettings.rotation)}
-		options={ROTATION_OPTIONS.map((r) => ({ value: String(r), label: `${r}°` }))}
+		options={ROTATION_OPTIONS.map((r) => ({
+			value: String(r),
+			label: $_('components.settings.picture.orientationPanel.rotationOptionLabel', {
+				values: { degrees: r }
+			})
+		}))}
 		onchange={(r) => onUpdateRotation(Number(r))}
 	/>
 	<div class="flex flex-wrap gap-x-5 gap-y-2">
@@ -32,13 +38,13 @@
 			checked={draftSettings.flip_horizontal}
 			onchange={() => onUpdateBoolean('flip_horizontal', !draftSettings.flip_horizontal)}
 		>
-			Flip horizontally
+			{$_('components.settings.picture.orientationPanel.flipHorizontalLabel')}
 		</Checkbox>
 		<Checkbox
 			checked={draftSettings.flip_vertical}
 			onchange={() => onUpdateBoolean('flip_vertical', !draftSettings.flip_vertical)}
 		>
-			Flip vertically
+			{$_('components.settings.picture.orientationPanel.flipVerticalLabel')}
 		</Checkbox>
 	</div>
 </section>

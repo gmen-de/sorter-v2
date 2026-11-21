@@ -1,0 +1,399 @@
+{
+	"routes": {
+		"settings": {
+			"jitterTest": {
+				"pageTitle": "Sorter - Jitter test",
+				"title": "Jitter test",
+				"description": "A short, sharp back-and-forth on a stepper that breaks static friction: enough to nudge a stuck piece off a C channel without a violent shake. It runs on the firmware's real-time core and ends where it started.",
+				"motor": {
+					"panelTitle": "Motor",
+					"label": "Motor"
+				},
+				"presets": {
+					"panelTitle": "Presets",
+					"description": "A preset fills in the settings below; then press Jitter. Amplitudes are at the motor: the rotor moves about {gearRatio} times less.",
+					"items": {
+						"heavyStuck": {
+							"name": "Heavy stuck",
+							"blurb": "Reference: medium everything, the one that worked"
+						},
+						"quickStuck": {
+							"name": "Quick stuck",
+							"blurb": "Same force & travel, shorter"
+						},
+						"briefStuck": {
+							"name": "Brief stuck",
+							"blurb": "Same force & travel, very short burst"
+						},
+						"sharpShort": {
+							"name": "Sharp & short",
+							"blurb": "Stronger jerk, shorter"
+						},
+						"hardSnap": {
+							"name": "Hard snap",
+							"blurb": "Max jerk, tiny burst"
+						},
+						"softLong": {
+							"name": "Soft & long",
+							"blurb": "Softer but longer"
+						},
+						"gentleMarathon": {
+							"name": "Gentle marathon",
+							"blurb": "Very soft, very long"
+						},
+						"bigTravel": {
+							"name": "Big travel",
+							"blurb": "More throw, medium length"
+						},
+						"bigBrief": {
+							"name": "Big & brief",
+							"blurb": "Big throw, short"
+						},
+						"bigHard": {
+							"name": "Big & hard",
+							"blurb": "Big throw, strong jerk"
+						},
+						"maxShake": {
+							"name": "Max shake",
+							"blurb": "Largest throw, strong"
+						},
+						"wideSoft": {
+							"name": "Wide & soft",
+							"blurb": "Big throw but gentle, long"
+						},
+						"fastBuzz": {
+							"name": "Fast buzz",
+							"blurb": "Medium throw, fast & long"
+						},
+						"strongLong": {
+							"name": "Strong & long",
+							"blurb": "Strong and persistent"
+						}
+					}
+				},
+				"settingsPanelTitle": "Settings",
+				"fields": {
+					"amplitude": {
+						"label": "Amplitude",
+						"help": "About {outputAmplitudeDeg}° at the rotor (gear ratio {gearRatio}:1).",
+						"unit": "° a stroke"
+					},
+					"cycles": {
+						"label": "Cycles",
+						"help": "Back-and-forths."
+					},
+					"speed": {
+						"label": "Speed"
+					},
+					"acceleration": {
+						"label": "Acceleration",
+						"help": "Higher is a sharper jerk each stroke."
+					}
+				},
+				"actions": {
+					"resetDefaults": "Back to the defaults",
+					"stop": "Stop",
+					"jitter": "Jitter"
+				},
+				"status": {
+					"jittering": "Jittering {stepper}: {cycles} cycles of ±{amplitude}° motor (~{duration}s, {microsteps} µsteps/stroke).",
+					"stopped": "Stopped {stepper}.",
+					"requestFailed": "Request failed with status {status}"
+				}
+			},
+			"networking": {
+				"pageTitle": "Sorter - Networking",
+				"title": "Networking",
+				"description": "How this page reaches the machine, and the machine's own networks.",
+				"wifi": {
+					"title": "Wi-Fi",
+					"description": "Scan for and join wireless networks, on any of the machine's adapters."
+				},
+				"tailscale": {
+					"title": "Tailscale",
+					"description": "The machine's Tailscale connection: join a network or switch to another."
+				}
+			},
+			"nextcloud": {
+				"pageTitle": "Sorter - Nextcloud",
+				"title": "Nextcloud",
+				"description": "Upload recognized pieces to your own Nextcloud, to train a custom model later."
+			},
+			"octopusDiagnostic": {
+				"title": "Octopus diagnostic",
+				"description": "Live chute readout and bin wheel, the board's other three steppers, and its LED channels — all in one place.",
+				"tabs": {
+					"ariaLabel": "Octopus diagnostic sections",
+					"chute": "Chute",
+					"steppers": "Other steppers",
+					"leds": "LEDs",
+					"fans": "Fans",
+					"benchmark": "Benchmark"
+				},
+				"errors": {
+					"loadLayout": "Failed to load the bin layout",
+					"loadGeometry": "Failed to load the chute geometry",
+					"loadFans": "Failed to load the fans",
+					"setFan": "Failed to set the fan",
+					"moveChute": "Failed to move the chute"
+				},
+				"live": {
+					"panelTitle": "Live readout",
+					"panelDescription": "Raw sensor state and driver registers, polled while this tab is open.",
+					"notAvailable": "Hardware not initialized — start the machine to see live chute data.",
+					"stat": {
+						"currentAngle": "Current angle",
+						"stepperStopped": "Stepper stopped",
+						"homed": "Homed",
+						"encoderCount": "Encoder count",
+						"indexSynced": "Index synced",
+						"countAtIndex": "Count at index",
+						"sensorAB": "Sensor A / B",
+						"homing": "Homing"
+					},
+					"homingActive": "Active",
+					"homingFailed": "Failed",
+					"homingIdle": "Idle",
+					"stallLatch": "Stall latch: {value}",
+					"yes": "Yes",
+					"no": "No",
+					"clean": "clean"
+				},
+				"binWheel": {
+					"panelTitle": "Bin wheel",
+					"panelDescription": "Click a bin to jog the chute straight there (same move the sorter itself uses).",
+					"layerLabel": "Layer",
+					"layerOption": "Layer {n}",
+					"movingTo": "Moving to section {section}, bin {bin}."
+				},
+				"leds": {
+					"cChannel2": {
+						"title": "C-channel 2",
+						"description": "The light in C-channel 2's hood."
+					},
+					"cChannel3": {
+						"title": "C-channel 3",
+						"description": "The light in C-channel 3's hood."
+					},
+					"classificationChannel": {
+						"title": "Classification channel",
+						"description": "The light in the classification channel's hood."
+					}
+				},
+				"fans": {
+					"cpuPanelTitle": "Orange Pi CPU",
+					"cpuPanelDescription": "FAN{autoFanIndex} is reserved for cooling the Orange Pi's own SoC - target {fanOnTemp}°C, off again at {fanOffTemp}°C, and it won't switch again within {minSwitchInterval}s of its last change, so it doesn't chatter. The chip itself only throttles at {throttleTemp}°C.",
+					"cpuTempLabel": "CPU temperature",
+					"onOffLabel": "On / off at",
+					"minSwitchLabel": "Min. between switches",
+					"headersPanelTitle": "Fan headers",
+					"headersPanelDescription": "The board's 6 fan headers (FAN0-FAN5). Duty shown is the last value this backend set, not a live read from the board.",
+					"loading": "Loading the fans",
+					"notAvailable": "Hardware not initialized, or this board has no fan headers.",
+					"auto": "Auto",
+					"controlledByCpu": "Controlled by CPU temperature (see the Orange Pi panel above) - {state}.",
+					"currentlyOn": "currently on",
+					"currentlyOff": "currently off",
+					"off": "Off",
+					"full": "Full",
+					"on": "On"
+				}
+			},
+			"performance": {
+				"pageTitle": "Sorter - Performance",
+				"title": "Performance",
+				"description": "How fast this machine is thinking and how fresh the data behind each decision is.",
+				"defaultMachineName": "this machine",
+				"ranges": {
+					"live": "Live",
+					"oneMin": "1 min",
+					"fiveMin": "5 min",
+					"fifteenMin": "15 min",
+					"sixtyMin": "60 min"
+				},
+				"historyError": "Failed to load history",
+				"recordNone": "None",
+				"showing": "Showing",
+				"running": "running",
+				"timeRangeLabel": "Time range",
+				"decisionLoop": {
+					"panelTitle": "Decision loop",
+					"decisionsPerSecond": "Decisions a second",
+					"classificationTicks": "Classification ticks",
+					"decisionDataAge": "Decision data age",
+					"ageOfCameraData": "Age of the camera data",
+					"controlLoopRate": "Control loop rate",
+					"target100": "Target 100",
+					"gilStall": "GIL stall",
+					"loopContention": "Loop contention",
+					"sparkDecisionDataAge": "Decision data age (ms)",
+					"sparkControlLoopInterval": "Control loop interval (ms)",
+					"sparkDecisionsPerSecond": "Decisions a second",
+					"overRange": "Over {range}",
+					"lowerIsFaster": "Lower is faster"
+				},
+				"perception": {
+					"panelTitle": "Perception",
+					"panelDescription": "Inference on each camera.",
+					"none": "No inference cameras are reporting yet.",
+					"rate": "Rate",
+					"infer": "Infer",
+					"cycle": "Cycle",
+					"frameAge": "Frame age"
+				},
+				"subsystem": {
+					"panelTitle": "Subsystem step cost",
+					"panelDescription": "Each control tick.",
+					"distribution": "Distribution",
+					"classification": "Classification",
+					"feeder": "Feeder",
+					"controllerStep": "Controller step"
+				},
+				"throughput": {
+					"panelTitle": "Throughput",
+					"piecesPerMinute5min": "Pieces a minute (5 min)",
+					"piecesPerMinuteAverage": "Pieces a minute (average)",
+					"piecesSeen": "Pieces seen",
+					"distributed": "Distributed"
+				},
+				"compare": {
+					"panelTitle": "Compare to a past run",
+					"panelDescription": "This machine's current session beside a finished run, the same numbers side by side. Useful for comparing machines or spotting a regression.",
+					"pastRunLabel": "Past run",
+					"noSavedRuns": "No saved runs yet.",
+					"metric": "Metric",
+					"nowSuffix": "{machine} (now)",
+					"rows": {
+						"decisionsPerSecond": "Decisions a second",
+						"decisionDataAgeMs": "Decision data age (ms)",
+						"controlLoopRateHz": "Control loop rate (Hz)",
+						"gilStallMs": "GIL stall (ms)",
+						"controllerStepMs": "Controller step (ms)",
+						"distributionStepMs": "Distribution step (ms)",
+						"classificationStepMs": "Classification step (ms)",
+						"feederStepMs": "Feeder step (ms)",
+						"piecesPerMinuteAverage": "Pieces a minute (average)",
+						"inferenceHz": "Inference {id} (Hz)"
+					}
+				}
+			},
+			"powerStress": {
+				"pageTitle": "Sorter - Power stress test",
+				"title": "Power stress test",
+				"description": "The heaviest load the machine can make, for measuring its draw at the wall. It needs a safe home and a pause first.",
+				"requestFailed": "Request failed with status {status}",
+				"alertInfo": "The chute homes before anything moves and stays at or below {chuteMax}°. The lights stay at 100%, every configured vision worker must be running, C1 to C4 ramp their moves, and the servos use their whole 0° to 180°. Each phase's start is stored as an epoch time, to line up with the power meter's readings.",
+				"sequence": {
+					"panelTitle": "Sequence",
+					"steady": {
+						"title": "1. Steady",
+						"description": "The four channel steppers run without stopping, the chute sweeps from home to its limit, and the servos sweep end to end."
+					},
+					"random": {
+						"title": "2. Random",
+						"description": "The steppers brake and burst either way, and the chute and the servos go to random targets."
+					},
+					"mixed": {
+						"title": "3. Mixed",
+						"description": "Short stretches mix steady and bursting steppers while the chute and the servos alternate."
+					}
+				},
+				"settings": {
+					"panelTitle": "Settings",
+					"movingTime": "Moving time",
+					"stepperTopSpeed": "C1 to C4 top speed",
+					"chuteSpeed": "Chute speed",
+					"chuteLimit": "Chute limit",
+					"stopSafely": "Stop safely",
+					"start": "Start the power stress test"
+				},
+				"thisRun": {
+					"panelTitle": "This run",
+					"downloadJson": "Download the JSON",
+					"finished": "Finished",
+					"part": ", part {n}",
+					"of": "of",
+					"progress": "Progress",
+					"steppers": "Steppers",
+					"servos": "Servos",
+					"lightOutputs": "Light outputs",
+					"visionWorkers": "Vision workers",
+					"when": "When",
+					"what": "What",
+					"phase": "Phase"
+				},
+				"pastRuns": {
+					"panelTitle": "Past runs",
+					"none": "No power stress runs yet.",
+					"started": "Started",
+					"status": "Status",
+					"duration": "Duration",
+					"downloadSr": "Download",
+					"json": "JSON"
+				}
+			},
+			"providers": {
+				"pageTitle": "Sorter - Providers",
+				"title": "Providers",
+				"description": "Which service identifies each piece's mold, and which predicts its color. The two run side by side during classification; if a remote color provider is slow or unreachable, the piece falls back to Brickognize's color. Changes apply to the next piece, with no restart.",
+				"saved": "Saved. It applies to the next classified piece.",
+				"loading": "Loading",
+				"color": {
+					"panelTitle": "Color prediction",
+					"panelDescription": "Which service says what color a piece is.",
+					"fieldName": "Color provider"
+				},
+				"mold": {
+					"panelTitle": "Mold detection",
+					"panelDescription": "Which service says what part a piece is.",
+					"fieldName": "Mold provider"
+				},
+				"errors": {
+					"load": "Failed to load providers",
+					"save": "Failed to save providers"
+				}
+			},
+			"sampleCapture": {
+				"goToDataSettings": "Go to the Data settings"
+			},
+			"servoControl": {
+				"pageTitle": "Sorter - Servo control",
+				"title": "Servo control",
+				"description": "Where layer-gate servo commands go: a control board's PCA9685 channels, or the ESP32 BLE gate bridge.",
+				"tabs": {
+					"ariaLabel": "Servo control sections",
+					"settings": "Settings",
+					"diagnostics": "Diagnostics"
+				}
+			},
+			"stepperStallguard": {
+				"goToChuteStallguard": "Go to the chute's StallGuard"
+			},
+			"storageLayers": {
+				"pageTitle": "Sorter - Storage layers",
+				"title": "Storage layers",
+				"description": "Each layer's flap, where it opens and closes, and its bins."
+			},
+			"trainingData": {
+				"goToTrainingRuns": "Go to the training runs",
+				"detail": {
+					"goToTrainingRuns": "Go to the training runs"
+				}
+			},
+			"tuning": {
+				"classificationChannel": {
+					"pageTitle": "Sorter - Classification channel tuning",
+					"title": "Classification channel tuning",
+					"description": "The parameters of the rev01 state machine. Changes apply to the next piece, with no restart.",
+					"saved": "Saved. The changes apply to the next piece.",
+					"parametersPanelTitle": "Parameters",
+					"loading": "Loading",
+					"errors": {
+						"load": "Failed to load config",
+						"save": "Failed to save config"
+					}
+				}
+			}
+		}
+	}
+}

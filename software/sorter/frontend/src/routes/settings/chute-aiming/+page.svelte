@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachinesContext } from '$lib/machines/context';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -130,7 +131,7 @@
 			void loadCalibrations();
 			void loadLive();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to load chute aiming settings';
+			errorMsg = e.message ?? $_('routes.settings.chuteAiming.page.loadError');
 		}
 	}
 
@@ -199,12 +200,12 @@
 					num_sections: numSections,
 					section_width_deg: sectionWidthDeg,
 					first_section_offset_deg: firstSectionOffsetDeg,
-					label: 'Manual edit'
+					label: $_('routes.settings.chuteAiming.page.manualEditLabel')
 				})
 			);
 			editingParams = false;
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to save parameters';
+			errorMsg = e.message ?? $_('routes.settings.chuteAiming.page.saveError');
 		} finally {
 			busy = false;
 		}
@@ -217,10 +218,10 @@
 		try {
 			const p = await post('/api/hardware-config/chute/calibrate/find-endstop');
 			homed = true;
-			statusMsg = p?.message ?? 'Chute homed to its endstop.';
+			statusMsg = p?.message ?? $_('routes.settings.chuteAiming.page.homedStatus');
 			void loadLive();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to home the chute';
+			errorMsg = e.message ?? $_('routes.settings.chuteAiming.page.homeError');
 		} finally {
 			homingState = false;
 		}
@@ -229,9 +230,9 @@
 	async function cancelHome() {
 		try {
 			await post('/api/hardware-config/chute/calibrate/cancel');
-			statusMsg = 'Chute homing canceled.';
+			statusMsg = $_('routes.settings.chuteAiming.page.homingCanceledStatus');
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to cancel homing';
+			errorMsg = e.message ?? $_('routes.settings.chuteAiming.page.cancelHomeError');
 		}
 	}
 
@@ -245,7 +246,7 @@
 			currentAngle = typeof p?.target_angle === 'number' ? p.target_angle : currentAngle;
 			void loadLive();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Chute move failed';
+			errorMsg = e.message ?? $_('routes.settings.chuteAiming.page.jogError');
 		} finally {
 			movingJog = false;
 			busy = false;
@@ -286,7 +287,7 @@
 			);
 			resetCalibration();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to derive aiming geometry';
+			errorMsg = e.message ?? $_('routes.settings.chuteAiming.page.deriveError');
 		} finally {
 			busy = false;
 		}
@@ -299,7 +300,7 @@
 		try {
 			applyResult(await post(`/api/hardware-config/chute/calibrations/${id}/activate`));
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to lock in calibration';
+			errorMsg = e.message ?? $_('routes.settings.chuteAiming.page.lockInError');
 		} finally {
 			busy = false;
 		}
@@ -315,7 +316,7 @@
 			const p = await res.json();
 			if (Array.isArray(p?.calibrations)) calibrations = p.calibrations;
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to delete calibration';
+			errorMsg = e.message ?? $_('routes.settings.chuteAiming.page.deleteError');
 		}
 	}
 
@@ -337,10 +338,17 @@
 				section_index: selected.section,
 				bin_index: selected.bin
 			});
-			statusMsg = `Aiming at ${selected.binCount}-bin section ${selected.section + 1}, bin ${selected.bin + 1} (${fmt(p?.target_angle)}°).`;
+			statusMsg = $_('routes.settings.chuteAiming.page.testAimStatus', {
+				values: {
+					binCount: selected.binCount,
+					section: selected.section + 1,
+					bin: selected.bin + 1,
+					angle: fmt(p?.target_angle)
+				}
+			});
 			void loadLive();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Test aim failed';
+			errorMsg = e.message ?? $_('routes.settings.chuteAiming.page.testAimError');
 		} finally {
 			busy = false;
 		}
@@ -380,7 +388,7 @@
 
 </script>
 
-<svelte:head><title>Sorter - Chute aiming</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.chuteAiming.page.pageTitle')}</title></svelte:head>
 
 <svelte:window onkeydown={handleKey} />
 
@@ -393,7 +401,7 @@
 {#snippet jogPad(active: boolean, showBins: boolean)}
 	<div class="flex w-fit flex-wrap gap-x-8 gap-y-4 rounded-control bg-well p-3">
 		<div class="flex flex-col gap-2" class:opacity-40={!active}>
-			<span class="label">Jog the chute</span>
+			<span class="label">{$_('routes.settings.chuteAiming.page.jogPad.jogLabel')}</span>
 			<div class="grid grid-cols-3 gap-1 select-none">
 				<span></span>
 				{@render jogKey(ArrowUp, `+${FINE}°`, FINE, active)}
@@ -401,7 +409,7 @@
 				{@render jogKey(ArrowLeft, `−${COARSE}°`, -COARSE, active)}
 				<span class="flex flex-col items-center justify-center rounded-control bg-surface px-2 py-1">
 					<span class="num text-sm font-medium text-ink">{fmt(currentAngle, 2)}°</span>
-					<span class="text-xs text-ink-muted">Now</span>
+					<span class="text-xs text-ink-muted">{$_('routes.settings.chuteAiming.page.jogPad.now')}</span>
 				</span>
 				{@render jogKey(ArrowRight, `+${COARSE}°`, COARSE, active)}
 				<span></span>
@@ -410,23 +418,24 @@
 			</div>
 			{#if active}
 				<p class="max-w-60 text-sm text-ink-muted">
-					The arrow keys work too: up and down move {FINE}°, left and right {COARSE}°. Hold one to
-					repeat.
+					{$_('routes.settings.chuteAiming.page.jogPad.keyboardHint', {
+						values: { fine: FINE, coarse: COARSE }
+					})}
 				</p>
 			{/if}
 		</div>
 		{#if showBins}
 			<div class="flex flex-col gap-2">
-				<span class="label">Bins in this section</span>
+				<span class="label">{$_('routes.settings.chuteAiming.page.jogPad.binsInSectionLabel')}</span>
 				<SegmentedControl
-					label="Bins in this section"
+					label={$_('routes.settings.chuteAiming.page.jogPad.binsInSectionLabel')}
 					size="sm"
 					value={String(binsInTestSection)}
 					options={['3', '4', '5', '6'].map((n) => ({ value: n, label: n }))}
 					onchange={(n) => (binsInTestSection = Number(n))}
 				/>
 				<p class="max-w-52 text-sm text-ink-muted">
-					How many bins the section you are measuring has. More is more accurate; 3 or 5 is best.
+					{$_('routes.settings.chuteAiming.page.jogPad.binsInSectionHelp')}
 				</p>
 			</div>
 		{/if}
@@ -458,7 +467,7 @@
 			firstSectionOffsetDeg = DEFAULT_FIRST_SECTION_OFFSET_DEG;
 		}}
 	>
-		Use the defaults
+		{$_('routes.settings.chuteAiming.page.editFooter.useDefaults')}
 	</Button>
 	<Button
 		variant="ghost"
@@ -467,15 +476,17 @@
 			void loadSettings();
 		}}
 	>
-		Cancel
+		{$_('routes.settings.chuteAiming.page.editFooter.cancel')}
 	</Button>
-	<Button variant="primary" loading={busy} onclick={saveParams}>Save</Button>
+	<Button variant="primary" loading={busy} onclick={saveParams}
+		>{$_('routes.settings.chuteAiming.page.editFooter.save')}</Button
+	>
 {/snippet}
 
 <div class="flex max-w-4xl flex-col gap-(--gap-panels)">
 	<PageHeader
-		title="Chute aiming"
-		description="If the chute points at the wrong bin, run the calibration below. Otherwise the defaults are already right and you can leave this page."
+		title={$_('routes.settings.chuteAiming.page.title')}
+		description={$_('routes.settings.chuteAiming.page.description')}
 	/>
 
 	{#if errorMsg}
@@ -486,7 +497,7 @@
 
 	<!-- The active parameters come first; editing them by hand hides until hovered. -->
 	<Panel
-		title="Active aiming parameters"
+		title={$_('routes.settings.chuteAiming.page.activeParams.title')}
 		flush={!editingParams}
 		class="group"
 		footer={editingParams ? editFooter : undefined}
@@ -499,29 +510,29 @@
 					class="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
 					onclick={() => (editingParams = true)}
 				>
-					Edit by hand
+					{$_('routes.settings.chuteAiming.page.activeParams.editByHand')}
 				</Button>
 			{/if}
 		{/snippet}
 		{#if !editingParams}
 			<div class="grid grid-cols-2 gap-px bg-line sm:grid-cols-5">
-				{#each [['Sections', String(numSections)], ['Section width', `${fmt(sectionWidthDeg, 2)}°`], ['Offset from home', `${fmt(firstSectionOffsetDeg, 2)}°`], ['Pitch', `${fmt(sectionPitchDeg, 2)}°`], ['Pillar', `${fmt(pillarWidthDeg, 2)}°`]] as [label, value] (label)}
+				{#each [[$_('routes.settings.chuteAiming.page.activeParams.sections'), String(numSections)], [$_('routes.settings.chuteAiming.page.activeParams.sectionWidth'), `${fmt(sectionWidthDeg, 2)}°`], [$_('routes.settings.chuteAiming.page.activeParams.offsetFromHome'), `${fmt(firstSectionOffsetDeg, 2)}°`], [$_('routes.settings.chuteAiming.page.activeParams.pitch'), `${fmt(sectionPitchDeg, 2)}°`], [$_('routes.settings.chuteAiming.page.activeParams.pillar'), `${fmt(pillarWidthDeg, 2)}°`]] as [label, value] (label)}
 					<div class="bg-surface max-sm:last:col-span-2"><Stat {label} {value} /></div>
 				{/each}
 			</div>
 		{:else}
 			<div class="flex flex-col gap-4">
 				<Alert tone="warning">
-					The calibration sets these. Only change them by hand if you know exactly what they mean.
+					{$_('routes.settings.chuteAiming.page.activeParams.editWarning')}
 				</Alert>
 				<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-					<Field label="Sections (N)" for="aim-sections">
+					<Field label={$_('routes.settings.chuteAiming.page.activeParams.sectionsFieldLabel')} for="aim-sections">
 						<Input id="aim-sections" type="number" bind:value={numSections} />
 					</Field>
-					<Field label="Section width (W)" for="aim-width">
+					<Field label={$_('routes.settings.chuteAiming.page.activeParams.sectionWidthFieldLabel')} for="aim-width">
 						<Input id="aim-width" type="number" unit="°" bind:value={sectionWidthDeg} />
 					</Field>
-					<Field label="Offset (θ₀)" for="aim-offset">
+					<Field label={$_('routes.settings.chuteAiming.page.activeParams.offsetFieldLabel')} for="aim-offset">
 						<Input id="aim-offset" type="number" unit="°" bind:value={firstSectionOffsetDeg} />
 					</Field>
 				</div>
@@ -530,47 +541,60 @@
 	</Panel>
 
 	<Panel
-		title="Run the calibration"
-		description="It finds two numbers: the width of a section in degrees, and the offset of the first section from home. From those the machine works out where every bin sits and which ones each layout can reach."
+		title={$_('routes.settings.chuteAiming.page.calibration.title')}
+		description={$_('routes.settings.chuteAiming.page.calibration.description')}
 		flush
 	>
 		{#snippet actions()}
 			{#if homed || capturedFirst !== null || capturedLast !== null}
-				<Button variant="ghost" size="sm" onclick={resetCalibration}>Start over</Button>
+				<Button variant="ghost" size="sm" onclick={resetCalibration}
+					>{$_('routes.settings.chuteAiming.page.calibration.startOver')}</Button
+				>
 			{/if}
 		{/snippet}
 		<div class="px-(--pad-panel) pb-4">
 			<Alert tone="warning">
-				Every step here moves the chute. It hits a hard stop at home and can never cross it, so it has
-				about {fmt(maxAngleDeg, 0)}° of travel. Always home first.
+				{$_('routes.settings.chuteAiming.page.calibration.travelWarning', {
+					values: { deg: fmt(maxAngleDeg, 0) }
+				})}
 			</Alert>
 		</div>
 		<ol class="divide-y divide-line border-t border-line">
 			<li class="flex flex-col gap-3 px-(--pad-panel) py-4">
-				{@render stepHead(1, homed, 'Home the chute')}
-				<p class="text-sm text-ink-muted">Sets 0° at the home switch.</p>
+				{@render stepHead(1, homed, $_('routes.settings.chuteAiming.page.steps.home'))}
+				<p class="text-sm text-ink-muted">{$_('routes.settings.chuteAiming.page.calibration.step1.description')}</p>
 				<dl class="flex w-fit flex-wrap gap-x-6 gap-y-1 rounded-control bg-well px-3 py-2 text-sm">
 					<div class="flex gap-2">
-						<dt class="text-ink-muted">Chute angle</dt>
+						<dt class="text-ink-muted">{$_('routes.settings.chuteAiming.page.calibration.step1.chuteAngle')}</dt>
 						<dd class="num font-medium text-ink">{fmt(currentAngle, 1)}°</dd>
 					</div>
 					<div class="flex gap-2">
-						<dt class="text-ink-muted">Motor angle</dt>
+						<dt class="text-ink-muted">{$_('routes.settings.chuteAiming.page.calibration.step1.motorAngle')}</dt>
 						<dd class="num font-medium text-ink">{fmt(stepperPositionDeg, 1)}°</dd>
 					</div>
 					<div class="flex gap-2">
-						<dt class="text-ink-muted">Endstop</dt>
+						<dt class="text-ink-muted">{$_('routes.settings.chuteAiming.page.calibration.step1.endstop')}</dt>
 						<dd class="font-medium {liveEndstopTriggered ? 'text-success-ink' : 'text-ink'}">
-							{liveEndstopTriggered === null ? '–' : liveEndstopTriggered ? 'Triggered' : 'Open'}
+							{liveEndstopTriggered === null
+								? '–'
+								: liveEndstopTriggered
+									? $_('routes.settings.chuteAiming.page.calibration.step1.triggered')
+									: $_('routes.settings.chuteAiming.page.calibration.step1.open')}
 						</dd>
 					</div>
 				</dl>
 				<div class="flex flex-wrap items-center gap-2">
 					<Button variant={homed ? 'secondary' : 'primary'} loading={homingState} onclick={homeChute}>
-						{homed ? 'Home again' : 'Home the chute'}
+						{homed
+							? $_('routes.settings.chuteAiming.page.calibration.step1.homeAgain')
+							: $_('routes.settings.chuteAiming.page.calibration.step1.homeButton')}
 					</Button>
-					{#if homingState}<Button variant="danger" onclick={cancelHome}>Cancel</Button>{/if}
-					{#if homed}<span class="text-sm text-success-ink">Homed.</span>{/if}
+					{#if homingState}<Button variant="danger" onclick={cancelHome}
+							>{$_('routes.settings.chuteAiming.page.calibration.step1.cancel')}</Button
+						>{/if}
+					{#if homed}<span class="text-sm text-success-ink"
+							>{$_('routes.settings.chuteAiming.page.calibration.step1.homedBadge')}</span
+						>{/if}
 				</div>
 			</li>
 
@@ -579,22 +603,24 @@
 				class:opacity-50={step2Locked}
 				class:pointer-events-none={step2Locked}
 			>
-				{@render stepHead(2, capturedFirst !== null, 'Aim at the first bin of a section')}
+				{@render stepHead(2, capturedFirst !== null, $_('routes.settings.chuteAiming.page.steps.firstBin'))}
 				<p class="text-sm text-ink-muted">
 					{#if step2Locked}
-						Home the chute first.
+						{$_('routes.settings.chuteAiming.page.calibration.step2.locked')}
 					{:else}
-						Pick any layer, and a section you can see whole with more than 2 bins; 3 or 5 is best,
-						and more bins is more accurate. Set its bin count, then jog until the chute points
-						straight into the first bin, and capture.
+						{$_('routes.settings.chuteAiming.page.calibration.step2.description')}
 					{/if}
 				</p>
 				{@render jogPad(activeStep === 2, true)}
 				<div class="flex flex-wrap items-center gap-3">
 					<Button variant="primary" disabled={step2Locked || currentAngle === null} onclick={captureFirst}>
-						Capture the first bin
+						{$_('routes.settings.chuteAiming.page.calibration.step2.captureButton')}
 					</Button>
-					<span class="num text-sm text-ink-muted">Captured {fmt(capturedFirst, 2)}°</span>
+					<span class="num text-sm text-ink-muted"
+						>{$_('routes.settings.chuteAiming.page.calibration.step2.captured', {
+							values: { deg: fmt(capturedFirst, 2) }
+						})}</span
+					>
 				</div>
 			</li>
 
@@ -603,21 +629,24 @@
 				class:opacity-50={step3Locked}
 				class:pointer-events-none={step3Locked}
 			>
-				{@render stepHead(3, capturedLast !== null, 'Aim at the last bin of that section')}
+				{@render stepHead(3, capturedLast !== null, $_('routes.settings.chuteAiming.page.steps.lastBin'))}
 				<p class="text-sm text-ink-muted">
 					{#if step3Locked}
-						Capture the first bin first.
+						{$_('routes.settings.chuteAiming.page.calibration.step3.locked')}
 					{:else}
-						Jog until the chute points straight into the last bin of the same section, then capture.
-						It sits at a higher angle than the first bin.
+						{$_('routes.settings.chuteAiming.page.calibration.step3.description')}
 					{/if}
 				</p>
 				{@render jogPad(activeStep === 3, false)}
 				<div class="flex flex-wrap items-center gap-3">
 					<Button variant="primary" disabled={step3Locked || currentAngle === null} onclick={captureLast}>
-						Capture the last bin
+						{$_('routes.settings.chuteAiming.page.calibration.step3.captureButton')}
 					</Button>
-					<span class="num text-sm text-ink-muted">Captured {fmt(capturedLast, 2)}°</span>
+					<span class="num text-sm text-ink-muted"
+						>{$_('routes.settings.chuteAiming.page.calibration.step3.captured', {
+							values: { deg: fmt(capturedLast, 2) }
+						})}</span
+					>
 				</div>
 			</li>
 
@@ -626,39 +655,47 @@
 				class:opacity-50={step4Locked}
 				class:pointer-events-none={step4Locked}
 			>
-				{@render stepHead(4, false, 'Lock it in')}
+				{@render stepHead(4, false, $_('routes.settings.chuteAiming.page.steps.lockIn'))}
 				{#if captureOrderWrong}
 					<p class="text-sm text-danger-ink">
-						The last bin must be at a higher angle than the first. Capture the last bin again, jogging
-						so the angle goes up.
+						{$_('routes.settings.chuteAiming.page.calibration.step4.orderWrong')}
 					</p>
 				{:else if !step4Locked}
 					{@const slot = (capturedLast! - capturedFirst!) / Math.max(1, binsInTestSection - 1)}
 					{@const w = slot * binsInTestSection}
 					<dl class="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-						<div class="flex gap-2"><dt class="text-ink-muted">Section width</dt><dd class="num text-ink">{fmt(w, 2)}°</dd></div>
-						<div class="flex gap-2"><dt class="text-ink-muted">Offset from home</dt><dd class="num text-ink">{fmt(capturedFirst! - 0.5 * slot, 2)}°</dd></div>
-						<div class="flex gap-2"><dt class="text-ink-muted">Pillar</dt><dd class="num text-ink">{fmt(sectionPitchDeg - w, 2)}°</dd></div>
+						<div class="flex gap-2"><dt class="text-ink-muted">{$_('routes.settings.chuteAiming.page.calibration.step4.sectionWidth')}</dt><dd class="num text-ink">{fmt(w, 2)}°</dd></div>
+						<div class="flex gap-2"><dt class="text-ink-muted">{$_('routes.settings.chuteAiming.page.calibration.step4.offsetFromHome')}</dt><dd class="num text-ink">{fmt(capturedFirst! - 0.5 * slot, 2)}°</dd></div>
+						<div class="flex gap-2"><dt class="text-ink-muted">{$_('routes.settings.chuteAiming.page.calibration.step4.pillar')}</dt><dd class="num text-ink">{fmt(sectionPitchDeg - w, 2)}°</dd></div>
 					</dl>
-					<Field label="Label" for="aim-label" help="Optional." class="max-w-sm">
-						<Input id="aim-label" bind:value={calibrationLabel} placeholder="After moving the home switch" />
+					<Field
+						label={$_('routes.settings.chuteAiming.page.calibration.step4.labelFieldLabel')}
+						for="aim-label"
+						help={$_('routes.settings.chuteAiming.page.calibration.step4.labelFieldHelp')}
+						class="max-w-sm"
+					>
+						<Input
+							id="aim-label"
+							bind:value={calibrationLabel}
+							placeholder={$_('routes.settings.chuteAiming.page.calibration.step4.labelPlaceholder')}
+						/>
 					</Field>
 				{:else}
-					<p class="text-sm text-ink-muted">Capture both bins to work out the geometry and lock it in.</p>
+					<p class="text-sm text-ink-muted">{$_('routes.settings.chuteAiming.page.calibration.step4.locked')}</p>
 				{/if}
 				<div>
 					<Button variant="primary" loading={busy} disabled={step4Locked || captureOrderWrong} onclick={deriveAndLockIn}>
-						Work it out and lock it in
+						{$_('routes.settings.chuteAiming.page.calibration.step4.lockInButton')}
 					</Button>
 				</div>
 			</li>
 		</ol>
 	</Panel>
 
-	<Panel title="Saved calibrations" flush>
+	<Panel title={$_('routes.settings.chuteAiming.page.saved.title')} flush>
 		{#if calibrations.length === 0}
 			<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">
-				None yet. Run the calibration above to save one.
+				{$_('routes.settings.chuteAiming.page.saved.empty')}
 			</p>
 		{:else}
 			<ul class="divide-y divide-line">
@@ -666,8 +703,10 @@
 					<li class="flex items-center justify-between gap-3 px-(--pad-panel) py-(--pad-row)">
 						<div class="min-w-0 text-sm">
 							<div class="flex items-center gap-2">
-								<span class="truncate font-medium text-ink">{cal.label ?? 'Calibration'}</span>
-								{#if cal.is_active}<Badge tone="success">Active</Badge>{/if}
+								<span class="truncate font-medium text-ink"
+									>{cal.label ?? $_('routes.settings.chuteAiming.page.saved.fallbackLabel')}</span
+								>
+								{#if cal.is_active}<Badge tone="success">{$_('routes.settings.chuteAiming.page.saved.activeBadge')}</Badge>{/if}
 							</div>
 							<div class="num text-ink-muted">
 								{fmtDate(cal.created_at)} · N {cal.num_sections} · W {fmt(cal.section_width_deg, 1)}° · θ₀
@@ -677,9 +716,11 @@
 						{#if !cal.is_active}
 							<div class="flex shrink-0 items-center gap-2">
 								<Button variant="secondary" size="sm" loading={busy} onclick={() => lockIn(cal.id)}>
-									Lock in
+									{$_('routes.settings.chuteAiming.page.saved.lockIn')}
 								</Button>
-								<Button variant="ghost" size="sm" onclick={() => deleteCalibration(cal.id)}>Delete</Button>
+								<Button variant="ghost" size="sm" onclick={() => deleteCalibration(cal.id)}
+									>{$_('routes.settings.chuteAiming.page.saved.delete')}</Button
+								>
 							</div>
 						{/if}
 					</li>
@@ -689,15 +730,16 @@
 	</Panel>
 
 	<Panel
-		title="Reachable bins by layout"
-		description="Chute travel 0 to {fmt(maxAngleDeg, 0)}°, with a {fmt(360 - maxAngleDeg, 0)}° no-go wedge at home."
+		title={$_('routes.settings.chuteAiming.page.reachable.title')}
+		description={$_('routes.settings.chuteAiming.page.reachable.description', {
+			values: { max: fmt(maxAngleDeg, 0), wedge: fmt(360 - maxAngleDeg, 0) }
+		})}
 	>
 		<div class="flex flex-col gap-4">
 			<p class="text-sm text-ink-muted">
-				Each layout shows where the chute points for that many bins a section. Bins crossed out in red
-				fall in the wedge between the end of travel ({fmt(maxAngleDeg, 0)}°) and home (0°), which is
-				what loses bins whenever home does not land on a pillar. Click a reachable bin to test-aim at
-				it.
+				{$_('routes.settings.chuteAiming.page.reachable.explanation', {
+					values: { max: fmt(maxAngleDeg, 0) }
+				})}
 			</p>
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 				{#each VIZ_SIZES as size (size)}
@@ -716,7 +758,9 @@
 			{#if selected}
 				<div class="flex flex-wrap items-center gap-3">
 					<span class="text-sm text-ink">
-						The {selected.binCount}-bin layout, section {selected.section + 1}, bin {selected.bin + 1}:
+						{$_('routes.settings.chuteAiming.page.reachable.selectedLabel', {
+							values: { binCount: selected.binCount, section: selected.section + 1, bin: selected.bin + 1 }
+						})}
 						<span class="num text-ink-muted">{fmt(angleFor(selected.section, selected.bin, selected.binCount), 2)}°</span>
 					</span>
 					<Button
@@ -725,11 +769,11 @@
 						disabled={!isReachable(angleFor(selected.section, selected.bin, selected.binCount))}
 						onclick={testAimSelected}
 					>
-						Test aim at this bin
+						{$_('routes.settings.chuteAiming.page.reachable.testAimButton')}
 					</Button>
 				</div>
 			{:else}
-				<p class="text-sm text-ink-muted">Click a bin in any layout to choose it, then test-aim.</p>
+				<p class="text-sm text-ink-muted">{$_('routes.settings.chuteAiming.page.reachable.prompt')}</p>
 			{/if}
 		</div>
 	</Panel>

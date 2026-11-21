@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import ColorChip from '$lib/components/ui/ColorChip.svelte';
 	import ImageZoom from '$lib/components/ui/ImageZoom.svelte';
@@ -28,17 +29,14 @@
 
 	// How many answers of each kind a request shows.
 	const SHOWN = 3;
-	const KINDS: { kind: string; label: string }[] = [
-		{ kind: 'part', label: 'Part' },
-		{ kind: 'color', label: 'Color' }
+	const KINDS: { kind: string; labelKey: string }[] = [
+		{ kind: 'part', labelKey: 'components.pieces.piecePredictions.partLabel' },
+		{ kind: 'color', labelKey: 'components.pieces.piecePredictions.colorLabel' }
 	];
+	// Provider names are proper nouns (product/internal model names), not translated.
 	const PROVIDERS: Record<string, string> = {
 		brickognize: 'Brickognize',
 		hive_basically: 'basically color model'
-	};
-	const LIVE_REQUESTS: Record<string, string> = {
-		combined: 'Combined (fused set)',
-		single_burst: 'Single burst frame'
 	};
 
 	const groups = $derived.by(() => {
@@ -55,11 +53,15 @@
 	});
 
 	function sourceLabel(source: string): string {
-		return source === 'live' ? 'While sorting' : source;
+		return source === 'live' ? $_('components.pieces.piecePredictions.whileSortingLabel') : source;
 	}
 
 	function requestLabel(p: PiecePrediction): string {
-		if (p.source === 'live' && LIVE_REQUESTS[p.request]) return LIVE_REQUESTS[p.request];
+		const liveRequests: Record<string, string> = {
+			combined: $_('components.pieces.piecePredictions.combinedLabel'),
+			single_burst: $_('components.pieces.piecePredictions.singleBurstLabel')
+		};
+		if (p.source === 'live' && liveRequests[p.request]) return liveRequests[p.request];
 		return p.model_name ?? p.request;
 	}
 
@@ -73,7 +75,10 @@
 
 	// The same numbering as the piece's image panels: "Burst 3", "Link 1".
 	function imageLabel(image: PredictionImage): string {
-		const set = image.set === 'link' ? 'Link' : 'Burst';
+		const set =
+			image.set === 'link'
+				? $_('components.pieces.piecePredictions.linkLabel')
+				: $_('components.pieces.piecePredictions.burstLabel');
 		const channel = image.channel != null ? ` (C${image.channel})` : '';
 		return `${set} ${image.seq + 1}${channel}`;
 	}
@@ -81,13 +86,24 @@
 	function formatWhen(ts: number | null): string {
 		return ts ? new Date(ts * 1000).toLocaleString() : '';
 	}
+
+	const requestWord = $derived(
+		predictions.length === 1
+			? $_('components.pieces.piecePredictions.requestWord')
+			: $_('components.pieces.piecePredictions.requestsWord')
+	);
+	const sourceWord = $derived(
+		groups.length === 1
+			? $_('components.pieces.piecePredictions.sourceWord')
+			: $_('components.pieces.piecePredictions.sourcesWord')
+	);
 </script>
 
 <Panel
-	title="Predictions"
-	description="{predictions.length} request{predictions.length === 1
-		? ''
-		: 's'} from {groups.length} source{groups.length === 1 ? '' : 's'}."
+	title={$_('components.pieces.piecePredictions.panelTitle')}
+	description={$_('components.pieces.piecePredictions.panelDescription', {
+		values: { count: predictions.length, requestWord, sources: groups.length, sourceWord }
+	})}
 	flush
 >
 	<div class="divide-y divide-line">
@@ -117,11 +133,11 @@
 									</span>
 								</div>
 
-								{#each KINDS as { kind, label } (kind)}
+								{#each KINDS as { kind, labelKey } (kind)}
 									{@const answers = answersOf(p, kind)}
 									<div class="flex min-w-0 flex-col gap-0.5">
 										{#if answers.length > 0}
-											<div class="label">{label}</div>
+											<div class="label">{$_(labelKey)}</div>
 											<ol class="flex flex-col gap-0.5 text-sm">
 												{#each answers as a (a.rank)}
 													<li class="flex min-w-0 items-center gap-2">
@@ -141,8 +157,10 @@
 															>{percent(a.score)}</span
 														>
 														{#if a.applied}
-															<span title="The piece took this answer"
-																><Badge tone="primary">Applied</Badge></span
+															<span title={$_('components.pieces.piecePredictions.appliedTitle')}
+																><Badge tone="primary"
+																	>{$_('components.pieces.piecePredictions.appliedBadge')}</Badge
+																></span
 															>
 														{/if}
 													</li>
@@ -153,11 +171,17 @@
 								{/each}
 
 								<div class="flex flex-wrap items-center gap-1">
-									<span class="mr-1 text-xs text-ink-muted">Saw</span>
+									<span class="mr-1 text-xs text-ink-muted"
+										>{$_('components.pieces.piecePredictions.sawLabel')}</span
+									>
 									{#if p.images === null}
-										<span class="text-xs text-ink-muted">Not recorded</span>
+										<span class="text-xs text-ink-muted"
+											>{$_('components.pieces.piecePredictions.notRecorded')}</span
+										>
 									{:else if p.images.length === 0}
-										<span class="text-xs text-ink-muted">No stored images</span>
+										<span class="text-xs text-ink-muted"
+											>{$_('components.pieces.piecePredictions.noStoredImages')}</span
+										>
 									{:else}
 										{#each p.images as image (`${image.set}|${image.seq}`)}
 											{@const src = imageSrc(image)}
@@ -178,7 +202,7 @@
 													</button>
 												</ImageZoom>
 											{:else}
-												<span title="This image is no longer on the machine"
+												<span title={$_('components.pieces.piecePredictions.imageGoneTitle')}
 													><Badge>{imageLabel(image)}</Badge></span
 												>
 											{/if}

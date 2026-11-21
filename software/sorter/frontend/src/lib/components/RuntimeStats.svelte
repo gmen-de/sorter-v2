@@ -17,6 +17,7 @@
 		comes from the machine's piece records (/runtime-stats/rates), so it
 		survives restarts and a tab left in the background.
 	*/
+	import { _ } from 'svelte-i18n';
 	import Stat from '$lib/components/ui/Stat.svelte';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
@@ -26,11 +27,14 @@
 	let { span }: { span: RuntimeSpan } = $props();
 
 	const ctx = getMachineContext();
-	const SPAN_HINT: Record<RuntimeSpan, string> = {
-		'10m': 'Last 10 min',
-		'1h': 'Last hour',
-		today: 'Today'
-	};
+	// Module-level RUNTIME_SPANS (above) is consumed by route files outside this
+	// batch and can't reactively re-translate on a locale switch, so its labels
+	// stay English; SPAN_HINT is component-local and safe to translate.
+	const SPAN_HINT = $derived<Record<RuntimeSpan, string>>({
+		'10m': $_('components.runtimeStats.spanHint.last10Min'),
+		'1h': $_('components.runtimeStats.spanHint.lastHour'),
+		today: $_('components.runtimeStats.spanHint.today')
+	});
 
 	let buckets = $state<Bucket[]>([]);
 	let window_ = $state({ since: 0, bucket: 60, now: 0 });
@@ -140,7 +144,11 @@
 			const h = d.getHours() % 12 || 12;
 			return `${h}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'am' : 'pm'}`;
 		};
-		return window_.bucket >= 300 ? `${fmt(t)} to ${fmt(t + window_.bucket)}` : `At ${fmt(t)}`;
+		return window_.bucket >= 300
+			? $_('components.runtimeStats.timeRange', {
+					values: { from: fmt(t), to: fmt(t + window_.bucket) }
+				})
+			: $_('components.runtimeStats.timeAt', { values: { time: fmt(t) } });
 	}
 
 	function fmtRate(n: number | null): string {
@@ -155,16 +163,34 @@
 <div class="h-full overflow-y-auto">
 	<div class="grid grid-cols-2 gap-px bg-line">
 		<div class="bg-surface">
-			<Stat label="Classified a minute" value={fmtRate(shown.classifiedRate)} unit="ppm" hint={shown.hint} />
+			<Stat
+				label={$_('components.runtimeStats.classifiedAMinute')}
+				value={fmtRate(shown.classifiedRate)}
+				unit="ppm"
+				hint={shown.hint}
+			/>
 		</div>
 		<div class="bg-surface">
-			<Stat label="Fed a minute" value={fmtRate(shown.feedRate)} unit="ppm" hint={shown.hint} />
+			<Stat
+				label={$_('components.runtimeStats.fedAMinute')}
+				value={fmtRate(shown.feedRate)}
+				unit="ppm"
+				hint={shown.hint}
+			/>
 		</div>
 		<div class="bg-surface">
-			<Stat label="Multi-drop rate" value={fmtPct(shown.multiPct)} hint="Of pieces seen" />
+			<Stat
+				label={$_('components.runtimeStats.multiDropRate')}
+				value={fmtPct(shown.multiPct)}
+				hint={$_('components.runtimeStats.ofPiecesSeen')}
+			/>
 		</div>
 		<div class="bg-surface">
-			<Stat label="Classified" value={fmtPct(shown.classifiedPct)} hint="Of pieces seen" />
+			<Stat
+				label={$_('components.runtimeStats.classified')}
+				value={fmtPct(shown.classifiedPct)}
+				hint={$_('components.runtimeStats.ofPiecesSeen')}
+			/>
 		</div>
 	</div>
 
@@ -174,7 +200,7 @@
 			preserveAspectRatio="none"
 			class="block h-24 w-full cursor-crosshair overflow-visible"
 			role="img"
-			aria-label="Rates over the span; point at it for a moment's numbers"
+			aria-label={$_('components.runtimeStats.ratesOverSpanAriaLabel')}
 			onpointermove={onPointer}
 			onpointerdown={onPointer}
 			onpointerleave={() => (hover = null)}
@@ -188,10 +214,24 @@
 			{/if}
 		</svg>
 		<div class="num mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
-			<span class="flex items-center gap-1"><span class="h-0.5 w-3 bg-primary"></span>Classified/min</span>
-			<span class="flex items-center gap-1"><span class="h-0.5 w-3 bg-ink-muted"></span>Fed/min</span>
-			<span class="flex items-center gap-1"><span class="h-0.5 w-3 bg-danger"></span>Multi-drop %</span>
-			<span class="ml-auto">{shown.seen} pieces · top {fmtRate(series.ppmMax)} ppm · {series.pctMax.toFixed(0)}%</span>
+			<span class="flex items-center gap-1"
+				><span class="h-0.5 w-3 bg-primary"></span>{$_('components.runtimeStats.legend.classifiedPerMin')}</span
+			>
+			<span class="flex items-center gap-1"
+				><span class="h-0.5 w-3 bg-ink-muted"></span>{$_('components.runtimeStats.legend.fedPerMin')}</span
+			>
+			<span class="flex items-center gap-1"
+				><span class="h-0.5 w-3 bg-danger"></span>{$_('components.runtimeStats.legend.multiDropPct')}</span
+			>
+			<span class="ml-auto">
+				{$_('components.runtimeStats.legend.summary', {
+					values: {
+						seen: shown.seen,
+						topRate: fmtRate(series.ppmMax),
+						topPct: series.pctMax.toFixed(0)
+					}
+				})}
+			</span>
 		</div>
 	</div>
 </div>

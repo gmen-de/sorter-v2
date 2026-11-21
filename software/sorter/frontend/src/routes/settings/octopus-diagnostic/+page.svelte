@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachinesContext } from '$lib/machines/context';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -11,6 +12,7 @@
 	import Tabs from '$lib/components/ui/Tabs.svelte';
 	import StepperPanel from '$lib/components/settings/StepperPanel.svelte';
 	import ChannelLedSection from '$lib/components/settings/ChannelLedSection.svelte';
+	import BenchmarkPanel from '$lib/components/settings/BenchmarkPanel.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import BinLayoutViz from '../chute-aiming/BinLayoutViz.svelte';
 
@@ -24,7 +26,7 @@
 	const manager = getMachinesContext();
 	const POLL_MS = 400;
 
-	type Tab = 'chute' | 'steppers' | 'leds' | 'fans';
+	type Tab = 'chute' | 'steppers' | 'leds' | 'fans' | 'benchmark';
 	let tab = $state<Tab>('chute');
 
 	type Fan = { index: number; duty_percent: number; auto?: boolean };
@@ -99,7 +101,7 @@
 				: [];
 			if (!layers.find((l) => l.layer_index === layerIndex) && layers.length) layerIndex = layers[0].layer_index;
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to load the bin layout';
+			errorMsg = e.message ?? $_('routes.settings.octopusDiagnostic.errors.loadLayout');
 		}
 	}
 
@@ -113,7 +115,7 @@
 			if (Number.isFinite(c?.first_section_offset_deg)) firstSectionOffsetDeg = c.first_section_offset_deg;
 			if (Number.isFinite(c?.max_angle_deg)) maxAngleDeg = c.max_angle_deg;
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to load the chute geometry';
+			errorMsg = e.message ?? $_('routes.settings.octopusDiagnostic.errors.loadGeometry');
 		}
 	}
 
@@ -131,7 +133,7 @@
 		} catch (e: any) {
 			// Only surface the error on the initial load - a transient poll
 			// failure should keep showing the last good reading.
-			if (fansLoading) errorMsg = e.message ?? 'Failed to load the fans';
+			if (fansLoading) errorMsg = e.message ?? $_('routes.settings.octopusDiagnostic.errors.loadFans');
 		} finally {
 			fansLoading = false;
 			fansInFlight = false;
@@ -152,7 +154,7 @@
 			}
 			fans = fans.map((f) => (f.index === index ? { ...f, duty_percent: dutyPercent } : f));
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to set the fan';
+			errorMsg = e.message ?? $_('routes.settings.octopusDiagnostic.errors.setFan');
 		} finally {
 			savingFan = null;
 		}
@@ -186,9 +188,9 @@
 				const detail = await res.json().catch(() => null);
 				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
 			}
-			statusMsg = `Moving to section ${sel.section + 1}, bin ${sel.bin + 1}.`;
+			statusMsg = $_('routes.settings.octopusDiagnostic.binWheel.movingTo', { values: { section: sel.section + 1, bin: sel.bin + 1 } });
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to move the chute';
+			errorMsg = e.message ?? $_('routes.settings.octopusDiagnostic.errors.moveChute');
 		} finally {
 			jogging = false;
 		}
@@ -198,12 +200,16 @@
 		return v === null || v === undefined || !Number.isFinite(v) ? '--' : v.toFixed(d);
 	}
 	function tri(v: boolean | null | undefined): string {
-		return v === null || v === undefined ? '--' : v ? 'Yes' : 'No';
+		return v === null || v === undefined
+			? '--'
+			: v
+				? $_('routes.settings.octopusDiagnostic.live.yes')
+				: $_('routes.settings.octopusDiagnostic.live.no');
 	}
 	function drvStatusSummary(d: Record<string, unknown> | null | undefined): string {
 		if (!d) return '--';
 		const flags = ['otpw', 'ot', 's2ga', 's2gb', 's2vsa', 's2vsb', 'ola', 'olb'].filter((k) => d[k]);
-		return flags.length ? flags.join(', ') : 'clean';
+		return flags.length ? flags.join(', ') : $_('routes.settings.octopusDiagnostic.live.clean');
 	}
 
 	function startPolling() {
@@ -237,8 +243,8 @@
 </script>
 
 <PageHeader
-	title="Octopus diagnostic"
-	description="Live chute readout and bin wheel, the board's other three steppers, and its LED channels — all in one place."
+	title={$_('routes.settings.octopusDiagnostic.title')}
+	description={$_('routes.settings.octopusDiagnostic.description')}
 />
 
 {#if errorMsg}
@@ -246,39 +252,50 @@
 {/if}
 
 <Tabs
-	label="Octopus diagnostic sections"
+	label={$_('routes.settings.octopusDiagnostic.tabs.ariaLabel')}
 	bind:value={tab}
 	items={[
-		{ value: 'chute', label: 'Chute' },
-		{ value: 'steppers', label: 'Other steppers' },
-		{ value: 'leds', label: 'LEDs' },
-		{ value: 'fans', label: 'Fans' }
+		{ value: 'chute', label: $_('routes.settings.octopusDiagnostic.tabs.chute') },
+		{ value: 'steppers', label: $_('routes.settings.octopusDiagnostic.tabs.steppers') },
+		{ value: 'leds', label: $_('routes.settings.octopusDiagnostic.tabs.leds') },
+		{ value: 'fans', label: $_('routes.settings.octopusDiagnostic.tabs.fans') },
+		{ value: 'benchmark', label: $_('routes.settings.octopusDiagnostic.tabs.benchmark') }
 	]}
 />
 
 {#if tab === 'chute'}
-	<Panel title="Live readout" description="Raw sensor state and driver registers, polled while this tab is open.">
+	<Panel
+		title={$_('routes.settings.octopusDiagnostic.live.panelTitle')}
+		description={$_('routes.settings.octopusDiagnostic.live.panelDescription')}
+	>
 		{#if !live?.live_available}
 			<div class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">
-				Hardware not initialized — start the machine to see live chute data.
+				{$_('routes.settings.octopusDiagnostic.live.notAvailable')}
 			</div>
 		{:else}
 			<div class="grid grid-cols-2 gap-3 px-(--pad-panel) pb-(--pad-panel) sm:grid-cols-4">
-				<Stat label="Current angle" value={`${fmt(live.current_angle)}°`} />
-				<Stat label="Stepper stopped" value={tri(live.stepper_stopped)} />
-				<Stat label="Homed" value={tri(live.homed)} />
-				<Stat label="Encoder count" value={live.encoder_count ?? '--'} />
-				<Stat label="Index synced" value={tri(live.encoder_index_synced)} />
-				<Stat label="Count at index" value={live.encoder_count_at_index ?? '--'} />
-				<Stat label="Sensor A / B" value={`${tri(live.encoder_raw_sensor_a)} / ${tri(live.encoder_raw_sensor_b)}`} />
-				<Stat label="Homing" value={live.homing_active ? 'Active' : live.homing_failed ? 'Failed' : 'Idle'} />
+				<Stat label={$_('routes.settings.octopusDiagnostic.live.stat.currentAngle')} value={`${fmt(live.current_angle)}°`} />
+				<Stat label={$_('routes.settings.octopusDiagnostic.live.stat.stepperStopped')} value={tri(live.stepper_stopped)} />
+				<Stat label={$_('routes.settings.octopusDiagnostic.live.stat.homed')} value={tri(live.homed)} />
+				<Stat label={$_('routes.settings.octopusDiagnostic.live.stat.encoderCount')} value={live.encoder_count ?? '--'} />
+				<Stat label={$_('routes.settings.octopusDiagnostic.live.stat.indexSynced')} value={tri(live.encoder_index_synced)} />
+				<Stat label={$_('routes.settings.octopusDiagnostic.live.stat.countAtIndex')} value={live.encoder_count_at_index ?? '--'} />
+				<Stat label={$_('routes.settings.octopusDiagnostic.live.stat.sensorAB')} value={`${tri(live.encoder_raw_sensor_a)} / ${tri(live.encoder_raw_sensor_b)}`} />
+				<Stat
+					label={$_('routes.settings.octopusDiagnostic.live.stat.homing')}
+					value={live.homing_active
+						? $_('routes.settings.octopusDiagnostic.live.homingActive')
+						: live.homing_failed
+							? $_('routes.settings.octopusDiagnostic.live.homingFailed')
+							: $_('routes.settings.octopusDiagnostic.live.homingIdle')}
+				/>
 			</div>
 			<div class="flex flex-wrap gap-3 px-(--pad-panel) pb-(--pad-panel)">
 				<Badge tone={live.stall_latched ? 'danger' : 'neutral'}>
-					Stall latch: {tri(live.stall_latched)}
+					{$_('routes.settings.octopusDiagnostic.live.stallLatch', { values: { value: tri(live.stall_latched) } })}
 				</Badge>
 				<Badge>SG_RESULT: {live.tmc_sg_result ?? '--'}</Badge>
-				<Badge tone={drvStatusSummary(live.tmc_drv_status) === 'clean' ? 'neutral' : 'danger'}>
+				<Badge tone={drvStatusSummary(live.tmc_drv_status) === $_('routes.settings.octopusDiagnostic.live.clean') ? 'neutral' : 'danger'}>
 					DRV_STATUS: {drvStatusSummary(live.tmc_drv_status)}
 				</Badge>
 				{#if live.encoder_error}<Badge tone="danger">{live.encoder_error}</Badge>{/if}
@@ -286,14 +303,20 @@
 		{/if}
 	</Panel>
 
-	<Panel title="Bin wheel" description="Click a bin to jog the chute straight there (same move the sorter itself uses).">
+	<Panel
+		title={$_('routes.settings.octopusDiagnostic.binWheel.panelTitle')}
+		description={$_('routes.settings.octopusDiagnostic.binWheel.panelDescription')}
+	>
 		<div class="flex flex-col gap-3 px-(--pad-panel) pb-(--pad-panel)">
-			<Field label="Layer" for="diag-layer">
+			<Field label={$_('routes.settings.octopusDiagnostic.binWheel.layerLabel')} for="diag-layer">
 				<Select
 					id="diag-layer"
 					value={String(layerIndex)}
 					onchange={(v) => (layerIndex = Number(v))}
-					options={layers.map((l) => ({ value: String(l.layer_index), label: `Layer ${l.layer_index + 1}` }))}
+					options={layers.map((l) => ({
+						value: String(l.layer_index),
+						label: $_('routes.settings.octopusDiagnostic.binWheel.layerOption', { values: { n: l.layer_index + 1 } })
+					}))}
 				/>
 			</Field>
 			<div class="max-w-xs">
@@ -319,26 +342,41 @@
 	</div>
 {:else if tab === 'leds'}
 	<div class="flex flex-col gap-(--gap-panels)">
-		<Panel title="C-channel 2" description="The light in C-channel 2's hood.">
+		<Panel
+			title={$_('routes.settings.octopusDiagnostic.leds.cChannel2.title')}
+			description={$_('routes.settings.octopusDiagnostic.leds.cChannel2.description')}
+		>
 			<div class="px-(--pad-panel) pb-(--pad-panel)"><ChannelLedSection channelKey="c_channel_2" /></div>
 		</Panel>
-		<Panel title="C-channel 3" description="The light in C-channel 3's hood.">
+		<Panel
+			title={$_('routes.settings.octopusDiagnostic.leds.cChannel3.title')}
+			description={$_('routes.settings.octopusDiagnostic.leds.cChannel3.description')}
+		>
 			<div class="px-(--pad-panel) pb-(--pad-panel)"><ChannelLedSection channelKey="c_channel_3" /></div>
 		</Panel>
-		<Panel title="Classification channel" description="The light in the classification channel's hood.">
+		<Panel
+			title={$_('routes.settings.octopusDiagnostic.leds.classificationChannel.title')}
+			description={$_('routes.settings.octopusDiagnostic.leds.classificationChannel.description')}
+		>
 			<div class="px-(--pad-panel) pb-(--pad-panel)"><ChannelLedSection channelKey="classification_channel" /></div>
 		</Panel>
 	</div>
 {:else if tab === 'fans'}
 	<Panel
-		title="Orange Pi CPU"
-		description="FAN{cpu?.auto_fan_index ?? 5} is reserved for cooling the Orange Pi's own SoC - target {cpu?.fan_on_at_or_above_c ??
-			55}°C, off again at {cpu?.fan_off_below_c ?? 50}°C, and it won't switch again within {cpu?.min_switch_interval_s ??
-			60}s of its last change, so it doesn't chatter. The chip itself only throttles at {cpu?.throttle_c ?? 85}°C."
+		title={$_('routes.settings.octopusDiagnostic.fans.cpuPanelTitle')}
+		description={$_('routes.settings.octopusDiagnostic.fans.cpuPanelDescription', {
+			values: {
+				autoFanIndex: cpu?.auto_fan_index ?? 5,
+				fanOnTemp: cpu?.fan_on_at_or_above_c ?? 55,
+				fanOffTemp: cpu?.fan_off_below_c ?? 50,
+				minSwitchInterval: cpu?.min_switch_interval_s ?? 60,
+				throttleTemp: cpu?.throttle_c ?? 85
+			}
+		})}
 	>
 		<div class="grid grid-cols-2 divide-x divide-line sm:grid-cols-4">
 			<Stat
-				label="CPU temperature"
+				label={$_('routes.settings.octopusDiagnostic.fans.cpuTempLabel')}
 				value={cpu?.temp_c ?? '--'}
 				unit={cpu?.temp_c != null ? '°C' : undefined}
 				tone={cpu?.temp_c != null && cpu.fan_on_at_or_above_c != null && cpu.temp_c >= cpu.fan_on_at_or_above_c
@@ -347,18 +385,25 @@
 			/>
 			<Stat
 				label="FAN{cpu?.auto_fan_index ?? 5}"
-				value={cpu?.fan_on === null || cpu?.fan_on === undefined ? '--' : cpu.fan_on ? 'On' : 'Off'}
+				value={cpu?.fan_on === null || cpu?.fan_on === undefined
+					? '--'
+					: cpu.fan_on
+						? $_('routes.settings.octopusDiagnostic.fans.on')
+						: $_('routes.settings.octopusDiagnostic.fans.off')}
 			/>
-			<Stat label="On / off at" value={cpu ? `${cpu.fan_on_at_or_above_c} / ${cpu.fan_off_below_c}` : '--'} unit="°C" />
-			<Stat label="Min. between switches" value={cpu?.min_switch_interval_s ?? '--'} unit="s" />
+			<Stat label={$_('routes.settings.octopusDiagnostic.fans.onOffLabel')} value={cpu ? `${cpu.fan_on_at_or_above_c} / ${cpu.fan_off_below_c}` : '--'} unit="°C" />
+			<Stat label={$_('routes.settings.octopusDiagnostic.fans.minSwitchLabel')} value={cpu?.min_switch_interval_s ?? '--'} unit="s" />
 		</div>
 	</Panel>
-	<Panel title="Fan headers" description="The board's 6 fan headers (FAN0-FAN5). Duty shown is the last value this backend set, not a live read from the board.">
+	<Panel
+		title={$_('routes.settings.octopusDiagnostic.fans.headersPanelTitle')}
+		description={$_('routes.settings.octopusDiagnostic.fans.headersPanelDescription')}
+	>
 		{#if fansLoading}
-			<div class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">Loading the fans</div>
+			<div class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">{$_('routes.settings.octopusDiagnostic.fans.loading')}</div>
 		{:else if !fansAvailable}
 			<div class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">
-				Hardware not initialized, or this board has no fan headers.
+				{$_('routes.settings.octopusDiagnostic.fans.notAvailable')}
 			</div>
 		{:else}
 			<div class="grid grid-cols-1 gap-4 px-(--pad-panel) pb-(--pad-panel) sm:grid-cols-2 lg:grid-cols-3">
@@ -367,16 +412,20 @@
 						<div class="flex items-center justify-between text-sm">
 							<span class="font-medium text-ink">FAN{fan.index}</span>
 							{#if fan.auto}
-								<Badge tone={fan.duty_percent > 0 ? 'success' : undefined}>Auto</Badge>
+								<Badge tone={fan.duty_percent > 0 ? 'success' : undefined}>{$_('routes.settings.octopusDiagnostic.fans.auto')}</Badge>
 							{:else}
 								<span class="num text-ink-muted">{fan.duty_percent}%</span>
 							{/if}
 						</div>
 						{#if fan.auto}
 							<div class="text-sm text-ink-muted">
-								Controlled by CPU temperature (see the Orange Pi panel above) - {fan.duty_percent > 0
-									? 'currently on'
-									: 'currently off'}.
+								{$_('routes.settings.octopusDiagnostic.fans.controlledByCpu', {
+									values: {
+										state: fan.duty_percent > 0
+											? $_('routes.settings.octopusDiagnostic.fans.currentlyOn')
+											: $_('routes.settings.octopusDiagnostic.fans.currentlyOff')
+									}
+								})}
 							</div>
 						{:else}
 							<input
@@ -392,10 +441,10 @@
 							/>
 							<div class="flex gap-2">
 								<Button size="sm" disabled={savingFan === fan.index} onclick={() => void setFan(fan.index, 0)}>
-									Off
+									{$_('routes.settings.octopusDiagnostic.fans.off')}
 								</Button>
 								<Button size="sm" disabled={savingFan === fan.index} onclick={() => void setFan(fan.index, 100)}>
-									Full
+									{$_('routes.settings.octopusDiagnostic.fans.full')}
 								</Button>
 							</div>
 						{/if}
@@ -404,4 +453,6 @@
 			</div>
 		{/if}
 	</Panel>
+{:else if tab === 'benchmark'}
+	<BenchmarkPanel />
 {/if}

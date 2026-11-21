@@ -13,6 +13,7 @@
 	import Switch from '$lib/components/ui/Switch.svelte';
 	import { getMachinesContext } from '$lib/machines/context';
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 
 	type LogSource = {
 		id: string;
@@ -73,12 +74,12 @@
 	}
 
 	function formatTimestamp(value: number | null): string {
-		if (value == null) return 'n/a';
+		if (value == null) return $_('routes.logs.notAvailable');
 		return new Date(value * 1000).toLocaleString();
 	}
 
 	function formatBytes(value: number | null): string {
-		if (value == null) return 'n/a';
+		if (value == null) return $_('routes.logs.notAvailable');
 		if (value < 1024) return `${value} B`;
 		if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
 		return `${(value / (1024 * 1024)).toFixed(1)} MB`;
@@ -114,7 +115,7 @@
 			error = null;
 		} catch (e: unknown) {
 			if (requestId !== sourcesRequestSeq) return;
-			error = e instanceof Error ? e.message : 'Failed to load log sources';
+			error = e instanceof Error ? e.message : $_('routes.logs.loadSourcesFailedFallback');
 			sources = [];
 			selectedSourceId = null;
 			selectedLog = null;
@@ -149,7 +150,7 @@
 			error = null;
 		} catch (e: unknown) {
 			if (requestId !== contentRequestSeq) return;
-			error = e instanceof Error ? e.message : 'Failed to load log content';
+			error = e instanceof Error ? e.message : $_('routes.logs.loadContentFailedFallback');
 		} finally {
 			if (requestId !== contentRequestSeq) return;
 			refreshingContent = false;
@@ -214,13 +215,13 @@
 		return parsedEntries.filter((entry) => entry.level === level).length;
 	}
 
-	const LEVEL_LABELS: Record<LogLevel, string> = {
-		ERROR: 'Error',
-		WARN: 'Warning',
-		INFO: 'Info',
-		DEBUG: 'Debug',
-		OTHER: 'Other'
-	};
+	const LEVEL_LABELS = $derived<Record<LogLevel, string>>({
+		ERROR: $_('routes.logs.levelError'),
+		WARN: $_('routes.logs.levelWarning'),
+		INFO: $_('routes.logs.levelInfo'),
+		DEBUG: $_('routes.logs.levelDebug'),
+		OTHER: $_('routes.logs.levelOther')
+	});
 	const LEVEL_TONES = {
 		ERROR: 'danger',
 		WARN: 'warning',
@@ -255,34 +256,34 @@
 	});
 </script>
 
-<svelte:head><title>Sorter - Logs</title></svelte:head>
+<svelte:head><title>{$_('routes.logs.pageTitle')}</title></svelte:head>
 
 <AppShell fit>
 	<div class="mx-auto flex min-h-0 w-full max-w-[1500px] flex-1 flex-col gap-(--gap-panels) px-4 py-6 sm:px-6">
-		<PageHeader title="Logs" description="Curated log sources with search, level filtering and a steady refresh.">
+		<PageHeader title={$_('routes.logs.title')} description={$_('routes.logs.description')}>
 			{#snippet actions()}
 				<div class="flex items-center gap-2">
-					<span class="text-sm text-ink-muted">Lines</span>
+					<span class="text-sm text-ink-muted">{$_('routes.logs.linesLabel')}</span>
 					<Select
-						label="Lines to show"
+						label={$_('routes.logs.linesToShowLabel')}
 						class="w-24"
 						bind:value={lineLimit}
 						options={['200', '400', '800', '1500'].map((n) => ({ value: n, label: n }))}
 					/>
 				</div>
 				<div class="flex items-center gap-2">
-					<span id="logs-auto-refresh" class="text-sm text-ink-muted">Auto refresh</span>
+					<span id="logs-auto-refresh" class="text-sm text-ink-muted">{$_('routes.logs.autoRefreshLabel')}</span>
 					<Switch labelledby="logs-auto-refresh" bind:checked={autoRefresh} />
 				</div>
 				<div class="flex items-center gap-2">
-					<span id="logs-wrap" class="text-sm text-ink-muted">Wrap lines</span>
+					<span id="logs-wrap" class="text-sm text-ink-muted">{$_('routes.logs.wrapLinesLabel')}</span>
 					<Switch labelledby="logs-wrap" bind:checked={wrapLines} />
 				</div>
 				<Button
 					loading={refreshingSources || refreshingContent}
 					onclick={() => void refreshNow()}
 				>
-					Refresh
+					{$_('routes.logs.refreshButton')}
 				</Button>
 			{/snippet}
 		</PageHeader>
@@ -290,11 +291,11 @@
 		{#if error}<Alert tone="danger">{error}</Alert>{/if}
 
 		<div class="grid grid-cols-1 min-h-0 gap-(--gap-panels) lg:flex-1 xl:grid-cols-[20rem_minmax(0,1fr)]">
-			<Panel title="Sources" flush fill>
+			<Panel title={$_('routes.logs.sourcesPanelTitle')} flush fill>
 				{#if initialLoading && sources.length === 0}
 					<p class="flex items-center gap-2 px-(--pad-panel) pb-4 text-sm text-ink-muted">
 						<Spinner size={16} />
-						Loading the log sources
+						{$_('routes.logs.loadingLogSources')}
 					</p>
 				{:else}
 					<ul class="divide-y divide-line">
@@ -314,13 +315,15 @@
 									<div class="flex items-center justify-between gap-2">
 										<span class="text-sm font-medium text-ink">{source.label}</span>
 										<span class="num text-xs text-ink-muted">
-											{source.available ? formatBytes(source.size_bytes) : 'Unavailable'}
+											{source.available ? formatBytes(source.size_bytes) : $_('routes.logs.unavailableLabel')}
 										</span>
 									</div>
 									<div class="mt-1 text-sm text-ink-muted">{source.description}</div>
 									{#if source.available}
 										<div class="mt-2 truncate font-mono text-xs text-ink-muted">{source.path}</div>
-										<div class="mt-1 text-sm text-ink-muted">Updated {formatTimestamp(source.updated_at)}</div>
+										<div class="mt-1 text-sm text-ink-muted">
+											{$_('routes.logs.updatedLabel', { values: { ts: formatTimestamp(source.updated_at) } })}
+										</div>
 									{/if}
 								</button>
 							</li>
@@ -330,8 +333,8 @@
 			</Panel>
 
 			<Panel
-				title={selectedLog ? selectedLog.label : 'Log output'}
-				description={selectedLog ? selectedLog.description : 'Select an available source to inspect its logs.'}
+				title={selectedLog ? selectedLog.label : $_('routes.logs.logOutputFallbackTitle')}
+				description={selectedLog ? selectedLog.description : $_('routes.logs.selectSourceDescription')}
 				flush
 				fill
 			>
@@ -340,7 +343,7 @@
 						<div class="flex items-center gap-3 text-sm text-ink-muted">
 							{#if refreshingContent || refreshingSources}<Spinner size={14} />{/if}
 							<span class="num">{formatBytes(selectedLog.size_bytes)}</span>
-							<span>Updated {formatTimestamp(selectedLog.updated_at)}</span>
+							<span>{$_('routes.logs.updatedLabel', { values: { ts: formatTimestamp(selectedLog.updated_at) } })}</span>
 						</div>
 					{/if}
 				{/snippet}
@@ -349,34 +352,34 @@
 						<p class="truncate font-mono text-xs text-ink-muted">{selectedLog.path}</p>
 						<div class="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_12rem]">
 							<Input
-								aria-label="Search the log"
-								placeholder="Search message text, error names, part IDs, camera names"
+								aria-label={$_('routes.logs.searchAriaLabel')}
+								placeholder={$_('routes.logs.searchPlaceholder')}
 								bind:value={searchQuery}
 							/>
 							<Select
-								label="Level"
+								label={$_('routes.logs.levelSelectLabel')}
 								bind:value={levelFilter}
 								options={[
-									{ value: 'all', label: 'All levels' },
-									{ value: 'ERROR', label: 'Errors only' },
-									{ value: 'WARN', label: 'Warnings only' },
-									{ value: 'INFO', label: 'Info only' },
-									{ value: 'DEBUG', label: 'Debug only' },
-									{ value: 'OTHER', label: 'Other or raw only' }
+									{ value: 'all', label: $_('routes.logs.levelAll') },
+									{ value: 'ERROR', label: $_('routes.logs.levelErrorsOnly') },
+									{ value: 'WARN', label: $_('routes.logs.levelWarningsOnly') },
+									{ value: 'INFO', label: $_('routes.logs.levelInfoOnly') },
+									{ value: 'DEBUG', label: $_('routes.logs.levelDebugOnly') },
+									{ value: 'OTHER', label: $_('routes.logs.levelOtherOnly') }
 								]}
 							/>
 						</div>
 						<div class="flex flex-wrap items-center gap-2">
-							<Badge>{filteredEntries().length} matching lines</Badge>
-							<Badge tone="danger">Errors: {countByLevel('ERROR')}</Badge>
-							<Badge tone="warning">Warnings: {countByLevel('WARN')}</Badge>
-							<Badge tone="info">Info: {countByLevel('INFO')}</Badge>
+							<Badge>{$_('routes.logs.matchingLinesBadge', { values: { n: filteredEntries().length } })}</Badge>
+							<Badge tone="danger">{$_('routes.logs.errorsBadge', { values: { n: countByLevel('ERROR') } })}</Badge>
+							<Badge tone="warning">{$_('routes.logs.warningsBadge', { values: { n: countByLevel('WARN') } })}</Badge>
+							<Badge tone="info">{$_('routes.logs.infoBadge', { values: { n: countByLevel('INFO') } })}</Badge>
 						</div>
 					</div>
 
 					{#if filteredEntries().length === 0}
 						<p class="bg-well px-(--pad-panel) py-4 text-sm text-ink-muted">
-							No log lines match the current filters.
+							{$_('routes.logs.noMatchingLines')}
 						</p>
 					{:else}
 						<div class="divide-y divide-line bg-well">
@@ -401,7 +404,7 @@
 					{/if}
 				{:else}
 					<div class="px-(--pad-panel) pb-(--pad-panel)">
-						<EmptyState title="No log source is selected" />
+						<EmptyState title={$_('routes.logs.noLogSourceSelected')} />
 					</div>
 				{/if}
 			</Panel>

@@ -1,0 +1,45 @@
+{
+	"components": {
+		"settings": {
+			"benchmarkPanel": {
+				"panelTitle": "Bin-zu-Bin-Benchmark",
+				"panelDescription": "Fährt die Rutsche von einem Bin zu einem anderen, während die Klappe einer Ebene schließt und die einer anderen öffnet — als eine Operation gemessen.",
+				"startBin": "Start-Bin",
+				"targetBin": "Ziel-Bin",
+				"closeGate": "Klappe schließen",
+				"closeGateInfo": "Welche Ebenen-Klappe während der gemessenen Fahrt schließt.",
+				"openGate": "Klappe öffnen",
+				"openGateInfo": "Welche Ebenen-Klappe während der gemessenen Fahrt öffnet.",
+				"layerOption": "Ebene {layer}",
+				"sectionOption": "Sektion {section}",
+				"binOption": "Bin {bin}",
+				"runButton": "Benchmark starten",
+				"preparing": "Wird vorbereitet (nicht gemessen) …",
+				"randomTitle": "Zufallstest",
+				"randomDescription": "Fährt nacheinander zufällige Bins in zufälligen Ebenen an, misst jede Fahrt und zeigt die Streuung.",
+				"randomRunsLabel": "Durchläufe",
+				"randomStartButton": "Start",
+				"randomStopButton": "Stopp",
+				"randomProgress": "Durchlauf {current} / {total}",
+				"randomRunLabel": "Lauf {n}",
+				"stat": {
+					"total": "Gesamt",
+					"chute": "Rutsche",
+					"close": "Schließen",
+					"open": "Öffnen",
+					"count": "Durchläufe",
+					"min": "Schnellster",
+					"max": "Langsamster",
+					"avg": "Durchschnitt"
+				},
+				"errors": {
+					"loadLayout": "Bin-Layout konnte nicht geladen werden.",
+					"chuteTimeout": "Zeitüberschreitung beim Warten auf den Stillstand der Rutsche.",
+					"runFailed": "Benchmark fehlgeschlagen.",
+					"sameLayer": "Zwei unterschiedliche Ebenen für Schließen und Öffnen wählen — dieselbe Klappe kann nicht gleichzeitig beim Öffnen und Schließen gemessen werden.",
+					"noBins": "Es sind keine Bins konfiguriert."
+				}
+			}
+		}
+	}
+}

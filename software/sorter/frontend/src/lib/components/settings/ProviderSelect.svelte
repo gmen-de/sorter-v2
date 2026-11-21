@@ -8,6 +8,7 @@
 
 <script lang="ts">
 	// One provider out of a few, each with its sentence: the system's RadioGroup.
+	import { _ } from 'svelte-i18n';
 	import RadioGroup from '$lib/components/ui/RadioGroup.svelte';
 
 	let {
@@ -30,7 +31,10 @@
 	bind:value={selected}
 	options={options.map((p) => ({
 		value: p.id,
-		label: p.id === active ? `${p.label} (in use)` : p.label,
+		label:
+			p.id === active
+				? $_('components.settings.providerSelect.inUseLabel', { values: { label: p.label } })
+				: p.label,
 		help: p.description
 	}))}
 />

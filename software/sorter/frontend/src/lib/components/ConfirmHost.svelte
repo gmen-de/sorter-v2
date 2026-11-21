@@ -1,5 +1,6 @@
 <script lang="ts">
 	// The one place a confirmation is drawn (see $lib/confirm.svelte.ts), mounted once in the root layout.
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import { confirmation } from '$lib/confirm.svelte';
@@ -15,7 +16,9 @@
 >
 	<p class="whitespace-pre-line">{current?.message}</p>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => confirmation.settle(false)}>Cancel</Button>
+		<Button variant="ghost" onclick={() => confirmation.settle(false)}
+			>{$_('components.confirmHost.cancel')}</Button
+		>
 		<Button variant={current?.danger ? 'danger' : 'primary'} onclick={() => confirmation.settle(true)}>
 			{current?.action}
 		</Button>

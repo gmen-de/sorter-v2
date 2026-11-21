@@ -14,11 +14,19 @@
 // defaults for this board (confirmed from their stock ServoDriver.ino),
 // not something this firmware invented.
 
+#include <Adafruit_GFX.h>
+#include <Adafruit_NeoPixel.h>
+#include <Adafruit_SSD1306.h>
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <Preferences.h>
 #include <SCServo.h>
+#include <Wire.h>
 #include <esp_mac.h>
+
+// Bumped deliberately on every firmware change worth telling apart in a BLE
+// scan (see bleDeviceName()) - not auto-generated from anything.
+#define FW_VERSION "1.0.0"
 
 // -- Servo bus -------------------------------------------------------------
 
@@ -89,9 +97,106 @@ struct DemoGate {
 };
 DemoGate gDemoGates[DEMO_MAX_GATE + 1];  // index 1..DEMO_MAX_GATE used, 0 unused
 
+void updateDisplay();  // defined below; setDemoMode() needs it forward-declared
+
 void setDemoMode(bool enabled) {
   gDemoMode = enabled;
   gPrefs.putBool("demo", enabled);
+  updateDisplay();
+}
+
+// ---------------------------------------------------------------------------
+// Onboard peripherals: OLED + RGB status LEDs. Pins are the Waveshare
+// "Servo Driver with ESP32" board's own onboard wiring (not configurable) -
+// sourced from Waveshare's documentation for this board/its sibling ST3215
+// driver manual, not independently verified against this project's own
+// hardware. If the display stays blank or the LEDs don't light, the two
+// likely culprits are OLED_I2C_ADDR (0x3C vs the less common 0x3D) and the
+// NeoPixel color order (NEO_GRB vs NEO_RGB).
+// ---------------------------------------------------------------------------
+
+#define OLED_SDA 21
+#define OLED_SCL 22
+#define OLED_WIDTH 128
+#define OLED_HEIGHT 32
+#define OLED_I2C_ADDR 0x3C
+
+#define RGB_LED_PIN 23
+#define RGB_LED_COUNT 2
+#define LED_CONNECTION 0   // pixel 0: blue when a BLE host is connected
+#define LED_GATE_STATUS 1  // pixel 1: green/yellow/red, see GateStatus below
+#define LED_BLINK_MS 500
+
+Adafruit_SSD1306 gDisplay(OLED_WIDTH, OLED_HEIGHT, &Wire, -1);
+Adafruit_NeoPixel gRgbLeds(RGB_LED_COUNT, RGB_LED_PIN, NEO_GRB + NEO_KHZ800);
+bool gDisplayOk = false;
+
+volatile bool gBleConnected = false;
+
+// The gate this board most recently confirmed open (0 = none known open).
+// Cleared when that same gate is confirmed closed - this board drives one
+// chute's worth of layer gates, which the sorter only ever opens one at a
+// time, so "the" open gate is enough; it isn't a log of every gate's state.
+int gDisplayGate = 0;
+
+enum GateStatus { GATE_STATUS_OK, GATE_STATUS_MOVING, GATE_STATUS_BLOCKED };
+GateStatus gGateStatus = GATE_STATUS_OK;
+
+void updateDisplay() {
+  if (!gDisplayOk) return;
+  gDisplay.clearDisplay();
+  gDisplay.setTextSize(2);
+  gDisplay.setTextColor(SSD1306_WHITE);
+  gDisplay.setCursor(0, 8);
+  if (gDemoMode) {
+    gDisplay.print("DEMO");
+  } else if (gDisplayGate > 0) {
+    gDisplay.print("GATE ");
+    gDisplay.print(gDisplayGate);
+  } else {
+    gDisplay.print("-");
+  }
+  gDisplay.display();
+}
+
+// Called whenever a gate command's real outcome (not just what was asked
+// for) is known, so the display always reflects confirmed position, not an
+// attempted one.
+void noteGateOpenState(int gate, bool open) {
+  if (open) {
+    gDisplayGate = gate;
+  } else if (gDisplayGate == gate) {
+    gDisplayGate = 0;
+  }
+  updateDisplay();
+}
+
+void setGateStatus(GateStatus status) { gGateStatus = status; }
+
+// Pushes both LED pixels' current state to the strip. Called every loop()
+// tick (cheap) so the connection LED's blink has somewhere to run even
+// though nothing else changed; gGateStatus/gBleConnected changes just take
+// effect on the next tick (loop() runs roughly every 10ms - imperceptible).
+void updateLeds() {
+  if (gBleConnected) {
+    gRgbLeds.setPixelColor(LED_CONNECTION, gRgbLeds.Color(0, 0, 255));
+  } else {
+    bool on = (millis() / LED_BLINK_MS) % 2 == 0;
+    gRgbLeds.setPixelColor(LED_CONNECTION, on ? gRgbLeds.Color(0, 0, 255) : 0);
+  }
+
+  switch (gGateStatus) {
+    case GATE_STATUS_OK:
+      gRgbLeds.setPixelColor(LED_GATE_STATUS, gRgbLeds.Color(0, 255, 0));
+      break;
+    case GATE_STATUS_MOVING:
+      gRgbLeds.setPixelColor(LED_GATE_STATUS, gRgbLeds.Color(255, 255, 0));
+      break;
+    case GATE_STATUS_BLOCKED:
+      gRgbLeds.setPixelColor(LED_GATE_STATUS, gRgbLeds.Color(255, 0, 0));
+      break;
+  }
+  gRgbLeds.show();
 }
 
 // ---------------------------------------------------------------------------
@@ -225,17 +330,25 @@ bool calibrateServo(uint8_t id, uint16_t &safeMin, uint16_t &safeMax) {
 // ---------------------------------------------------------------------------
 
 String cmdOpenClose(int gate, bool open) {
+  setGateStatus(GATE_STATUS_MOVING);
+
   if (gDemoMode) {
-    if (gate < 1 || gate > DEMO_MAX_GATE) return String(gate) + " ERR UNCALIBRATED";
+    if (gate < 1 || gate > DEMO_MAX_GATE) {
+      setGateStatus(GATE_STATUS_BLOCKED);
+      return String(gate) + " ERR UNCALIBRATED";
+    }
     delay(DEMO_DELAY_MS);
     gDemoGates[gate].known = true;
     gDemoGates[gate].open = open;
+    setGateStatus(GATE_STATUS_OK);
+    noteGateOpenState(gate, open);
     return String(gate) + (open ? " OPEN" : " CLOSED");
   }
 
   uint8_t id = idForGate(gate);
   uint16_t minV, maxV;
   if (!readLimits(id, minV, maxV) || !isCalibrated(minV, maxV)) {
+    setGateStatus(GATE_STATUS_BLOCKED);
     return String(gate) + " ERR UNCALIBRATED";
   }
   uint16_t target = open ? minV : maxV;
@@ -247,13 +360,19 @@ String cmdOpenClose(int gate, bool open) {
   int pos, load;
   if (!readPositionAndLoad(id, pos, load)) {
     setTorque(id, false);
+    setGateStatus(GATE_STATUS_BLOCKED);
     return String(gate) + " ERR OFFLINE";
   }
 
   bool arrived = abs(pos - (int)target) <= POSITION_TOLERANCE;
   setTorque(id, false);
 
-  if (arrived) return String(gate) + (open ? " OPEN" : " CLOSED");
+  if (arrived) {
+    setGateStatus(GATE_STATUS_OK);
+    noteGateOpenState(gate, open);
+    return String(gate) + (open ? " OPEN" : " CLOSED");
+  }
+  setGateStatus(GATE_STATUS_BLOCKED);
   return String(gate) + " BLOCKED";
 }
 
@@ -484,21 +603,35 @@ class TxCallbacks : public NimBLECharacteristicCallbacks {
   }
 };
 
-// "SORTER-SERVO-BLE" plus the last two bytes of the BT MAC (e.g.
-// "SORTER-SERVO-BLE_A7:38"), so a setup with more than one bridge board can
-// tell them apart in a BLE scan, and a one-board setup still recognizes the
-// name without needing to know its MAC at all.
+// Drives the connection LED (see updateLeds()) and, since NimBLE-Arduino
+// with CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1 does not resume advertising on
+// its own, restarts advertising on disconnect so a new client can find the
+// board again without a power cycle.
+class ServerCallbacks : public NimBLEServerCallbacks {
+  void onConnect(NimBLEServer *server, ble_gap_conn_desc *desc) override { gBleConnected = true; }
+  void onDisconnect(NimBLEServer *server, ble_gap_conn_desc *desc) override {
+    gBleConnected = false;
+    NimBLEDevice::startAdvertising();
+  }
+};
+
+// "SERVO-BLE" plus the last two bytes of the BT MAC and the firmware version
+// (e.g. "SERVO-BLE_A7:38_v1.0.0"), so a setup with more than one bridge
+// board can tell them apart in a BLE scan, a one-board setup still
+// recognizes the name without needing to know its MAC at all, and a scan
+// shows which boards still need reflashing after a firmware change.
 String bleDeviceName() {
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_BT);
   char suffix[6];
   snprintf(suffix, sizeof(suffix), "%02X:%02X", mac[4], mac[5]);
-  return String("SORTER-SERVO-BLE_") + suffix;
+  return String("SERVO-BLE_") + suffix + "_v" + FW_VERSION;
 }
 
 void setupBle() {
   NimBLEDevice::init(bleDeviceName().c_str());
   NimBLEServer *server = NimBLEDevice::createServer();
+  server->setCallbacks(new ServerCallbacks());
   NimBLEService *service = server->createService(SVC_UUID);
 
   gTxCharacteristic = service->createCharacteristic(CHR_TX_UUID, NIMBLE_PROPERTY::NOTIFY);
@@ -526,6 +659,14 @@ void setup() {
   gPrefs.begin("sorter_ble", false);
   gDemoMode = gPrefs.getBool("demo", false);
 
+  Wire.begin(OLED_SDA, OLED_SCL);
+  gDisplayOk = gDisplay.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR);
+  if (!gDisplayOk) Serial.println("OLED not found - display disabled");
+
+  gRgbLeds.begin();
+  updateLeds();
+  updateDisplay();
+
   setupBle();
 
   Serial.println("esp32_ble_servo_bridge ready");
@@ -540,5 +681,6 @@ void loop() {
     gSendInventoryPending = false;
     sendInventory();
   }
+  updateLeds();
   delay(10);
 }

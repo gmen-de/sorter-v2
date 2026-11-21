@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { chartFont, token } from '$lib/theme';
 	// Stacked time-series panels for StallGuard telemetry. Each signal gets its own
 	// panel on its own real scale — SG_RESULT (0..512), TSTEP (log, decades differ
@@ -242,7 +243,7 @@
 			ctx.fillStyle = colMuted;
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
-			ctx.fillText('No samples', x0 + plotW / 2, height / 2);
+			ctx.fillText($_('components.stallGuardChart.noSamples'), x0 + plotW / 2, height / 2);
 			return;
 		}
 
@@ -282,7 +283,11 @@
 					ctx.fillStyle = colDanger;
 					ctx.textAlign = 'left';
 					ctx.textBaseline = 'bottom';
-					ctx.fillText(`trigger ≤ ${triggerLevel}`, x0 + 4, y - 2);
+					ctx.fillText(
+						$_('components.stallGuardChart.triggerLabel', { values: { level: triggerLevel } }),
+						x0 + 4,
+						y - 2
+					);
 				}
 				drawSeries((p) => (p.sg != null && p.sg >= 0 ? p.sg : null), sy, colPrimary, 1.5);
 				if (hoverPoint && hoverPoint.sg != null && hoverPoint.sg >= 0) {
@@ -298,11 +303,19 @@
 					ctx.textAlign = 'right';
 					ctx.textBaseline = 'top';
 					const ramp =
-						stats.ramp != null ? ` · ramp ${stats.ramp.toFixed(1)}s` : ' · never opens';
+						stats.ramp != null
+							? $_('components.stallGuardChart.gateRamp', {
+									values: { ramp: stats.ramp.toFixed(1) }
+								})
+							: $_('components.stallGuardChart.gateNeverOpens');
 					ctx.fillText(
-						`gate open ${stats.openSec.toFixed(1)}s / ${stats.dur.toFixed(1)}s (${Math.round(
-							stats.pct
-						)}%)${ramp}`,
+						$_('components.stallGuardChart.gateOpen', {
+							values: {
+								openSec: stats.openSec.toFixed(1),
+								dur: stats.dur.toFixed(1),
+								pct: Math.round(stats.pct)
+							}
+						}) + ramp,
 						x0 + plotW - 4,
 						y0 + 3
 					);
@@ -333,7 +346,11 @@
 					ctx.fillStyle = colSuccess;
 					ctx.textAlign = 'left';
 					ctx.textBaseline = 'bottom';
-					ctx.fillText(`tcoolthrs ${cruiseTstep} (gate ≤ here)`, x0 + 4, y - 2);
+					ctx.fillText(
+						$_('components.stallGuardChart.tcoolthrsLabel', { values: { value: cruiseTstep } }),
+						x0 + 4,
+						y - 2
+					);
 				}
 				drawSeries(
 					(p) => (p.tstep != null && p.tstep > 0 ? p.tstep : null),
@@ -347,7 +364,7 @@
 					ctx.arc(hoverXPix, sy(hoverPoint.tstep), 3, 0, Math.PI * 2);
 					ctx.fill();
 				}
-				drawFrameTitle(y0, plotH, 'TSTEP (log, lower = faster)', colSuccess);
+				drawFrameTitle(y0, plotH, $_('components.stallGuardChart.tstepPanelTitle'), colSuccess);
 			} else {
 				const sy = (v: number) =>
 					y0 + plotH - (Math.max(0, Math.min(CS_MAX, v)) / CS_MAX) * plotH;

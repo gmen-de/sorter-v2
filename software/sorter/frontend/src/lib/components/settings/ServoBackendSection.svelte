@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
@@ -46,7 +47,7 @@
 			const data = await res.json();
 			scannedDevices = data.devices ?? [];
 		} catch (e: any) {
-			scanError = e?.message ?? 'Scan failed.';
+			scanError = e?.message ?? $_('components.settings.servoBackendSection.errors.scanFailed');
 		} finally {
 			scanning = false;
 		}
@@ -72,7 +73,7 @@
 			const data = await res.json();
 			demoMode = Boolean(data.demo_mode);
 		} catch (e: any) {
-			demoError = e?.message ?? 'Could not read demo mode.';
+			demoError = e?.message ?? $_('components.settings.servoBackendSection.errors.demoReadFailed');
 		}
 	}
 
@@ -92,7 +93,7 @@
 			const data = await res.json();
 			demoMode = Boolean(data.demo_mode);
 		} catch (e: any) {
-			demoError = e?.message ?? 'Could not change demo mode.';
+			demoError = e?.message ?? $_('components.settings.servoBackendSection.errors.demoChangeFailed');
 			demoMode = !enabled;
 		} finally {
 			demoLoading = false;
@@ -115,7 +116,7 @@
 			device = data.device ?? '';
 			if (backend === 'waveshare_ble') void loadDemoMode();
 		} catch (e: any) {
-			loadError = e?.message ?? 'Failed to reach the servo settings.';
+			loadError = e?.message ?? $_('components.settings.servoBackendSection.errors.loadFailed');
 		} finally {
 			loading = false;
 		}
@@ -141,11 +142,11 @@
 			backend = data.settings.backend;
 			device = data.settings.device ?? '';
 			saveStatus = 'saved';
-			saveMessage = data.message ?? 'Saved.';
+			saveMessage = data.message ?? $_('components.settings.servoBackendSection.savedDefault');
 			if (backend === 'waveshare_ble') void loadDemoMode();
 		} catch (e: any) {
 			saveStatus = 'error';
-			saveMessage = e?.message ?? 'Save failed.';
+			saveMessage = e?.message ?? $_('components.settings.servoBackendSection.errors.saveFailed');
 		}
 	}
 
@@ -153,32 +154,48 @@
 </script>
 
 <Panel
-	title="Servo control"
-	description="Where layer-gate servo commands go: a control board's PCA9685 channels, or the ESP32 BLE gate bridge."
+	title={$_('components.settings.servoBackendSection.panelTitle')}
+	description={$_('components.settings.servoBackendSection.panelDescription')}
 	flush
 >
 	{#snippet actions()}
 		{#if saveStatus === 'saving'}
-			<span class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={14} /> Saving</span>
+			<span class="flex items-center gap-2 text-sm text-ink-muted"
+				><Spinner size={14} /> {$_('components.settings.servoBackendSection.savingLabel')}</span
+			>
 		{:else if saveStatus === 'saved'}
 			<span class="text-sm text-success-ink">{saveMessage}</span>
 		{:else if saveStatus === 'error'}
-			<span class="text-sm text-danger-ink" title={saveMessage}>Not saved</span>
+			<span class="text-sm text-danger-ink" title={saveMessage}
+				>{$_('components.settings.servoBackendSection.notSaved')}</span
+			>
 		{/if}
 	{/snippet}
 	<div class="flex flex-col gap-4 px-(--pad-panel) pb-(--pad-panel)">
 		{#if loadError}
 			<Alert tone="danger">{loadError}</Alert>
 		{:else if loading}
-			<div class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={14} /> Loading</div>
+			<div class="flex items-center gap-2 text-sm text-ink-muted">
+				<Spinner size={14} /> {$_('components.settings.servoBackendSection.scanningLabel')}
+			</div>
 		{:else}
-			<Field label="Backend" for="servo-backend" help="Changing this needs the hardware re-homed afterward.">
+			<Field
+				label={$_('components.settings.servoBackendSection.backendField.label')}
+				for="servo-backend"
+				help={$_('components.settings.servoBackendSection.backendField.help')}
+			>
 				<Select
 					id="servo-backend"
 					value={backend}
 					options={[
-						{ value: 'pca9685', label: 'Control board (PCA9685)' },
-						{ value: 'waveshare_ble', label: 'BLE servo (ESP32 gate bridge)' }
+						{
+							value: 'pca9685',
+							label: $_('components.settings.servoBackendSection.backendOptions.pca9685')
+						},
+						{
+							value: 'waveshare_ble',
+							label: $_('components.settings.servoBackendSection.backendOptions.waveshareBle')
+						}
 					]}
 					onchange={(v) => {
 						const next = (v || 'pca9685') as 'pca9685' | 'waveshare_ble';
@@ -235,7 +252,7 @@
 								onclick={() => pickDevice(found.address)}
 							>
 								<span class="font-mono">{found.address}</span>
-								<span class="text-ink-muted">{found.name || '(unnamed)'}{found.is_sorter_servo ? ' — SORTER-SERVO-BLE' : ''}</span>
+								<span class="text-ink-muted">{found.name || '(unnamed)'}{found.is_sorter_servo ? ' — SERVO-BLE' : ''}</span>
 								<span class="text-ink-muted">{found.rssi ?? ''} dBm</span>
 							</button>
 						{/each}

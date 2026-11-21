@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase } from '$lib/backend';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
@@ -105,7 +106,7 @@
 			);
 			selectedFourcc = pickInitialFourcc(selectedModeKey, parsed.current?.fourcc ?? null);
 		} catch (e: any) {
-			error = e.message ?? 'Failed to load capture modes';
+			error = e.message ?? $_('components.settings.picture.captureModePanel.failedToLoad');
 		} finally {
 			loading = false;
 		}
@@ -129,12 +130,12 @@
 			});
 			if (!res.ok) throw new Error(await res.text());
 			const parsed = await res.json();
-			status = parsed.message ?? 'Capture mode saved.';
+			status = parsed.message ?? $_('components.settings.picture.captureModePanel.savedStatus');
 			selectedModeKey = modeKeyStr;
 			selectedFourcc = fcUpper;
 			await load();
 		} catch (e: any) {
-			error = e.message ?? 'Failed to save capture mode';
+			error = e.message ?? $_('components.settings.picture.captureModePanel.failedToSave');
 		} finally {
 			saving = false;
 		}
@@ -158,17 +159,30 @@
 	const modeOptions = $derived(
 		Array.from(new Set((data?.modes ?? []).map((m) => modeKey(m)))).flatMap((key) => {
 			const sample = data?.modes.find((m) => modeKey(m) === key);
-			return sample ? [{ value: key, label: `${sample.width}×${sample.height} at ${sample.fps} fps` }] : [];
+			return sample
+				? [
+						{
+							value: key,
+							label: $_('components.settings.picture.captureModePanel.modeOptionLabel', {
+								values: { width: sample.width, height: sample.height, fps: sample.fps }
+							})
+						}
+					]
+				: [];
 		})
 	);
 </script>
 
 <section class="flex flex-col gap-3 px-(--pad-panel) py-4">
 	<div class="flex items-baseline justify-between gap-2">
-		<h3 class="label">Capture mode</h3>
+		<h3 class="label">{$_('components.settings.picture.captureModePanel.title')}</h3>
 		{#if data?.live?.width && data?.live?.height}
 			<span class="num text-sm text-ink-muted">
-				Live {data.live.width}×{data.live.height}{#if data.live.fps}&nbsp;at {data.live.fps} fps{/if}
+				{$_('components.settings.picture.captureModePanel.liveResolution', {
+					values: { width: data.live.width, height: data.live.height }
+				})}{#if data.live.fps}{$_('components.settings.picture.captureModePanel.liveFpsSuffix', {
+						values: { fps: data.live.fps }
+					})}{/if}
 			</span>
 		{/if}
 	</div>
@@ -176,33 +190,37 @@
 	{#if loading}
 		<p class="flex items-center gap-2 text-sm text-ink-muted">
 			<Spinner size={14} />
-			Loading the capture modes
+			{$_('components.settings.picture.captureModePanel.loadingText')}
 		</p>
 	{:else if !data?.supported}
 		<p class="text-sm text-ink-muted">
-			{data?.message ?? 'This camera does not offer a choice of resolution.'}
+			{data?.message ?? $_('components.settings.picture.captureModePanel.noResolutionChoice')}
 		</p>
 	{:else}
-		<Field label="Mode" for="capture-mode-{role}">
+		<Field label={$_('components.settings.picture.captureModePanel.modeFieldLabel')} for="capture-mode-{role}">
 			<Select
 				id="capture-mode-{role}"
 				value={selectedModeKey}
 				options={modeOptions}
-				placeholder="Pick a mode"
+				placeholder={$_('components.settings.picture.captureModePanel.pickModePlaceholder')}
 				disabled={saving}
 				onchange={onModeChange}
 			/>
 		</Field>
 		<Field
-			label="Pixel format"
+			label={$_('components.settings.picture.captureModePanel.pixelFormatField.label')}
 			for="capture-fourcc-{role}"
-			help="MJPG is the default: compressed, about a tenth of YUYV's USB bandwidth. Pick another only if this camera needs it."
+			help={$_('components.settings.picture.captureModePanel.pixelFormatField.help')}
 		>
 			<Select
 				id="capture-fourcc-{role}"
 				value={selectedFourcc}
-				options={fourccOptions.map((fc) => ({ value: fc, label: fc === 'MJPG' ? 'MJPG (default)' : fc }))}
-				placeholder="None"
+				options={fourccOptions.map((fc) => ({
+					value: fc,
+					label:
+						fc === 'MJPG' ? $_('components.settings.picture.captureModePanel.mjpgDefaultLabel') : fc
+				}))}
+				placeholder={$_('components.settings.picture.captureModePanel.nonePlaceholder')}
 				disabled={saving || fourccOptions.length === 0}
 				onchange={onFourccChange}
 			/>

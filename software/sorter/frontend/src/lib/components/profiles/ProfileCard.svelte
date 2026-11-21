@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Boxes from '@lucide/svelte/icons/boxes';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import { _ } from 'svelte-i18n';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -84,7 +85,9 @@
 		props.detail
 			? visibleVersions(props.detail).map((version) => ({
 					label: `v${version.version_number}${version.label ? ` - ${version.label}` : ''}`,
-					hint: version.is_published ? undefined : 'draft',
+					hint: version.is_published
+						? undefined
+						: $_('components.profiles.profileCard.versionDraftHint'),
 					onselect: () => props.onApplyVersion(version.id)
 				}))
 			: []
@@ -97,32 +100,43 @@
 			<div class="min-w-0 flex-1">
 				<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
 					<h3 class="truncate text-base font-semibold text-ink">{props.profile.name}</h3>
-					{#if isActive}<Badge tone="success" dot>Active</Badge>{/if}
+					{#if isActive}<Badge tone="success" dot
+							>{$_('components.profiles.profileCard.activeBadge')}</Badge
+						>{/if}
 					{#if props.profile.is_default}
-						<Badge>Hive default</Badge>
+						<Badge>{$_('components.profiles.profileCard.hiveDefaultBadge')}</Badge>
 					{:else if props.profile.visibility === 'public'}
-						<Badge>Public</Badge>
+						<Badge>{$_('components.profiles.profileCard.publicBadge')}</Badge>
 					{/if}
 				</div>
 				{#if update}
 					<p class="mt-1 text-sm text-ink-muted">
-						v{update.latest} is on Hive; this machine runs v{update.current}.
+						{$_('components.profiles.profileCard.updateNotice', {
+							values: { latest: update.latest, current: update.current }
+						})}
 					</p>
 				{/if}
 			</div>
 			<div class="flex shrink-0 items-center gap-1">
 				{#if props.detailError}
-					<Badge tone="warning">Unavailable</Badge>
+					<Badge tone="warning">{$_('components.profiles.profileCard.unavailableBadge')}</Badge>
 				{:else if props.detail}
-					<Button size="sm" loading={applying} onclick={props.onApply}>Activate</Button>
-					<Menu label="Versions of {props.profile.name}" items={versionItems}>
+					<Button size="sm" loading={applying} onclick={props.onApply}
+						>{$_('components.profiles.profileCard.activateButton')}</Button
+					>
+					<Menu
+						label={$_('components.profiles.profileCard.versionsMenuLabel', {
+							values: { name: props.profile.name }
+						})}
+						items={versionItems}
+					>
 						{#snippet trigger(trigger)}
 							<Button
 								{...trigger}
 								size="sm"
 								variant="ghost"
 								icon={Ellipsis}
-								label="Choose a version to activate"
+								label={$_('components.profiles.profileCard.chooseVersionLabel')}
 								disabled={applying}
 							/>
 						{/snippet}
@@ -130,7 +144,7 @@
 				{:else}
 					<span class="flex items-center gap-2 text-sm text-ink-muted">
 						<Spinner size={14} />
-						Loading
+						{$_('components.profiles.profileCard.loadingLabel')}
 					</span>
 				{/if}
 			</div>
@@ -162,7 +176,9 @@
 			</ul>
 			{#if bins.length > MAX_BINS}
 				<div>
-					<Button size="sm" variant="ghost" onclick={props.onOpenDetails}>See all categories</Button>
+					<Button size="sm" variant="ghost" onclick={props.onOpenDetails}
+						>{$_('components.profiles.profileCard.seeAllCategories')}</Button
+					>
 				</div>
 			{/if}
 		{:else if rules.length > 0}
@@ -173,13 +189,13 @@
 				{#if rules.length > 8}
 					<div class="md:col-span-2">
 						<Button size="sm" variant="ghost" onclick={props.onOpenDetails}>
-							+{rules.length - 8} more rules
+							{$_('components.profiles.profileCard.moreRules', { values: { count: rules.length - 8 } })}
 						</Button>
 					</div>
 				{/if}
 			</div>
 		{:else}
-			<p class="text-sm text-ink-muted">No rules defined</p>
+			<p class="text-sm text-ink-muted">{$_('components.profiles.profileCard.noRulesDefined')}</p>
 		{/if}
 
 		<div class="mt-auto flex flex-col gap-1.5">
@@ -187,7 +203,13 @@
 				<div>
 					{#if lastUsed}
 						<span title={formatAbsoluteTime(lastUsed) ?? undefined}>
-							Last used {formatRelativeTime(lastUsed) ?? 'recently'}
+							{$_('components.profiles.profileCard.lastUsed', {
+								values: {
+									time:
+										formatRelativeTime(lastUsed) ??
+										$_('components.profiles.profileCard.recentlyFallback')
+								}
+							})}
 						</span>
 					{/if}
 				</div>
@@ -202,19 +224,31 @@
 				<div class="md:text-right">
 					{#if displayVersion(props.profile)?.created_at}
 						<span title={formatAbsoluteTime(displayVersion(props.profile)?.created_at) ?? undefined}>
-							Updated {formatRelativeTime(displayVersion(props.profile)?.created_at) ?? 'recently'}
+							{$_('components.profiles.profileCard.updatedLabel', {
+								values: {
+									time:
+										formatRelativeTime(displayVersion(props.profile)?.created_at) ??
+										$_('components.profiles.profileCard.recentlyFallback')
+								}
+							})}
 						</span>
 					{/if}
 				</div>
 			</div>
 			{#if props.detailError}
-				<p class="text-sm text-warning-ink">Could not load versions: {props.detailError}</p>
+				<p class="text-sm text-warning-ink">
+					{$_('components.profiles.profileCard.couldNotLoadVersions', {
+						values: { error: props.detailError }
+					})}
+				</p>
 			{/if}
 			{#if isSelectedActive}
-				<p class="text-sm text-ink-muted">Currently active on this machine.</p>
+				<p class="text-sm text-ink-muted">{$_('components.profiles.profileCard.currentlyActive')}</p>
 			{:else if isActive && props.syncState?.version_number}
 				<p class="text-sm text-ink-muted">
-					This profile is active on v{props.syncState.version_number}.
+					{$_('components.profiles.profileCard.activeOnVersion', {
+						values: { version: props.syncState.version_number }
+					})}
 				</p>
 			{/if}
 		</div>

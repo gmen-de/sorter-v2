@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { page } from '$app/state';
 	import QRCode from 'qrcode';
 	import Minus from '@lucide/svelte/icons/minus';
@@ -87,7 +88,7 @@
 			}
 			data = await res.json();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to load set checklist';
+			error = e instanceof Error ? e.message : $_('routes.bins.setView.loadFailedFallback');
 		} finally {
 			loading = false;
 		}
@@ -130,7 +131,7 @@
 			// Revert
 			part.manual_override_count = prevOverride;
 			part.user_state = prevState;
-			error = e instanceof Error ? e.message : 'Failed to update part state';
+			error = e instanceof Error ? e.message : $_('routes.bins.setView.updatePartStateFailedFallback');
 		} finally {
 			const updated = new Set(pendingKeys);
 			updated.delete(key);
@@ -213,10 +214,10 @@
 	const tabs = $derived(
 		(
 			[
-				['all', 'All'],
-				['unknown', 'Unknown'],
-				['deferred', 'Deferred'],
-				['complete', 'Complete']
+				['all', $_('routes.bins.setView.tabAll')],
+				['unknown', $_('routes.bins.setView.tabUnknown')],
+				['deferred', $_('routes.bins.setView.tabDeferred')],
+				['complete', $_('routes.bins.setView.tabComplete')]
 			] as [FilterKey, string][]
 		).map(([value, label]) => ({ value, label, count: counts[value] }))
 	);
@@ -244,7 +245,11 @@
 </script>
 
 <svelte:head>
-	<title>{data ? `${data.name} checklist` : 'Set checklist'}</title>
+	<title
+		>{data
+			? $_('routes.bins.setView.pageTitleWithName', { values: { name: data.name } })
+			: $_('routes.bins.setView.pageTitleFallback')}</title
+	>
 </svelte:head>
 
 <svelte:window onbeforeprint={() => (printing = true)} onafterprint={() => (printing = false)} />
@@ -253,10 +258,10 @@
 	{#if loading}
 		<p class="flex items-center gap-2 text-sm text-ink-muted">
 			<Spinner size={16} />
-			Loading the set checklist
+			{$_('routes.bins.setView.loadingChecklist')}
 		</p>
 	{:else if error && !data}
-		<Alert tone="danger" title="The checklist did not load">{error}</Alert>
+		<Alert tone="danger" title={$_('routes.bins.setView.checklistFailedTitle')}>{error}</Alert>
 	{:else if data}
 		<div class="mx-auto flex max-w-[1400px] flex-col gap-(--gap-panels) print:max-w-none">
 			<Panel class="print:p-0">
@@ -271,35 +276,41 @@
 						{/if}
 						<div>
 							<div class="num text-sm text-ink-muted">
-								Set {data.set_num}{#if data.year}
+								{$_('routes.bins.setView.setLabel', { values: { setNum: data.set_num } })}{#if data.year}
 									&middot; {data.year}{/if}
 							</div>
 							<h1 class="mt-0.5 text-xl font-semibold tracking-tight text-ink">{data.name}</h1>
 							<div class="mt-3 flex flex-wrap gap-2">
-								<Badge>{totals.found} / {totals.needed} found</Badge>
+								<Badge
+									>{$_('routes.bins.setView.foundBadge', {
+										values: { found: totals.found, needed: totals.needed }
+									})}</Badge
+								>
 								<Badge>{totals.pct}%</Badge>
-								{#if data.num_parts}<Badge>{data.num_parts} parts total</Badge>{/if}
+								{#if data.num_parts}<Badge
+										>{$_('routes.bins.setView.partsTotalBadge', { values: { n: data.num_parts } })}</Badge
+									>{/if}
 							</div>
 						</div>
 					</div>
 					<div class="flex items-start gap-3">
 						{#if qrDataUrl}
 							<div class="flex flex-col items-center gap-1">
-								<img src={qrDataUrl} alt="QR code linking to this checklist" class="size-28" />
-								<div class="text-sm text-ink-muted">Scan to continue</div>
+								<img src={qrDataUrl} alt={$_('routes.bins.setView.qrAlt')} class="size-28" />
+								<div class="text-sm text-ink-muted">{$_('routes.bins.setView.scanToContinue')}</div>
 							</div>
 						{/if}
 						<div class="print:hidden">
-							<Button icon={Printer} onclick={() => window.print()}>Print or save as PDF</Button>
+							<Button icon={Printer} onclick={() => window.print()}>{$_('routes.bins.setView.printButton')}</Button>
 						</div>
 					</div>
 				</div>
 			</Panel>
 
-			{#if error}<Alert tone="danger" title="The update failed">{error}</Alert>{/if}
+			{#if error}<Alert tone="danger" title={$_('routes.bins.setView.updateFailedTitle')}>{error}</Alert>{/if}
 
 			<div class="print:hidden">
-				<Tabs label="Parts to show" bind:value={filter} items={tabs} />
+				<Tabs label={$_('routes.bins.setView.tabsLabel')} bind:value={filter} items={tabs} />
 			</div>
 
 			<div class="grid grid-cols-1 gap-(--gap-panels) sm:grid-cols-2 xl:grid-cols-4 print:grid-cols-3">
@@ -341,7 +352,7 @@
 								<Button
 									size="lg"
 									icon={Minus}
-									label="Decrement found count"
+									label={$_('routes.bins.setView.decrementAriaLabel')}
 									disabled={isPending || found <= 0}
 									onclick={() => onDecrement(part)}
 								/>
@@ -351,29 +362,35 @@
 								<Button
 									size="lg"
 									icon={Plus}
-									label="Increment found count"
+									label={$_('routes.bins.setView.incrementAriaLabel')}
 									disabled={isPending}
 									onclick={() => onIncrement(part)}
 								/>
 							</div>
 
 							<div class="hidden items-center justify-between text-sm print:flex">
-								<span class="text-ink-muted">Found</span>
+								<span class="text-ink-muted">{$_('routes.bins.setView.foundLabel')}</span>
 								<span class="num font-medium text-ink">{found} / {part.quantity_needed}</span>
 							</div>
 
 							<div class="flex gap-2 print:hidden">
 								{#if status === 'complete'}
-									<Button class="flex-1" disabled={isPending} onclick={() => onReset(part)}>Reset</Button>
+									<Button class="flex-1" disabled={isPending} onclick={() => onReset(part)}
+										>{$_('routes.bins.setView.resetButton')}</Button
+									>
 								{:else if status === 'deferred'}
-									<Button class="flex-1" disabled={isPending} onclick={() => onReset(part)}>Resume</Button>
+									<Button class="flex-1" disabled={isPending} onclick={() => onReset(part)}
+										>{$_('routes.bins.setView.resumeButton')}</Button
+									>
 									<Button variant="primary" class="flex-1" disabled={isPending} onclick={() => onComplete(part)}>
-										Complete
+										{$_('routes.bins.setView.completeButton')}
 									</Button>
 								{:else}
-									<Button class="flex-1" disabled={isPending} onclick={() => onDefer(part)}>Defer</Button>
+									<Button class="flex-1" disabled={isPending} onclick={() => onDefer(part)}
+										>{$_('routes.bins.setView.deferButton')}</Button
+									>
 									<Button variant="primary" class="flex-1" disabled={isPending} onclick={() => onComplete(part)}>
-										Complete
+										{$_('routes.bins.setView.completeButton')}
 									</Button>
 								{/if}
 							</div>
@@ -383,7 +400,7 @@
 			</div>
 
 			{#if filteredParts.length === 0}
-				<EmptyState title="No parts in this view" />
+				<EmptyState title={$_('routes.bins.setView.noPartsTitle')} />
 			{/if}
 		</div>
 	{/if}

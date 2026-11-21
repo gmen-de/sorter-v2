@@ -2,6 +2,7 @@
 	// The bins of the profile this machine runs, from the machine itself: the
 	// same view as a version on Hive, for a profile that may never have been on
 	// Hive (a file saved here).
+	import { _ } from 'svelte-i18n';
 	import ProfileBinsView from '$lib/components/profiles/ProfileBinsView.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
@@ -18,7 +19,7 @@
 	let { open = $bindable(), metadata, loading, error }: Props = $props();
 </script>
 
-<Modal bind:open title="What this machine sorts into" size="lg">
+<Modal bind:open title={$_('components.profiles.activeProfileBinsModal.modalTitle')} size="lg">
 	<div class="flex flex-col gap-6">
 		{#if metadata}
 			<div>
@@ -32,7 +33,7 @@
 		{#if loading && !metadata}
 			<p class="flex items-center justify-center gap-2 py-8 text-ink-muted">
 				<Spinner size={16} />
-				Loading the bins
+				{$_('components.profiles.activeProfileBinsModal.loadingBins')}
 			</p>
 		{:else if metadata}
 			<ProfileBinsView
@@ -42,7 +43,7 @@
 				stats={metadata.stats}
 			/>
 		{:else if !error}
-			<p class="text-ink-muted">This machine has no profile to show.</p>
+			<p class="text-ink-muted">{$_('components.profiles.activeProfileBinsModal.noProfile')}</p>
 		{/if}
 	</div>
 </Modal>

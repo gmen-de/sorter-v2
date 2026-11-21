@@ -9,7 +9,7 @@ from piece_transport import ClassificationChannelTransport
 from runtime_stats import RuntimeStatsCollector
 from subsystems.bus import TickBus
 from subsystems.distribution.sending import (
-    CHUTE_SETTLE_MS,
+    FALLBACK_SETTLE_MS,
     MISSING_DROP_PIECE_GRACE_MS,
     Sending,
 )
@@ -102,12 +102,12 @@ class SendingChuteReopenGateTests(unittest.TestCase):
 
         # Settle timer elapsed, but cooldown has NOT — gate must stay closed.
         self.assertIsNone(sending.step())
-        sending.start_time = time.time() - (CHUTE_SETTLE_MS / 1000.0) - 0.05
+        sending.start_time = time.time() - (FALLBACK_SETTLE_MS / 1000.0) - 0.05
         self.assertIsNone(sending.step())
         self.assertFalse(shared.get_distribution_ready())
 
         # Advance past the cooldown — gate opens.
-        sending.start_time = time.time() - (CHUTE_SETTLE_MS / 1000.0) - 0.3
+        sending.start_time = time.time() - (FALLBACK_SETTLE_MS / 1000.0) - 0.3
         next_state = sending.step()
         self.assertEqual(DistributionState.IDLE, next_state)
         self.assertTrue(shared.get_distribution_ready())
@@ -131,7 +131,7 @@ class SendingChuteReopenGateTests(unittest.TestCase):
         self.assertEqual([], gc.run_recorder.pieces)  # commit guard holds
 
         # Jump past the settle timer — now it commits AND reopens.
-        sending.start_time = time.time() - (CHUTE_SETTLE_MS / 1000.0) - 0.01
+        sending.start_time = time.time() - (FALLBACK_SETTLE_MS / 1000.0) - 0.01
         next_state = sending.step()
         self.assertEqual(DistributionState.IDLE, next_state)
         self.assertTrue(shared.get_distribution_ready())

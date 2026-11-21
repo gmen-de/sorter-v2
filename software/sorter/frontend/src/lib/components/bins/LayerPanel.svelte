@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ArchiveX from '@lucide/svelte/icons/archive-x';
 	import FolderOutput from '@lucide/svelte/icons/folder-output';
+	import { _ } from 'svelte-i18n';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -105,17 +106,19 @@
 </script>
 
 <Panel
-	title="Layer {layer.layer_index + 1}"
-	description="{layer.section_count} sections · {layer.bin_count} bins"
+	title={$_('components.bins.layerPanel.layerTitle', { values: { n: layer.layer_index + 1 } })}
+	description={$_('components.bins.layerPanel.layerDescription', {
+		values: { sections: layer.section_count, bins: layer.bin_count }
+	})}
 	class="relative"
 >
 	{#snippet actions()}
-		{#if isActive}<Badge tone="success" dot>Active</Badge>{/if}
+		{#if isActive}<Badge tone="success" dot>{$_('components.bins.layerPanel.activeBadge')}</Badge>{/if}
 		<Switch
 			checked={layer.enabled}
 			label={layer.enabled
-				? `Turn off layer ${layer.layer_index + 1}`
-				: `Turn on layer ${layer.layer_index + 1}`}
+				? $_('components.bins.layerPanel.turnOffLayer', { values: { n: layer.layer_index + 1 } })
+				: $_('components.bins.layerPanel.turnOnLayer', { values: { n: layer.layer_index + 1 } })}
 			disabled={controlsDisabled}
 			onchange={() => onToggleEnabled(!layer.enabled)}
 		/>
@@ -129,10 +132,14 @@
 	<div class="flex flex-col gap-4 {layer.enabled ? '' : 'opacity-60'}">
 		<div class="flex flex-wrap items-center gap-2">
 			<Button size="sm" icon={FolderOutput} loading={emptyBusy} disabled={clearDisabled} onclick={onEmptyLayer}>
-				{emptyBusy ? 'Emptying…' : 'Empty the layer'}
+				{emptyBusy
+					? $_('components.bins.layerPanel.emptyingInProgress')
+					: $_('components.bins.layerPanel.emptyTheLayer')}
 			</Button>
 			<Button size="sm" icon={ArchiveX} loading={resetBusy} disabled={clearDisabled} onclick={onResetLayer}>
-				{resetBusy ? 'Resetting…' : 'Reset the layer'}
+				{resetBusy
+					? $_('components.bins.layerPanel.resettingInProgress')
+					: $_('components.bins.layerPanel.resetTheLayer')}
 			</Button>
 			<Button
 				size="sm"
@@ -141,10 +148,14 @@
 				disabled={niiDisabled}
 				onclick={() => onToggleNii(!layerNii)}
 			>
-				{niiBusy ? 'Saving…' : layerNii ? 'Not-in-inventory mode is on' : 'Not-in-inventory mode'}
+				{niiBusy
+					? $_('components.bins.layerPanel.savingInProgress')
+					: layerNii
+						? $_('components.bins.layerPanel.niiModeOn')
+						: $_('components.bins.layerPanel.niiModeButton')}
 			</Button>
 			<span class="text-sm text-ink-muted">
-				Not-in-inventory mode sends pieces missing from the active BrickLink inventory (.bsx) to this layer.
+				{$_('components.bins.layerPanel.niiHelp')}
 			</span>
 		</div>
 		<div class="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2 2xl:grid-cols-3">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Check from '@lucide/svelte/icons/check';
 
 	type WizardStepDefinition<Id extends string = string> = {
@@ -24,7 +25,7 @@
 <!-- The steps in a row on the surface, joined by a line that turns green as
      they are done; below md only the numbers show (the page's title names the
      current one). -->
-<nav aria-label="Setup steps" class="rounded-panel bg-surface px-2 py-4 sm:px-(--pad-panel)">
+<nav aria-label={$_('components.setup.setupStepperNav.ariaLabel')} class="rounded-panel bg-surface px-2 py-4 sm:px-(--pad-panel)">
 	<ol class="flex items-start">
 		{#each steps as step, index (step.id)}
 			{@const status = getStatus(step.id)}

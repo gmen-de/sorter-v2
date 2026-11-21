@@ -10,6 +10,7 @@
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import ScanSearch from '@lucide/svelte/icons/scan-search';
 	import X from '@lucide/svelte/icons/x';
+	import { _ } from 'svelte-i18n';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import NudgeControl from '$lib/components/ui/NudgeControl.svelte';
@@ -62,24 +63,40 @@
 		onsave: () => void;
 	} = $props();
 
-	const ROWS: { part: Part; name: string; help: string; color?: string }[] = [
-		{ part: 'ring', name: 'Ring', help: 'The band pieces ride, at the rim.' },
-		{ part: 'drop', name: 'Drop', help: 'Where pieces land from the channel before.', color: 'rgb(0 128 255)' },
+	type Row = { part: Part; name: string; help: string; color?: string };
+
+	const ROWS: Row[] = $derived([
+		{
+			part: 'ring',
+			name: $_('components.zones.zonePanel.rows.ring.name'),
+			help: $_('components.zones.zonePanel.rows.ring.help')
+		},
+		{
+			part: 'drop',
+			name: $_('components.zones.zonePanel.rows.drop.name'),
+			help: $_('components.zones.zonePanel.rows.drop.help'),
+			color: 'rgb(0 128 255)'
+		},
 		{
 			part: 'precise',
-			name: 'Precise',
-			help: 'The sliver before the exit, where pieces are let off one at a time.',
+			name: $_('components.zones.zonePanel.rows.precise.name'),
+			help: $_('components.zones.zonePanel.rows.precise.help'),
 			color: 'rgb(255 0 255)'
 		},
-		{ part: 'exit', name: 'Exit', help: 'Where pieces leave, along the rim at the opening.', color: 'rgb(255 64 0)' }
-	];
+		{
+			part: 'exit',
+			name: $_('components.zones.zonePanel.rows.exit.name'),
+			help: $_('components.zones.zonePanel.rows.exit.help'),
+			color: 'rgb(255 64 0)'
+		}
+	]);
 
-	const SOURCE: Record<Source, string> = {
-		default: 'Not set yet',
-		drawn: 'Set by hand',
-		found: 'Found in the picture',
-		learned: 'Learned from pieces'
-	};
+	const SOURCE: Record<Source, string> = $derived({
+		default: $_('components.zones.zonePanel.source.default'),
+		drawn: $_('components.zones.zonePanel.source.drawn'),
+		found: $_('components.zones.zonePanel.source.found'),
+		learned: $_('components.zones.zonePanel.source.learned')
+	});
 
 	let step = $state(1);
 
@@ -87,7 +104,9 @@
 		if (!zones) return '';
 		if (part === 'ring') return `${Math.round(zones.exit_radius)} px`;
 		const span = zoneSpan(zones, part as ZoneName);
-		return span ? `${Math.round(spanWidth(span))}°` : 'None';
+		return span
+			? `${Math.round(spanWidth(span))}°`
+			: $_('components.zones.zonePanel.noneLabel');
 	}
 
 	function nudge(part: Part, side: 'left' | 'right') {
@@ -105,14 +124,20 @@
 	}
 </script>
 
-<Panel title="Zones" flush>
+<Panel title={$_('components.zones.zonePanel.panelTitle')} flush>
 	{#snippet actions()}
-		<Button icon={ScanSearch} loading={finding} disabled={saving} onclick={onfind}>Find</Button>
+		<Button icon={ScanSearch} loading={finding} disabled={saving} onclick={onfind}
+			>{$_('components.zones.zonePanel.findButton')}</Button
+		>
 		{#if editing}
-			<Button variant="ghost" icon={X} onclick={oncancel}>Cancel</Button>
-			<Button variant="primary" icon={Check} loading={saving} disabled={!dirty} onclick={onsave}>Save</Button>
+			<Button variant="ghost" icon={X} onclick={oncancel}
+				>{$_('components.zones.zonePanel.cancelButton')}</Button
+			>
+			<Button variant="primary" icon={Check} loading={saving} disabled={!dirty} onclick={onsave}
+				>{$_('components.zones.zonePanel.saveButton')}</Button
+			>
 		{:else}
-			<Button icon={Pencil} onclick={onedit}>Edit</Button>
+			<Button icon={Pencil} onclick={onedit}>{$_('components.zones.zonePanel.editButton')}</Button>
 		{/if}
 	{/snippet}
 
@@ -154,16 +179,24 @@
 								presets={[1, 5]}
 								unit={row.part === 'ring' ? ' px' : '°'}
 								max={row.part === 'ring' ? 200 : 90}
-								label="Size of the {row.name.toLowerCase()}"
-								leftLabel="Make the {row.name.toLowerCase()} smaller"
-								rightLabel="Make the {row.name.toLowerCase()} bigger"
-								amountLabel="Each press changes it by"
+								label={$_('components.zones.zonePanel.nudge.sizeOf', {
+									values: { name: row.name.toLowerCase() }
+								})}
+								leftLabel={$_('components.zones.zonePanel.nudge.makeSmaller', {
+									values: { name: row.name.toLowerCase() }
+								})}
+								rightLabel={$_('components.zones.zonePanel.nudge.makeBigger', {
+									values: { name: row.name.toLowerCase() }
+								})}
+								amountLabel={$_('components.zones.zonePanel.nudge.eachPress')}
 								disabled={isLocked(zones, row.part)}
 								onnudge={(side) => nudge(row.part, side)}
 							/>
 						{/if}
 						<Switch
-							label="Lock the {row.name.toLowerCase()}"
+							label={$_('components.zones.zonePanel.lockLabel', {
+								values: { name: row.name.toLowerCase() }
+							})}
 							checked={isLocked(zones, row.part)}
 							onchange={(locked) => zones && onchange(setLocked(zones, row.part, locked))}
 						/>
@@ -173,13 +206,13 @@
 		</div>
 	{:else}
 		<p class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">
-			No zones yet. Find them in the picture, then adjust and save.
+			{$_('components.zones.zonePanel.emptyState')}
 		</p>
 	{/if}
 
 	{#snippet footer()}
 		<p class="mr-auto text-sm text-ink-muted">
-			{watch || 'The zones change only when someone saves them. Lock a part to keep Find from moving it.'}
+			{watch || $_('components.zones.zonePanel.footerFallback')}
 		</p>
 	{/snippet}
 </Panel>

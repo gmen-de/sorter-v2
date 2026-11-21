@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getMachineContext } from '$lib/machines/context';
 	import { untrack } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import Wand2 from '@lucide/svelte/icons/wand-sparkles';
 	import type { KnownObjectData } from '$lib/api/events';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
@@ -633,7 +634,9 @@
 		obj.classification_status === 'failed' || Boolean(obj.request_failed)}
 	{@const is_multi_drop = obj.classification_status === 'multi_drop_fail'}
 	{@const is_too_big = Boolean(obj.too_big) || Boolean(obj.too_big_for_layer)}
-	{@const too_big_label = obj.too_big_for_layer ? 'Too big for layer' : 'Too big'}
+	{@const too_big_label = obj.too_big_for_layer
+		? $_('components.recentObjects.tooBigForLayer')
+		: $_('components.recentObjects.tooBig')}
 	{@const is_classified_ok = !is_unknown && !is_multi_drop && Boolean(reference_src)}
 	{@const ts =
 		obj.distributed_at ??
@@ -651,13 +654,13 @@
 	{@const resolved_name = obj.part_name ?? null}
 	{@const has_name = Boolean(resolved_name) && !is_unknown && !is_multi_drop}
 	{@const primary_text = is_multi_drop
-		? 'Multi drop — rejected'
+		? $_('components.recentObjects.multiDropRejected')
 		: is_failed
-			? 'ID failed'
+			? $_('components.recentObjects.idFailed')
 			: is_unknown
 				? obj.classification_status === 'not_found'
-					? 'Not recognized'
-					: 'Unknown piece'
+					? $_('components.recentObjects.notRecognized')
+					: $_('components.recentObjects.unknownPiece')
 				: has_name
 					? resolved_name!
 					: (obj.part_id ?? obj.uuid.slice(0, 8))}
@@ -695,7 +698,11 @@
 						requestFailed={Boolean(obj.request_failed)}
 					/>
 					<span class="num ml-auto shrink-0 text-sm text-ink-muted">
-						{obj.destination_bin ? `Discard ${formatBin(obj.destination_bin)}` : 'Discard bin'}
+						{obj.destination_bin
+							? $_('components.recentObjects.discardAt', {
+									values: { bin: formatBin(obj.destination_bin) }
+								})
+							: $_('components.recentObjects.discardBin')}
 					</span>
 				</div>
 			</div>
@@ -709,7 +716,7 @@
 						{#if base_src}
 							<img
 								src={base_src}
-								alt="piece"
+								alt={$_('components.recentObjects.alt.piece')}
 								class="absolute inset-0 h-full w-full object-contain transition-opacity duration-150 {show_cycle
 									? 'opacity-0'
 									: 'opacity-100'}"
@@ -718,7 +725,7 @@
 						{#if cycle_src}
 							<img
 								src={cycle_src}
-								alt="recognition view"
+								alt={$_('components.recentObjects.alt.recognitionView')}
 								class="absolute inset-0 h-full w-full object-contain transition-opacity duration-150 {show_cycle
 									? 'opacity-100'
 									: 'opacity-0'}"
@@ -760,11 +767,11 @@
 											? 'text-warning-ink'
 											: 'text-ink-muted hover:text-primary-ink'}"
 									title={submittedCount === 2
-										? 'Correction sent to Brickognize (2/2)'
+										? $_('components.recentObjects.correctionSent2of2')
 										: submittedCount === 1
-											? 'Correction sent to Brickognize (1/2) — click to finish'
-											: 'Correct this Brickognize prediction'}
-									aria-label="Correct prediction"
+											? $_('components.recentObjects.correctionSent1of2')
+											: $_('components.recentObjects.correctThisPrediction')}
+									aria-label={$_('components.recentObjects.correctPredictionAriaLabel')}
 								>
 									<Wand2 size={14} />
 								</button>
@@ -780,8 +787,12 @@
 									class="num shrink-0 text-sm font-medium text-success-ink"
 									title={(obj.piece_metadata as Record<string, unknown> | null | undefined)
 										?.price_from_base_mold
-										? `Approximate — base mold ${(obj.piece_metadata as Record<string, unknown>).price_from_base_mold} price (no data for this exact print)`
-										: 'BrickLink moving-average price (Hive catalog)'}
+										? $_('components.recentObjects.approximateBaseMoldPrice', {
+												values: {
+													mold: (obj.piece_metadata as Record<string, unknown>).price_from_base_mold
+												}
+											})
+										: $_('components.recentObjects.brickLinkAveragePrice')}
 								>
 									{(obj.piece_metadata as Record<string, unknown> | null | undefined)
 										?.price_from_base_mold

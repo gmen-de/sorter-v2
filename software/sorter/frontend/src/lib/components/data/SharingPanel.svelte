@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
 	import { page } from '$app/state';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
 	import StreamRows from '$lib/components/data/StreamRows.svelte';
@@ -61,7 +62,10 @@
 			sharing = next;
 			loadError = null;
 		} catch (e) {
-			if (mine === request) loadError = `Couldn't load what this sorter shares: ${message(e)}`;
+			if (mine === request)
+				loadError = $_('components.data.sharingPanel.loadErrorPrefix', {
+					values: { message: message(e) }
+				});
 		}
 	}
 
@@ -126,16 +130,23 @@
 		if (target) {
 			if (!(stream.key in target.overrides)) return null;
 			const every = sharedWith(sharing, stream, null);
+			const state = every
+				? $_('components.data.sharingPanel.stateOn')
+				: $_('components.data.sharingPanel.stateOff');
 			return {
-				text: `every Hive (${every ? 'on' : 'off'})`,
-				help: `Every Hive gets this ${every ? 'on' : 'off'}. Give ${target.name} the same.`,
+				text: $_('components.data.sharingPanel.resetToEveryHive', { values: { state } }),
+				help: $_('components.data.sharingPanel.resetToEveryHiveHelp', {
+					values: { state, hive: target.name }
+				}),
 				onreset: () => void save(target.id, { [stream.key]: every })
 			};
 		}
 		const fallback = defaultOf(sharing, stream);
 		if (sharedWith(sharing, stream, null) === fallback) return null;
 		return {
-			text: fallback ? 'on' : 'off',
+			text: fallback
+				? $_('components.data.sharingPanel.stateOn')
+				: $_('components.data.sharingPanel.stateOff'),
 			onreset: () => void save(null, { [stream.key]: fallback })
 		};
 	}
@@ -150,22 +161,24 @@
 	});
 
 	const scopeOptions = $derived([
-		{ value: 'all', label: 'Every Hive' },
+		{ value: 'all', label: $_('components.data.sharingPanel.everyHiveOption') },
 		...(sharing?.targets ?? []).map((t) => ({ value: t.id, label: t.name }))
 	]);
 
 	const description = $derived(
 		sharing && sharing.targets.length === 0
-			? 'No Hive is connected yet. What you choose here applies to each one you connect.'
-			: 'What each Hive may receive. The icon after a name says what it is for.'
+			? $_('components.data.sharingPanel.description.noHive')
+			: $_('components.data.sharingPanel.description.default')
 	);
 </script>
 
-<Panel title="Shared with Hive" {description} flush>
+<Panel title={$_('components.data.sharingPanel.panelTitle')} {description} flush>
 	{#snippet actions()}
 		{#if hasOwnValues}
 			<Button variant="ghost" size="sm" loading={busy} onclick={backToDefaults}>
-				{target ? "Use every Hive's settings" : 'Reset to defaults'}
+				{target
+					? $_('components.data.sharingPanel.resetButton.useEveryHive')
+					: $_('components.data.sharingPanel.resetButton.resetDefaults')}
 			</Button>
 		{/if}
 	{/snippet}
@@ -175,13 +188,15 @@
 			<Alert tone="danger">
 				{loadError}
 				{#snippet actions()}
-					<Button size="sm" onclick={() => void load(base)}>Try again</Button>
+					<Button size="sm" onclick={() => void load(base)}
+						>{$_('components.data.sharingPanel.tryAgainButton')}</Button
+					>
 				{/snippet}
 			</Alert>
 		</div>
 	{:else if !sharing}
 		<p class="flex items-center gap-2 px-(--pad-panel) pb-4 text-sm text-ink-muted">
-			<Spinner size={14} /> Loading
+			<Spinner size={14} /> {$_('components.data.sharingPanel.loadingLabel')}
 		</p>
 	{:else}
 		{@const current = sharing}
@@ -190,15 +205,17 @@
 				<Alert
 					tone="info"
 					title={current.consent.needs_consent
-						? 'Nothing is shared with a Hive yet'
-						: 'What this sorter shares has changed'}
+						? $_('components.data.sharingPanel.alertTitle.needsConsent')
+						: $_('components.data.sharingPanel.alertTitle.needsReview')}
 				>
 					{current.consent.needs_consent
-						? 'Look over the list, then agree to start sharing it.'
-						: 'Machine telemetry is new. Look over the list, then press OK.'}
+						? $_('components.data.sharingPanel.alertBody.needsConsent')
+						: $_('components.data.sharingPanel.alertBody.needsReview')}
 					{#snippet actions()}
 						<Button size="sm" variant="primary" loading={busy} onclick={agree}>
-							{current.consent.needs_consent ? 'Agree' : 'OK'}
+							{current.consent.needs_consent
+								? $_('components.data.sharingPanel.agreeButton')
+								: $_('components.data.sharingPanel.okButton')}
 						</Button>
 					{/snippet}
 				</Alert>
@@ -208,9 +225,9 @@
 		<div class="divide-y divide-line">
 			{#if current.targets.length > 0}
 				<SettingRow
-					label="Shared with"
+					label={$_('components.data.sharingPanel.sharedWithLabel')}
 					for="sharing-scope"
-					info="Every Hive gets the same unless you set one differently. Choose a Hive to see and change what it receives."
+					info={$_('components.data.sharingPanel.sharedWithInfo')}
 				>
 					<Select
 						id="sharing-scope"

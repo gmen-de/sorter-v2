@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -60,27 +61,35 @@
 	}
 
 	function badgeLabel(state: GateState): string {
-		if (state === 'open') return 'Open';
-		if (state === 'closed') return 'Closed';
-		if (state === 'blocked') return 'Blocked';
-		if (state === 'error') return 'Error';
-		if (state === 'unknown') return 'Unknown';
-		return 'Untested';
+		if (state === 'open') return $_('components.setup.servo.bleGatePanel.gateState.open');
+		if (state === 'closed') return $_('components.setup.servo.bleGatePanel.gateState.closed');
+		if (state === 'blocked') return $_('components.setup.servo.bleGatePanel.gateState.blocked');
+		if (state === 'error') return $_('components.setup.servo.bleGatePanel.gateState.error');
+		if (state === 'unknown') return $_('components.setup.servo.bleGatePanel.gateState.unknown');
+		return $_('components.setup.servo.bleGatePanel.gateState.untested');
 	}
 </script>
 
-<Panel title="ESP32 BLE gate bridge">
+<Panel title={$_('components.setup.servo.bleGatePanel.panelTitle')}>
 	{#snippet actions()}
 		<Badge tone={connected ? 'success' : 'neutral'} dot>
-			{connected ? 'Connected' : 'Not connected'}
+			{connected
+				? $_('components.setup.servo.bleGatePanel.badge.connected')
+				: $_('components.setup.servo.bleGatePanel.badge.notConnected')}
 		</Badge>
 	{/snippet}
 
 	<div class="flex flex-wrap items-end gap-2">
-		<Field label="BLE device address" for="ble-device" class="min-w-0 flex-[2_1_16rem]">
+		<Field
+			label={$_('components.setup.servo.bleGatePanel.deviceAddress.label')}
+			for="ble-device"
+			class="min-w-0 flex-[2_1_16rem]"
+		>
 			<Input id="ble-device" bind:value={device} placeholder="AA:BB:CC:DD:EE:FF" />
 		</Field>
-		<Button loading={statusLoading} onclick={onLoadStatus}>Rescan</Button>
+		<Button loading={statusLoading} onclick={onLoadStatus}
+			>{$_('components.setup.servo.bleGatePanel.rescan')}</Button
+		>
 	</div>
 
 	{#if lastError}
@@ -88,11 +97,16 @@
 	{/if}
 </Panel>
 
-<Panel title="Gates on the bridge" description="{knownGates.length} reachable right now" flush>
+<Panel
+	title={$_('components.setup.servo.bleGatePanel.gatesPanel.title')}
+	description={$_('components.setup.servo.bleGatePanel.gatesPanel.description', {
+		values: { count: knownGates.length }
+	})}
+	flush
+>
 	{#if knownGates.length === 0}
 		<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">
-			No gates reachable yet. Connect one new servo at a time and press "Learn next servo" below —
-			it gets the next gate number automatically and calibrates itself.
+			{$_('components.setup.servo.bleGatePanel.gatesPanel.emptyHint')}
 		</p>
 	{:else}
 		<div class="divide-y divide-line">
@@ -100,17 +114,25 @@
 				{@const layer = layerByGate[gate] ?? 0}
 				{@const busy = busyByGate[gate]}
 				<div class="flex flex-wrap items-center gap-3 px-(--pad-panel) py-3">
-					<span class="w-16 shrink-0 text-sm font-medium text-ink">Gate {gate}</span>
+					<span class="w-16 shrink-0 text-sm font-medium text-ink"
+						>{$_('components.setup.servo.bleGatePanel.gateLabel', { values: { gate } })}</span
+					>
 					<Badge tone={badgeTone(stateByGate[gate])}>{badgeLabel(stateByGate[gate])}</Badge>
 
 					<Select
-						label="Storage layer for gate {gate}"
+						label={$_('components.setup.servo.bleGatePanel.layerSelect.label', { values: { gate } })}
 						size="sm"
 						class="min-w-36"
 						value={String(layer)}
 						options={[
-							{ value: '0', label: 'Unassigned' },
-							...unassignedLayers(layer).map((l) => ({ value: String(l), label: `Layer ${l}` }))
+							{
+								value: '0',
+								label: $_('components.setup.servo.bleGatePanel.layerSelect.unassigned')
+							},
+							...unassignedLayers(layer).map((l) => ({
+								value: String(l),
+								label: $_('components.setup.servo.bleGatePanel.layerSelect.layer', { values: { layer: l } })
+							}))
 						]}
 						onchange={(value) => onAssignLayer(gate, Number(value))}
 					/>
@@ -121,7 +143,7 @@
 								checked={Boolean(invertByLayer[layer])}
 								onchange={() => onToggleInvert(layer)}
 							/>
-							Inverted
+							{$_('components.setup.servo.bleGatePanel.inverted')}
 						</label>
 					{/if}
 
@@ -132,7 +154,7 @@
 							disabled={Boolean(busy)}
 							onclick={() => onMoveGate(gate, 'open')}
 						>
-							Open
+							{$_('components.setup.servo.bleGatePanel.buttons.open')}
 						</Button>
 						<Button
 							size="sm"
@@ -140,7 +162,7 @@
 							disabled={Boolean(busy)}
 							onclick={() => onMoveGate(gate, 'close')}
 						>
-							Close
+							{$_('components.setup.servo.bleGatePanel.buttons.close')}
 						</Button>
 						<Button
 							size="sm"
@@ -148,7 +170,7 @@
 							disabled={Boolean(busy)}
 							onclick={() => onCalibrateGate(gate)}
 						>
-							Calibrate
+							{$_('components.setup.servo.bleGatePanel.buttons.calibrate')}
 						</Button>
 					</div>
 				</div>
@@ -157,14 +179,14 @@
 	{/if}
 	{#snippet footer()}
 		<div class="flex w-full flex-wrap items-center gap-2">
-			<Button loading={learning} onclick={onLearn}>Learn next servo</Button>
+			<Button loading={learning} onclick={onLearn}
+				>{$_('components.setup.servo.bleGatePanel.buttons.learnNext')}</Button
+			>
 			<Button variant="danger" loading={resettingAll} onclick={onResetAll}>
-				Factory-reset all
+				{$_('components.setup.servo.bleGatePanel.buttons.factoryResetAll')}
 			</Button>
 			<p class="text-sm text-ink-muted">
-				Connect one new servo at a time, then "Learn next servo" — it gets the next gate number (11,
-				12, 13, …) and calibrates itself. "Factory-reset all" clears every reachable servo's ID and
-				calibration so onboarding can start over.
+				{$_('components.setup.servo.bleGatePanel.footerHint')}
 			</p>
 		</div>
 	{/snippet}

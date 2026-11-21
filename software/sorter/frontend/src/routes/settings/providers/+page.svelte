@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase } from '$lib/backend';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -39,7 +40,7 @@
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			applyData(await res.json());
 		} catch (e: any) {
-			error = e.message ?? 'Failed to load providers';
+			error = e.message ?? $_('routes.settings.providers.errors.load');
 		} finally {
 			loading = false;
 		}
@@ -66,7 +67,7 @@
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
 		} catch (e: any) {
-			error = e.message ?? 'Failed to save providers';
+			error = e.message ?? $_('routes.settings.providers.errors.save');
 		} finally {
 			saving = false;
 		}
@@ -77,35 +78,35 @@
 	});
 </script>
 
-<svelte:head><title>Sorter - Providers</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.providers.pageTitle')}</title></svelte:head>
 
 <PageHeader
-	title="Providers"
-	description="Which service identifies each piece's mold, and which predicts its color. The two run side by side during classification; if a remote color provider is slow or unreachable, the piece falls back to Brickognize's color. Changes apply to the next piece, with no restart."
+	title={$_('routes.settings.providers.title')}
+	description={$_('routes.settings.providers.description')}
 />
 
 {#if error}
 	<Alert tone="danger">{error}</Alert>
 {/if}
 {#if saved}
-	<Alert tone="success">Saved. It applies to the next classified piece.</Alert>
+	<Alert tone="success">{$_('routes.settings.providers.saved')}</Alert>
 {/if}
 
 {#if loading}
-	<div class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={14} /> Loading</div>
+	<div class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={14} /> {$_('routes.settings.providers.loading')}</div>
 {:else}
-	<Panel title="Color prediction" description="Which service says what color a piece is.">
+	<Panel title={$_('routes.settings.providers.color.panelTitle')} description={$_('routes.settings.providers.color.panelDescription')}>
 		<ProviderSelect
-			name="Color provider"
+			name={$_('routes.settings.providers.color.fieldName')}
 			options={colorProviders}
 			bind:selected={selectedColor}
 			active={activeColor}
 		/>
 	</Panel>
 
-	<Panel title="Mold detection" description="Which service says what part a piece is.">
+	<Panel title={$_('routes.settings.providers.mold.panelTitle')} description={$_('routes.settings.providers.mold.panelDescription')}>
 		<ProviderSelect
-			name="Mold provider"
+			name={$_('routes.settings.providers.mold.fieldName')}
 			options={moldProviders}
 			bind:selected={selectedMold}
 			active={activeMold}

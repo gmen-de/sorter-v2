@@ -8,6 +8,7 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash2 from '@lucide/svelte/icons/trash';
 	import Eraser from '@lucide/svelte/icons/eraser';
+	import { _ } from 'svelte-i18n';
 	import ServoSpeedSettings from './ServoSpeedSettings.svelte';
 	import ChuteFlapDiagram from './ChuteFlapDiagram.svelte';
 	import FlapOpenIcon from './FlapOpenIcon.svelte';
@@ -28,7 +29,8 @@
 	import Switch from '$lib/components/ui/Switch.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 
-	type ServoBackend = 'pca9685' | 'waveshare';
+	type ServoBackend = 'pca9685' | 'waveshare' | 'waveshare_ble';
+	type BleGateState = 'open' | 'closed' | 'blocked' | 'unknown' | 'error' | undefined;
 
 	type LayerDraft = {
 		layerIndex: number; // 0-based, matches backend layer/servo index
@@ -49,6 +51,13 @@
 		busy: boolean;
 		lockStatus: 'idle' | 'saving' | 'saved' | 'error';
 		lockError: string;
+		// Chute-settle wait (how long Sending waits after a drop before the
+		// chute may move again) - physics-computed per layer, plus an
+		// operator fine-tune on top. settleAdjustMs is editable here; the
+		// other two are read-only, shown for context.
+		settleBaseMs: number | null;
+		settleAdjustMs: string; // '' = 0, kept as a string for the number input
+		settleTotalMs: number | null;
 	};
 
 	const manager = getMachinesContext();
@@ -59,10 +68,41 @@
 	let errorMsg = $state<string | null>(null);
 	let statusMsg = $state('');
 	let backend = $state<ServoBackend>('pca9685');
+	// Only meaningful for waveshare_ble (the bridge board's BLE address) -
+	// save_servo_hardware_config requires it on every save for that backend,
+	// so it has to round-trip even though this page never edits it itself.
+	let device = $state('');
 	let layers = $state<LayerDraft[]>([]);
 	let channelChoices = $state<number[]>([]);
 	let allowedCounts = $state<number[]>([6, 12, 18, 30]);
 	let selectedIndex = $state<number | null>(null);
+
+	// Waveshare BLE: each layer's "channel" field (reused as-is) holds a gate
+	// number instead of a PCA9685 channel - invert and the angle-degree nudge/
+	// lock controls below don't apply (the bridge firmware finds and keeps its
+	// own open/closed limits; see esp32_ble_servo_bridge). This block is the
+	// live bridge/gate state for the BLE-specific controls further down.
+	let bleConnected = $state(false);
+	let bleStatusLoading = $state(false);
+	let bleLastError = $state<string | null>(null);
+	let gateStateByGate = $state<Record<number, BleGateState>>({});
+	let gateBusyByGate = $state<Record<number, string>>({});
+	// Per-gate calibrated flag, derived from the firmware's own "ERR
+	// UNCALIBRATED" response text (cmdOpenClose/cmdStatus in
+	// esp32_ble_servo_bridge) rather than the PCA9685-only open/closed-angle
+	// fields - those stay null for BLE gates, which otherwise left the top
+	// badge stuck on "Needs calibrating" forever even after a real calibrate.
+	let gateCalibratedByGate = $state<Record<number, boolean>>({});
+
+	function noteGateRaw(gate: number, raw: string) {
+		if (raw.includes('UNCALIBRATED')) {
+			gateCalibratedByGate = { ...gateCalibratedByGate, [gate]: false };
+		} else if (!raw.includes('OFFLINE')) {
+			// OPEN/CLOSED/BLOCKED/UNKNOWN all require calibrated limits to be
+			// reported at all - "OFFLINE" alone says nothing either way.
+			gateCalibratedByGate = { ...gateCalibratedByGate, [gate]: true };
+		}
+	}
 	// Channel, invert and the speeds: set once when the machine is built, so they
 	// stay out of the way of calibrating.
 	let advanced = $derived(userConfig.servoAdvanced);
@@ -75,7 +115,14 @@
 	let savedSignature = $state('');
 	function layerSignature(list: LayerDraft[]): string {
 		return JSON.stringify(
-			list.map((l) => [l.enabled, l.channel, l.invert, l.binCount, l.maxPiecesPerBin.trim()])
+			list.map((l) => [
+				l.enabled,
+				l.channel,
+				l.invert,
+				l.binCount,
+				l.maxPiecesPerBin.trim(),
+				l.settleAdjustMs.trim()
+			])
 		);
 	}
 	let dirty = $derived(layerSignature(layers) !== savedSignature);
@@ -99,6 +146,10 @@
 		);
 	}
 
+	function layerLabel(index: number): string {
+		return $_('components.servo.servoLayerCalibrator.layerLabel', { values: { n: index + 1 } });
+	}
+
 	function layerIsCalibrated(layer: LayerDraft): boolean {
 		return layer.openAngle !== null && layer.closedAngle !== null;
 	}
@@ -116,12 +167,12 @@
 	function servoHint(layer: LayerDraft): string | null {
 		if (layerCanMove(layer)) return null;
 		if (!layerHasChannel(layer)) {
-			return 'Choose the channel its servo is wired to (under Advanced), save the layers, then home the machine to move its flap.';
+			return $_('components.servo.servoLayerCalibrator.hint.noChannel');
 		}
 		if (layer.savedChannel !== layer.channel) {
-			return 'Save the layers, then home the machine to move its flap.';
+			return $_('components.servo.servoLayerCalibrator.hint.unsaved');
 		}
-		return 'Home the machine to move its flap.';
+		return $_('components.servo.servoLayerCalibrator.hint.needsHome');
 	}
 
 	// What to do next on a layer that is not calibrated yet: open first, then closed.
@@ -139,13 +190,17 @@
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
 			const servo = payload?.servo ?? {};
-			backend = servo.backend === 'waveshare' ? 'waveshare' : 'pca9685';
+			backend =
+				servo.backend === 'waveshare' || servo.backend === 'waveshare_ble'
+					? servo.backend
+					: 'pca9685';
 			globalOpenAngle = typeof servo.open_angle === 'number' ? servo.open_angle : null;
 			globalClosedAngle = typeof servo.closed_angle === 'number' ? servo.closed_angle : null;
 			openSpeed = typeof servo.open_speed === 'number' ? servo.open_speed : null;
 			closeSpeed = typeof servo.close_speed === 'number' ? servo.close_speed : null;
 			homingSpeed = typeof servo.homing_speed === 'number' ? servo.homing_speed : null;
 			port = typeof servo.port === 'string' ? servo.port : null;
+			device = typeof servo.device === 'string' ? servo.device : '';
 			channelChoices = Array.isArray(servo.available_channel_ids)
 				? servo.available_channel_ids
 						.map((value: any) => Number(value))
@@ -175,7 +230,7 @@
 				const sl = storageLayers[i] ?? {};
 				next.push({
 					layerIndex: i,
-					label: `Layer ${i + 1}`,
+					label: layerLabel(i),
 					enabled: Boolean(sl.enabled ?? true),
 					channel: channel && typeof channel.id === 'number' ? String(channel.id) : '',
 					savedChannel: channel && typeof channel.id === 'number' ? String(channel.id) : '',
@@ -191,17 +246,148 @@
 					liveChannel: typeof sl.servo_live_channel === 'number' ? sl.servo_live_channel : null,
 					busy: false,
 					lockStatus: 'idle',
-					lockError: ''
+					lockError: '',
+					settleBaseMs: typeof sl.settle_base_ms === 'number' ? sl.settle_base_ms : null,
+					settleAdjustMs:
+						typeof sl.settle_adjust_ms === 'number' && sl.settle_adjust_ms !== 0
+							? String(sl.settle_adjust_ms)
+							: '',
+					settleTotalMs: typeof sl.settle_total_ms === 'number' ? sl.settle_total_ms : null
 				});
 			}
 			layers = next;
 			savedSignature = layerSignature(next);
 			if (selectedIndex !== null && selectedIndex >= layers.length) selectedIndex = null;
+			if (backend === 'waveshare_ble') await loadBleStatus();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to load servo layers';
+			errorMsg = e.message ?? $_('components.servo.servoLayerCalibrator.loadFailed');
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function loadBleStatus() {
+		bleStatusLoading = true;
+		try {
+			const res = await fetch(`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/status`);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			bleConnected = Boolean(payload?.connected);
+			bleLastError = typeof payload?.last_error === 'string' ? payload.last_error : null;
+		} catch (e: any) {
+			bleLastError = e?.message ?? $_('components.servo.servoLayerCalibrator.ble.errors.statusFailed');
+			bleConnected = false;
+		} finally {
+			bleStatusLoading = false;
+		}
+		// Known-open/closed state per assigned gate, so the page shows what the
+		// bridge currently reports rather than "untested" until the operator
+		// presses a button.
+		await Promise.all(
+			layers
+				.filter((l) => layerHasChannel(l))
+				.map(async (l) => {
+					const gate = Number(l.channel);
+					try {
+						const res = await fetch(
+							`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/gates/${gate}/status`
+						);
+						if (!res.ok) return;
+						const payload = await res.json();
+						const state = String(payload?.state ?? '').toLowerCase();
+						gateStateByGate = {
+							...gateStateByGate,
+							[gate]: (['open', 'closed', 'blocked'].includes(state) ? state : 'unknown') as BleGateState
+						};
+						if (typeof payload?.raw === 'string') noteGateRaw(gate, payload.raw);
+					} catch {
+						// Leave this gate's state as whatever it was - a single failed
+						// poll shouldn't blank out an otherwise-working page.
+					}
+				})
+		);
+	}
+
+	function setGateBusy(gate: number, kind: string | null) {
+		if (kind === null) {
+			const next = { ...gateBusyByGate };
+			delete next[gate];
+			gateBusyByGate = next;
+		} else {
+			gateBusyByGate = { ...gateBusyByGate, [gate]: kind };
+		}
+	}
+
+	async function moveBleGate(gate: number, position: 'open' | 'close') {
+		setGateBusy(gate, position === 'open' ? 'opening' : 'closing');
+		bleLastError = null;
+		try {
+			const res = await fetch(
+				`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/gates/${gate}/move`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ position })
+				}
+			);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			const state = String(payload?.state ?? '').toLowerCase();
+			gateStateByGate = {
+				...gateStateByGate,
+				[gate]: (['open', 'closed', 'blocked'].includes(state) ? state : 'unknown') as BleGateState
+			};
+			if (typeof payload?.raw === 'string') noteGateRaw(gate, payload.raw);
+		} catch (e: any) {
+			bleLastError =
+				e?.message ??
+				$_('components.servo.servoLayerCalibrator.ble.errors.moveGateFailed', { values: { gate } });
+			gateStateByGate = { ...gateStateByGate, [gate]: 'error' };
+		} finally {
+			setGateBusy(gate, null);
+		}
+	}
+
+	async function calibrateBleGate(gate: number) {
+		setGateBusy(gate, 'calibrating');
+		bleLastError = null;
+		statusMsg = '';
+		try {
+			const res = await fetch(
+				`${currentBackendBaseUrl()}/api/hardware-config/waveshare-ble/gates/${gate}/calibrate`,
+				{ method: 'POST' }
+			);
+			if (!res.ok) throw new Error(await res.text());
+			const payload = await res.json();
+			if (typeof payload?.raw === 'string') noteGateRaw(gate, payload.raw);
+			statusMsg =
+				payload?.message ??
+				$_('components.servo.servoLayerCalibrator.ble.status.gateCalibrated', { values: { gate } });
+		} catch (e: any) {
+			bleLastError =
+				e?.message ??
+				$_('components.servo.servoLayerCalibrator.ble.errors.calibrateGateFailed', {
+					values: { gate }
+				});
+		} finally {
+			setGateBusy(gate, null);
+		}
+	}
+
+	function bleBadgeTone(state: BleGateState): 'neutral' | 'success' | 'info' | 'danger' {
+		if (state === 'open') return 'success';
+		if (state === 'closed') return 'info';
+		if (state === 'blocked' || state === 'error') return 'danger';
+		return 'neutral';
+	}
+
+	function bleBadgeLabel(state: BleGateState): string {
+		if (state === 'open') return $_('components.servo.servoLayerCalibrator.ble.gateState.open');
+		if (state === 'closed') return $_('components.servo.servoLayerCalibrator.ble.gateState.closed');
+		if (state === 'blocked') return $_('components.servo.servoLayerCalibrator.ble.gateState.blocked');
+		if (state === 'error') return $_('components.servo.servoLayerCalibrator.ble.gateState.error');
+		if (state === 'unknown') return $_('components.servo.servoLayerCalibrator.ble.gateState.unknown');
+		return $_('components.servo.servoLayerCalibrator.ble.gateState.untested');
 	}
 
 	function setLayer(layerIndex: number, patch: Partial<LayerDraft>) {
@@ -230,7 +416,11 @@
 			if (!res.ok) throw new Error(await res.text());
 			return await res.json();
 		} catch (e: any) {
-			errorMsg = e.message ?? `Failed to ${path} layer ${layerIndex + 1}`;
+			errorMsg =
+				e.message ??
+				$_('components.servo.servoLayerCalibrator.actionFailed', {
+					values: { action: path, layer: layerIndex + 1 }
+				});
 			return null;
 		} finally {
 			setLayer(layerIndex, { busy: false });
@@ -298,9 +488,19 @@
 				lockStatus: 'saved',
 				lockError: ''
 			});
-			statusMsg = result.message ?? `Layer ${layerIndex + 1} ${which} angle locked.`;
+			statusMsg =
+				result.message ??
+				$_(
+					which === 'open'
+						? 'components.servo.servoLayerCalibrator.status.lockedOpen'
+						: 'components.servo.servoLayerCalibrator.status.lockedClosed',
+					{ values: { layer: layerIndex + 1 } }
+				);
 		} else {
-			setLayer(layerIndex, { lockStatus: 'error', lockError: errorMsg ?? 'Save failed' });
+			setLayer(layerIndex, {
+				lockStatus: 'error',
+				lockError: errorMsg ?? $_('components.servo.servoLayerCalibrator.status.saveFailed')
+			});
 		}
 	}
 
@@ -316,9 +516,16 @@
 				lockStatus: 'idle',
 				lockError: ''
 			});
-			statusMsg = result.message ?? `Layer ${layerIndex + 1} calibration cleared.`;
+			statusMsg =
+				result.message ??
+				$_('components.servo.servoLayerCalibrator.status.cleared', {
+					values: { layer: layerIndex + 1 }
+				});
 		} else {
-			setLayer(layerIndex, { lockStatus: 'error', lockError: errorMsg ?? 'Clear failed' });
+			setLayer(layerIndex, {
+				lockStatus: 'error',
+				lockError: errorMsg ?? $_('components.servo.servoLayerCalibrator.status.clearFailed')
+			});
 		}
 	}
 
@@ -338,10 +545,18 @@
 			const channels = layers.map((layer, index) => {
 				const id = layer.channel.trim().length > 0 ? Number(layer.channel) : null;
 				if (id !== null && (!Number.isInteger(id) || id < 0)) {
-					throw new Error(`Layer ${index + 1} has an invalid channel.`);
+					throw new Error(
+						$_('components.servo.servoLayerCalibrator.validation.invalidChannel', {
+							values: { layer: index + 1 }
+						})
+					);
 				}
 				if (id === null && layer.enabled) {
-					throw new Error(`Layer ${index + 1} needs a channel while it is active.`);
+					throw new Error(
+						$_('components.servo.servoLayerCalibrator.validation.needsChannel', {
+							values: { layer: index + 1 }
+						})
+					);
 				}
 				return { id, invert: layer.invert };
 			});
@@ -352,16 +567,34 @@
 				if (trimmed.length > 0) {
 					const parsed = Number(trimmed);
 					if (!Number.isInteger(parsed) || parsed <= 0) {
-						throw new Error(`${layer.label}'s bin limit must be a whole number above 0.`);
+						throw new Error(
+							$_('components.servo.servoLayerCalibrator.validation.binLimit', {
+								values: { label: layer.label }
+							})
+						);
 					}
 					maxPieces = parsed;
+				}
+				const settleTrimmed = layer.settleAdjustMs.trim();
+				let settleAdjust = 0;
+				if (settleTrimmed.length > 0) {
+					const parsedSettle = Number(settleTrimmed);
+					if (!Number.isInteger(parsedSettle)) {
+						throw new Error(
+							$_('components.servo.servoLayerCalibrator.validation.settleAdjust', {
+								values: { label: layer.label }
+							})
+						);
+					}
+					settleAdjust = parsedSettle;
 				}
 				return {
 					bin_count: Number(layer.binCount),
 					enabled: layer.enabled,
 					servo_open_angle: layer.openAngle,
 					servo_closed_angle: layer.closedAngle,
-					max_pieces_per_bin: maxPieces
+					max_pieces_per_bin: maxPieces,
+					settle_adjust_ms: settleAdjust
 				};
 			});
 
@@ -379,7 +612,8 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					backend: 'pca9685',
+					backend,
+					device: backend === 'waveshare_ble' ? device.trim() : null,
 					open_angle: globalOpenAngle,
 					closed_angle: globalClosedAngle,
 					open_speed: openSpeed,
@@ -391,10 +625,11 @@
 			});
 			if (!servoRes.ok) throw new Error(await servoRes.text());
 
-			statusMsg = 'Servo layer settings saved.';
+			statusMsg = $_('components.servo.servoLayerCalibrator.status.saved');
 			await loadSettings();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to save servo layer settings';
+			errorMsg =
+				e.message ?? $_('components.servo.servoLayerCalibrator.status.saveSettingsFailed');
 		} finally {
 			saving = false;
 		}
@@ -423,7 +658,7 @@
 			...layers,
 			{
 				layerIndex: nextIndex,
-				label: `Layer ${nextIndex + 1}`,
+				label: layerLabel(nextIndex),
 				enabled: true,
 				channel: nextChannel(),
 				savedChannel: null,
@@ -436,7 +671,10 @@
 				liveChannel: null,
 				busy: false,
 				lockStatus: 'idle',
-				lockError: ''
+				lockError: '',
+				settleBaseMs: null,
+				settleAdjustMs: '',
+				settleTotalMs: null
 			}
 		];
 	}
@@ -449,7 +687,7 @@
 			.map((l, i) => ({
 				...l,
 				layerIndex: i,
-				label: `Layer ${i + 1}`,
+				label: layerLabel(i),
 				liveChannel: i === l.layerIndex ? l.liveChannel : null
 			}));
 		if (selectedIndex === layerIndex) selectedIndex = null;
@@ -498,9 +736,15 @@
 	{@const next = nextStep(layer) === which}
 	<div class="flex min-w-0 flex-col gap-1.5">
 		<span class="text-sm text-ink">
-			<span class="font-medium">{which === 'open' ? 'Open' : 'Closed'}</span>
+			<span class="font-medium"
+				>{which === 'open'
+					? $_('components.servo.servoLayerCalibrator.openWord')
+					: $_('components.servo.servoLayerCalibrator.closedWord')}</span
+			>
 			{#if angle === null}
-				<span class="text-ink-muted">· not set</span>
+				<span class="text-ink-muted"
+					>· {$_('components.servo.servoLayerCalibrator.notSet')}</span
+				>
 			{:else}
 				<span class="num text-ink-muted">· {angle}°</span>
 			{/if}
@@ -513,14 +757,18 @@
 				disabled={idle || !canMove}
 				onclick={() => lockAngle(layer.layerIndex, which)}
 			>
-				{which === 'open' ? 'Lock open' : 'Lock closed'}
+				{which === 'open'
+					? $_('components.servo.servoLayerCalibrator.lockOpenButton')
+					: $_('components.servo.servoLayerCalibrator.lockClosedButton')}
 			</Button>
 			<Button
 				size="sm"
 				disabled={idle || !canMove || angle === null}
 				onclick={() => moveTo(layer.layerIndex, angle)}
 			>
-				{which === 'open' ? 'Go to open' : 'Go to closed'}
+				{which === 'open'
+					? $_('components.servo.servoLayerCalibrator.goToOpenButton')
+					: $_('components.servo.servoLayerCalibrator.goToClosedButton')}
 			</Button>
 		</div>
 	</div>
@@ -528,59 +776,81 @@
 
 {#if backend === 'waveshare'}
 	<Alert tone="warning">
-		This calibrator is for the PCA9685 (PWM) servo backend, and this machine is set up for the
-		Waveshare bus.
+		{$_('components.servo.servoLayerCalibrator.alert.wrongBackend')}
 	</Alert>
 {:else}
-	<Panel title="Each layer's flap">
+	<Panel title={$_('components.servo.servoLayerCalibrator.panelTitle.flap')}>
 		<div class="flex flex-col gap-4 md:flex-row md:items-start md:gap-8">
 			<div class="flex items-center gap-4">
 				<ChuteFlapDiagram state="open" size={128} />
 				<p class="max-w-56 text-sm text-ink-muted">
-					<span class="font-medium text-ink">Open.</span> The flap lies flat in the chute wall, so pieces
-					fall past it to the layers below.
+					<span class="font-medium text-ink"
+						>{$_('components.servo.servoLayerCalibrator.flapDiagram.openLabel')}</span
+					>
+					{$_('components.servo.servoLayerCalibrator.flapDiagram.openDescription')}
 				</p>
 			</div>
 			<div class="flex items-center gap-4">
 				<ChuteFlapDiagram state="closed" size={128} />
 				<p class="max-w-56 text-sm text-ink-muted">
-					<span class="font-medium text-ink">Closed.</span> The flap crosses the chute, so pieces slide
-					down this layer's funnel into its bins.
+					<span class="font-medium text-ink"
+						>{$_('components.servo.servoLayerCalibrator.flapDiagram.closedLabel')}</span
+					>
+					{$_('components.servo.servoLayerCalibrator.flapDiagram.closedDescription')}
 				</p>
 			</div>
 		</div>
 		<p class="mt-4 text-sm text-ink-muted">
-			For each layer, move its flap with the arrows (or the arrow keys) until it looks like the
-			picture, then lock that angle: open first, then closed. A layer sorts once both are locked.
+			{$_('components.servo.servoLayerCalibrator.instructions.moveFlap')}
 		</p>
 	</Panel>
 
-	<Panel title="Layers" flush>
+	<Panel title={$_('components.servo.servoLayerCalibrator.panelTitle.layers')} flush>
 		{#snippet actions()}
-			<Switch
-				checked={advanced}
-				labelledby="storage-layers-advanced"
-				onchange={(on) => userConfig.setServoAdvanced(on)}
-			/>
-			<span id="storage-layers-advanced" class="text-sm text-ink">Advanced</span>
+			{#if backend === 'waveshare_ble'}
+				<Badge tone={bleConnected ? 'success' : 'neutral'} dot>
+					{bleConnected
+						? $_('components.servo.servoLayerCalibrator.ble.connected')
+						: $_('components.servo.servoLayerCalibrator.ble.notConnected')}
+				</Badge>
+				<Button size="sm" loading={bleStatusLoading} onclick={() => void loadBleStatus()}>
+					{$_('components.servo.servoLayerCalibrator.ble.rescan')}
+				</Button>
+			{:else}
+				<Switch
+					checked={advanced}
+					labelledby="storage-layers-advanced"
+					onchange={(on) => userConfig.setServoAdvanced(on)}
+				/>
+				<span id="storage-layers-advanced" class="text-sm text-ink"
+					>{$_('components.servo.servoLayerCalibrator.advancedLabel')}</span
+				>
+			{/if}
 			<Button size="sm" icon={Plus} disabled={loading || saving} onclick={addLayer}
-				>Add a layer</Button
+				>{$_('components.servo.servoLayerCalibrator.addLayerButton')}</Button
 			>
 		{/snippet}
 
 		{#if layers.length === 0 && !loading}
 			<div class="px-(--pad-panel) pb-(--pad-panel)">
-				<EmptyState icon={Layers} title="No storage layers yet">Add a layer to start.</EmptyState>
+				<EmptyState
+					icon={Layers}
+					title={$_('components.servo.servoLayerCalibrator.emptyState.title')}
+					>{$_('components.servo.servoLayerCalibrator.emptyState.body')}</EmptyState
+				>
 			</div>
 		{:else if loading && layers.length === 0}
 			<div class="flex items-center gap-2 px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">
-				<Spinner size={14} /> Loading the layers
+				<Spinner size={14} /> {$_('components.servo.servoLayerCalibrator.loadingLayers')}
 			</div>
 		{/if}
 
 		<div class="divide-y divide-line">
 			{#each layers as layer (layer.layerIndex)}
-				{@const calibrated = layerIsCalibrated(layer)}
+				{@const calibrated =
+					backend === 'waveshare_ble'
+						? layerHasChannel(layer) && gateCalibratedByGate[Number(layer.channel)] === true
+						: layerIsCalibrated(layer)}
 				{@const selected = selectedIndex === layer.layerIndex}
 				{@const idle = loading || saving || layer.busy}
 				{@const canMove = layerCanMove(layer)}
@@ -594,15 +864,21 @@
 					<div class="flex flex-wrap items-center gap-2">
 						<span class="text-sm font-semibold text-ink">{layer.label}</span>
 						{#if !layer.enabled}
-							<Badge>Off</Badge>
+							<Badge>{$_('components.servo.servoLayerCalibrator.badge.off')}</Badge>
 						{:else if calibrated}
-							<Badge tone="success"><Lock size={12} /> Calibrated</Badge>
+							<Badge tone="success"
+								><Lock size={12} />
+								{$_('components.servo.servoLayerCalibrator.badge.calibrated')}</Badge
+							>
 						{:else}
-							<Badge tone="warning"><LockOpen size={12} /> Needs calibrating</Badge>
+							<Badge tone="warning"
+								><LockOpen size={12} />
+								{$_('components.servo.servoLayerCalibrator.badge.needsCalibrating')}</Badge
+							>
 						{/if}
 						{#if selected && canMove}
 							<Badge tone="primary"
-								>Up and down move its flap 1°, left and right 5°; Escape lets go</Badge
+								>{$_('components.servo.servoLayerCalibrator.badge.moveHint')}</Badge
 							>
 						{/if}
 						<span class="ml-auto flex items-center gap-3">
@@ -614,13 +890,15 @@
 										enabled: (e.currentTarget as HTMLInputElement).checked
 									})}
 							>
-								Active
+								{$_('components.servo.servoLayerCalibrator.activeLabel')}
 							</Checkbox>
 							<Button
 								variant="ghost"
 								size="sm"
 								icon={Trash2}
-								label="Remove {layer.label}"
+								label={$_('components.servo.servoLayerCalibrator.removeLabel', {
+									values: { label: layer.label }
+								})}
 								disabled={loading || saving}
 								onclick={() => removeLayer(layer.layerIndex)}
 							/>
@@ -629,11 +907,11 @@
 
 					<div class="flex flex-wrap items-end gap-x-5 gap-y-3">
 						<Field
-							label="Bins"
+							label={$_('components.servo.servoLayerCalibrator.bins.label')}
 							for="layer-{layer.layerIndex}-bins"
-							info="How many bins sit around the chute on this layer. Match the bins fitted on it: {allowedCounts.join(
-								', '
-							)}."
+							info={$_('components.servo.servoLayerCalibrator.bins.info', {
+								values: { counts: allowedCounts.join(', ') }
+							})}
 						>
 							<div class="w-20">
 								<Select
@@ -647,9 +925,9 @@
 							</div>
 						</Field>
 						<Field
-							label="Bin limit"
+							label={$_('components.servo.servoLayerCalibrator.binLimit.label')}
 							for="layer-{layer.layerIndex}-max"
-							info="The most pieces one bin on this layer takes. When a bin reaches it, the machine counts that bin full and sends the category's next pieces to another bin. Leave it empty for no limit."
+							info={$_('components.servo.servoLayerCalibrator.binLimit.info')}
 						>
 							<Input
 								id="layer-{layer.layerIndex}-max"
@@ -667,11 +945,60 @@
 								class="w-24"
 							/>
 						</Field>
-						{#if advanced}
+						<Field
+							label={$_('components.servo.servoLayerCalibrator.settle.label')}
+							for="layer-{layer.layerIndex}-settle-adjust"
+							info={$_('components.servo.servoLayerCalibrator.settle.info', {
+								values: { base: layer.settleBaseMs ?? '--', total: layer.settleTotalMs ?? '--' }
+							})}
+						>
+							<div class="flex items-center gap-1">
+								<Input
+									id="layer-{layer.layerIndex}-settle-adjust"
+									type="number"
+									size="sm"
+									step={10}
+									placeholder="0"
+									value={layer.settleAdjustMs}
+									disabled={loading || saving}
+									oninput={(e) =>
+										setLayer(layer.layerIndex, {
+											settleAdjustMs: (e.currentTarget as HTMLInputElement).value
+										})}
+									class="w-20"
+								/>
+								<span class="text-sm text-ink-muted">ms</span>
+							</div>
+						</Field>
+						{#if backend === 'waveshare_ble'}
 							<Field
-								label="Channel"
+								label={$_('components.servo.servoLayerCalibrator.ble.gateLabel')}
+								for="layer-{layer.layerIndex}-gate"
+							>
+								<div class="w-28">
+									<Select
+										id="layer-{layer.layerIndex}-gate"
+										size="sm"
+										value={layer.channel}
+										disabled={loading || saving}
+										onchange={(channel) => setLayer(layer.layerIndex, { channel })}
+										options={[
+											{ value: '', label: $_('components.servo.servoLayerCalibrator.ble.gateNone') },
+											...channelChoices.map((c) => ({
+												value: String(c),
+												label: $_('components.servo.servoLayerCalibrator.ble.gateOption', {
+													values: { id: c }
+												})
+											}))
+										]}
+									/>
+								</div>
+							</Field>
+						{:else if advanced}
+							<Field
+								label={$_('components.servo.servoLayerCalibrator.channel.label')}
 								for="layer-{layer.layerIndex}-channel"
-								info="The servo output on the control board that this layer's flap servo is plugged into."
+								info={$_('components.servo.servoLayerCalibrator.channel.info')}
 							>
 								<div class="w-24">
 									<Select
@@ -681,7 +1008,10 @@
 										disabled={loading || saving}
 										onchange={(channel) => setLayer(layer.layerIndex, { channel })}
 										options={[
-											{ value: '', label: 'None' },
+											{
+												value: '',
+												label: $_('components.servo.servoLayerCalibrator.channel.none')
+											},
 											...channelChoices.map((c) => ({ value: String(c), label: String(c) }))
 										]}
 									/>
@@ -696,93 +1026,147 @@
 											invert: (e.currentTarget as HTMLInputElement).checked
 										})}
 								>
-									Invert
+									{$_('components.servo.servoLayerCalibrator.invertLabel')}
 								</Checkbox>
 							</div>
 						{/if}
 					</div>
 
-					<div class="flex flex-col gap-3 rounded-item bg-well p-3">
-						<div class="flex flex-wrap items-center gap-x-8 gap-y-4">
-							<div class="flex flex-col gap-1.5">
-								<span class="text-sm font-medium text-ink">Flap</span>
-								<div
-									role="group"
-									aria-label="Move the flap of {layer.label}"
-									class="flex h-(--size-control-sm) items-stretch divide-x divide-line-strong overflow-hidden rounded-button border border-line-strong bg-field"
-								>
-									<button
-										type="button"
-										aria-label="Move toward a lower angle"
-										disabled={idle || !canMove}
-										onpointerdown={(e) => startHold(e, layer.layerIndex, -1)}
-										onpointerup={stopHold}
-										onpointerleave={stopHold}
-										onpointercancel={stopHold}
-										onclick={(e) => keyboardClick(e, layer.layerIndex, -1)}
-										class="flex w-(--size-control-sm) items-center justify-center text-ink transition-colors hover:bg-hover focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45"
-									>
-										<ChevronLeft size={16} />
-									</button>
-									<span class="num flex min-w-16 items-center justify-center px-2 text-sm text-ink">
-										{layer.currentAngle === null ? 'Unknown' : `${layer.currentAngle}°`}
-									</span>
-									<button
-										type="button"
-										aria-label="Move toward a higher angle"
-										disabled={idle || !canMove}
-										onpointerdown={(e) => startHold(e, layer.layerIndex, 1)}
-										onpointerup={stopHold}
-										onpointerleave={stopHold}
-										onpointercancel={stopHold}
-										onclick={(e) => keyboardClick(e, layer.layerIndex, 1)}
-										class="flex w-(--size-control-sm) items-center justify-center text-ink transition-colors hover:bg-hover focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45"
-									>
-										<ChevronRight size={16} />
-									</button>
-								</div>
+					{#if backend === 'waveshare_ble'}
+						{@const gate = layerHasChannel(layer) ? Number(layer.channel) : null}
+						<div class="flex flex-col gap-3 rounded-item bg-well p-3">
+							<div class="flex flex-wrap items-center gap-3">
+								{#if gate === null}
+									<p class="text-sm text-ink-muted">
+										{$_('components.servo.servoLayerCalibrator.ble.gateNone')}
+									</p>
+								{:else}
+									<Badge tone={bleBadgeTone(gateStateByGate[gate])}>
+										{bleBadgeLabel(gateStateByGate[gate])}
+									</Badge>
+									<div class="ml-auto flex items-center gap-2">
+										<Button
+											size="sm"
+											loading={gateBusyByGate[gate] === 'opening'}
+											disabled={Boolean(gateBusyByGate[gate])}
+											onclick={() => moveBleGate(gate, 'open')}
+										>
+											{$_('components.servo.servoLayerCalibrator.ble.buttons.open')}
+										</Button>
+										<Button
+											size="sm"
+											loading={gateBusyByGate[gate] === 'closing'}
+											disabled={Boolean(gateBusyByGate[gate])}
+											onclick={() => moveBleGate(gate, 'close')}
+										>
+											{$_('components.servo.servoLayerCalibrator.ble.buttons.close')}
+										</Button>
+										<Button
+											size="sm"
+											loading={gateBusyByGate[gate] === 'calibrating'}
+											disabled={Boolean(gateBusyByGate[gate])}
+											onclick={() => calibrateBleGate(gate)}
+										>
+											{$_('components.servo.servoLayerCalibrator.ble.buttons.calibrate')}
+										</Button>
+									</div>
+								{/if}
 							</div>
-							{@render flapStep(layer, 'open', canMove, idle)}
-							{@render flapStep(layer, 'closed', canMove, idle)}
-							{#if layer.openAngle !== null || layer.closedAngle !== null}
-								<Button
-									variant="ghost"
-									size="sm"
-									icon={Eraser}
-									class="ml-auto self-end"
-									disabled={idle || !canMove}
-									onclick={() => clearAngles(layer.layerIndex)}
-								>
-									Start over
-								</Button>
+						</div>
+					{:else}
+						<div class="flex flex-col gap-3 rounded-item bg-well p-3">
+							<div class="flex flex-wrap items-center gap-x-8 gap-y-4">
+								<div class="flex flex-col gap-1.5">
+									<span class="text-sm font-medium text-ink"
+										>{$_('components.servo.servoLayerCalibrator.flapLabel')}</span
+									>
+									<div
+										role="group"
+										aria-label={$_('components.servo.servoLayerCalibrator.moveFlapGroupLabel', {
+											values: { label: layer.label }
+										})}
+										class="flex h-(--size-control-sm) items-stretch divide-x divide-line-strong overflow-hidden rounded-button border border-line-strong bg-field"
+									>
+										<button
+											type="button"
+											aria-label={$_('components.servo.servoLayerCalibrator.lowerAngleLabel')}
+											disabled={idle || !canMove}
+											onpointerdown={(e) => startHold(e, layer.layerIndex, -1)}
+											onpointerup={stopHold}
+											onpointerleave={stopHold}
+											onpointercancel={stopHold}
+											onclick={(e) => keyboardClick(e, layer.layerIndex, -1)}
+											class="flex w-(--size-control-sm) items-center justify-center text-ink transition-colors hover:bg-hover focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45"
+										>
+											<ChevronLeft size={16} />
+										</button>
+										<span class="num flex min-w-16 items-center justify-center px-2 text-sm text-ink">
+											{layer.currentAngle === null
+												? $_('components.servo.servoLayerCalibrator.unknownAngle')
+												: `${layer.currentAngle}°`}
+										</span>
+										<button
+											type="button"
+											aria-label={$_('components.servo.servoLayerCalibrator.higherAngleLabel')}
+											disabled={idle || !canMove}
+											onpointerdown={(e) => startHold(e, layer.layerIndex, 1)}
+											onpointerup={stopHold}
+											onpointerleave={stopHold}
+											onpointercancel={stopHold}
+											onclick={(e) => keyboardClick(e, layer.layerIndex, 1)}
+											class="flex w-(--size-control-sm) items-center justify-center text-ink transition-colors hover:bg-hover focus-visible:-outline-offset-2 disabled:pointer-events-none disabled:opacity-45"
+										>
+											<ChevronRight size={16} />
+										</button>
+									</div>
+								</div>
+								{@render flapStep(layer, 'open', canMove, idle)}
+								{@render flapStep(layer, 'closed', canMove, idle)}
+								{#if layer.openAngle !== null || layer.closedAngle !== null}
+									<Button
+										variant="ghost"
+										size="sm"
+										icon={Eraser}
+										class="ml-auto self-end"
+										disabled={idle || !canMove}
+										onclick={() => clearAngles(layer.layerIndex)}
+									>
+										{$_('components.servo.servoLayerCalibrator.startOverButton')}
+									</Button>
+								{/if}
+							</div>
+
+							{#if hint || step || layer.lockStatus !== 'idle'}
+								<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+									{#if hint}
+										<p class="text-sm text-ink-muted">{hint}</p>
+									{:else if step === 'open'}
+										<p class="text-sm text-ink">
+											{$_('components.servo.servoLayerCalibrator.instructions.stepOpen')}
+										</p>
+									{:else if step === 'closed'}
+										<p class="text-sm text-ink">
+											{$_('components.servo.servoLayerCalibrator.instructions.stepClosed')}
+										</p>
+									{/if}
+									{#if layer.lockStatus === 'saving'}
+										<span class="flex items-center gap-1.5 text-sm text-ink-muted"
+											><Spinner size={12} />
+											{$_('components.servo.servoLayerCalibrator.savingLabel')}</span
+										>
+									{:else if layer.lockStatus === 'saved'}
+										<span class="text-sm text-success-ink"
+											>{$_('components.servo.servoLayerCalibrator.savedLabel')}</span
+										>
+									{:else if layer.lockStatus === 'error'}
+										<span class="text-sm text-danger-ink" title={layer.lockError}
+											>{$_('components.servo.servoLayerCalibrator.notSavedLabel')}</span
+										>
+									{/if}
+								</div>
 							{/if}
 						</div>
-
-						{#if hint || step || layer.lockStatus !== 'idle'}
-							<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-								{#if hint}
-									<p class="text-sm text-ink-muted">{hint}</p>
-								{:else if step === 'open'}
-									<p class="text-sm text-ink">
-										Move the flap until it lies flat in the chute wall, then lock it open.
-									</p>
-								{:else if step === 'closed'}
-									<p class="text-sm text-ink">
-										Now move the flap until it crosses the chute, then lock it closed.
-									</p>
-								{/if}
-								{#if layer.lockStatus === 'saving'}
-									<span class="flex items-center gap-1.5 text-sm text-ink-muted"
-										><Spinner size={12} /> Saving</span
-									>
-								{:else if layer.lockStatus === 'saved'}
-									<span class="text-sm text-success-ink">Saved</span>
-								{:else if layer.lockStatus === 'error'}
-									<span class="text-sm text-danger-ink" title={layer.lockError}>Not saved</span>
-								{/if}
-							</div>
-						{/if}
-					</div>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -790,7 +1174,9 @@
 		{#snippet footer()}
 			<div class="flex w-full flex-wrap items-center justify-end gap-2">
 				{#if dirty}
-					<Badge tone="warning">Unsaved changes</Badge>
+					<Badge tone="warning"
+						>{$_('components.servo.servoLayerCalibrator.badge.unsavedChanges')}</Badge
+					>
 				{/if}
 				<span class="mr-auto"></span>
 				<Button
@@ -799,16 +1185,16 @@
 					disabled={loading || saving}
 					onclick={loadSettings}
 				>
-					Reload
+					{$_('components.servo.servoLayerCalibrator.reloadButton')}
 				</Button>
 				<Button variant="primary" loading={saving} disabled={loading} onclick={saveSettings}>
-					Save the layers
+					{$_('components.servo.servoLayerCalibrator.saveLayersButton')}
 				</Button>
 			</div>
 		{/snippet}
 	</Panel>
 
-	{#if advanced}
+	{#if advanced && backend !== 'waveshare_ble'}
 		<ServoSpeedSettings
 			bind:openSpeed
 			bind:closeSpeed
@@ -820,6 +1206,8 @@
 
 {#if errorMsg}
 	<Alert tone="danger">{errorMsg}</Alert>
+{:else if bleLastError}
+	<Alert tone="danger">{bleLastError}</Alert>
 {:else if statusMsg}
 	<p class="text-sm text-ink-muted">{statusMsg}</p>
 {/if}

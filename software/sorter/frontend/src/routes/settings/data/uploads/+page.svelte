@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { _ } from 'svelte-i18n';
 	import Cloud from '@lucide/svelte/icons/cloud';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
@@ -31,10 +32,10 @@
 	const machine = getMachineContext();
 
 	const POLL_MS = 30_000;
-	const RANGES: { value: '24' | '168'; label: string }[] = [
-		{ value: '24', label: '24 hours' },
-		{ value: '168', label: '7 days' }
-	];
+	const RANGES = $derived<{ value: '24' | '168'; label: string }[]>([
+		{ value: '24', label: $_('routes.settings.data.uploads.ranges.h24') },
+		{ value: '168', label: $_('routes.settings.data.uploads.ranges.d7') }
+	]);
 
 	const base = $derived(machineHttpBaseUrlFromWsUrl(machine.machine?.url) ?? getBackendHttpBase());
 
@@ -71,7 +72,7 @@
 			error = null;
 		} catch (e) {
 			if (from === base && shown === range) {
-				error = `Couldn't load the upload numbers: ${message(e)}`;
+				error = $_('routes.settings.data.uploads.loadError', { values: { error: message(e) } });
 			}
 		} finally {
 			refreshing = false;
@@ -166,15 +167,19 @@
 
 	function sentNotes(i: number): TipRow[] {
 		const items = sumAt((s) => s.sent, i);
-		return items > 0 ? [{ label: 'Items sent', value: formatCount(items) }] : [];
+		return items > 0 ? [{ label: $_('routes.settings.data.uploads.notes.itemsSent'), value: formatCount(items) }] : [];
 	}
 
 	function backlogNotes(i: number): TipRow[] {
 		const dropped = sumAt((s) => s.dropped, i);
 		const waited = target?.budget_wait_s[i] ?? 0;
 		return [
-			...(dropped > 0 ? [{ label: 'Not uploaded', value: formatCount(dropped) }] : []),
-			...(waited >= 1 ? [{ label: 'Held back by the budget', value: formatWait(waited) }] : [])
+			...(dropped > 0
+				? [{ label: $_('routes.settings.data.uploads.notes.notUploaded'), value: formatCount(dropped) }]
+				: []),
+			...(waited >= 1
+				? [{ label: $_('routes.settings.data.uploads.notes.heldBackByBudget'), value: formatWait(waited) }]
+				: [])
 		];
 	}
 
@@ -183,7 +188,9 @@
 		const budget = target?.upload_budget;
 		if (!budget) return undefined;
 		const megabytes = Math.round(budget.bytes_per_minute / 1e5) / 10;
-		return `${megabytes} MB and ${formatCount(budget.files_per_minute)} files a minute`;
+		return $_('routes.settings.data.uploads.budgetText', {
+			values: { megabytes, files: budget.files_per_minute }
+		});
 	});
 
 	function streamOff(kind: StatsKind): boolean {
@@ -192,27 +199,24 @@
 	}
 </script>
 
-<svelte:head><title>Sorter - Uploads</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.data.uploads.pageTitle')}</title></svelte:head>
 
-<PageHeader
-	title="Uploads"
-	description="What this sorter has sent to a Hive, what is waiting to go, and what will never be sent."
->
+<PageHeader title={$_('routes.settings.data.uploads.title')} description={$_('routes.settings.data.uploads.description')}>
 	{#snippet actions()}
 		{#if stats && stats.targets.length > 0}
 			<Select
-				label="Hive"
+				label={$_('routes.settings.data.uploads.hiveSelectLabel')}
 				value={target?.id}
 				options={stats.targets.map((t) => ({
 					value: t.id,
 					label: t.name,
-					hint: t.reachable ? undefined : 'Unreachable'
+					hint: t.reachable ? undefined : $_('routes.settings.data.uploads.unreachableHint')
 				}))}
 				onchange={(id) => (chosen = id)}
 				class="w-48"
 			/>
 			<SegmentedControl
-				label="Time shown"
+				label={$_('routes.settings.data.uploads.timeShownLabel')}
 				options={RANGES}
 				value={range}
 				onchange={(value) => (range = value)}
@@ -225,13 +229,15 @@
 	<Alert tone="danger">{error}</Alert>
 {:else if !stats}
 	<Panel>
-		<p class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={14} /> Loading</p>
+		<p class="flex items-center gap-2 text-sm text-ink-muted">
+			<Spinner size={14} /> {$_('routes.settings.data.uploads.loading')}
+		</p>
 	</Panel>
 {:else if !target}
-	<EmptyState icon={Cloud} title="No Hive is connected">
-		Connect this sorter to a Hive and its uploads are counted here.
+	<EmptyState icon={Cloud} title={$_('routes.settings.data.uploads.noHive.title')}>
+		{$_('routes.settings.data.uploads.noHive.description')}
 		{#snippet action()}
-			<Button href="/settings/hive">Go to Hive settings</Button>
+			<Button href="/settings/hive">{$_('routes.settings.data.uploads.noHive.button')}</Button>
 		{/snippet}
 	</EmptyState>
 {:else}
@@ -241,8 +247,11 @@
 	>
 		{#if error}<Alert tone="warning">{error}</Alert>{/if}
 		{#if !target.reachable}
-			<Alert tone="warning" title="{target.name} can't be reached">
-				Nothing is being sent to it. What is waiting stays on this machine until it answers.
+			<Alert
+				tone="warning"
+				title={$_('routes.settings.data.uploads.unreachableAlert.title', { values: { name: target.name } })}
+			>
+				{$_('routes.settings.data.uploads.unreachableAlert.body')}
 			</Alert>
 		{/if}
 
@@ -250,81 +259,93 @@
 			<div class="grid grid-cols-2 gap-px bg-line lg:grid-cols-4">
 				<div class="bg-surface">
 					<Stat
-						label="Uploaded"
+						label={$_('routes.settings.data.uploads.stats.uploaded')}
 						value={formatBytes(total(sentBytes))}
-						hint="{formatCount(total(sentItems))} items"
+						hint={$_('routes.settings.data.uploads.stats.uploadedHint', {
+							values: { count: formatCount(total(sentItems)) }
+						})}
 					/>
 				</div>
 				<div class="bg-surface">
-					<Stat label="Waiting now" value={formatCount(waitingNow)} hint="items to upload" />
+					<Stat
+						label={$_('routes.settings.data.uploads.stats.waitingNow')}
+						value={formatCount(waitingNow)}
+						hint={$_('routes.settings.data.uploads.stats.waitingNowHint')}
+					/>
 				</div>
 				<div class="bg-surface">
 					<Stat
-						label="Not uploaded"
+						label={$_('routes.settings.data.uploads.stats.notUploaded')}
 						value={formatCount(total(droppedItems))}
-						hint={total(droppedItems) > 0 ? formatBytes(total(droppedBytes)) : 'None'}
+						hint={total(droppedItems) > 0
+							? formatBytes(total(droppedBytes))
+							: $_('routes.settings.data.uploads.stats.notUploadedNone')}
 						tone={total(droppedItems) > 0 ? 'warning' : undefined}
 					/>
 				</div>
 				<div class="bg-surface">
-					<Stat label="Held back" value={formatWait(heldBack)} hint="By the upload budget" />
+					<Stat
+						label={$_('routes.settings.data.uploads.stats.heldBack')}
+						value={formatWait(heldBack)}
+						hint={$_('routes.settings.data.uploads.stats.heldBackHint')}
+					/>
 				</div>
 			</div>
 			<p class="border-t border-line px-(--pad-panel) py-3 text-sm text-ink-muted">
-				{#if budgetText}Uploads wait for room under a limit of {budgetText}.{/if}
-				Not uploaded is what was skipped to keep up, or deleted here before it was sent.
+				{#if budgetText}{$_('routes.settings.data.uploads.budgetLine', { values: { budget: budgetText } })}{/if}
+				{$_('routes.settings.data.uploads.notUploadedExplainer')}
 			</p>
 		</Panel>
 
 		<Panel
-			title="Uploaded"
-			description="Bytes sent to {target.name} each hour, by kind. Point at an hour for its numbers."
+			title={$_('routes.settings.data.uploads.uploadedPanel.title')}
+			description={$_('routes.settings.data.uploads.uploadedPanel.description', { values: { name: target.name } })}
 		>
 			<HourlyChart
-				label="Bytes uploaded to {target.name} each hour"
+				label={$_('routes.settings.data.uploads.uploadedPanel.chartLabel', { values: { name: target.name } })}
 				{hours}
 				series={bytesSeries}
 				format={formatBytes}
 				bytes
-				totalLabel="uploaded"
+				totalLabel={$_('routes.settings.data.uploads.uploadedPanel.totalLabel')}
 				notes={sentNotes}
-				empty="Nothing was uploaded in this time."
+				empty={$_('routes.settings.data.uploads.uploadedPanel.empty')}
 			/>
 		</Panel>
 
 		<Panel
-			title="Waiting to upload"
-			description="Items waiting at the end of each hour. A mark along the bottom is an hour when some were skipped or deleted before they could be sent."
+			title={$_('routes.settings.data.uploads.waitingPanel.title')}
+			description={$_('routes.settings.data.uploads.waitingPanel.description')}
 		>
 			<HourlyChart
-				label="Items waiting to upload to {target.name}"
+				label={$_('routes.settings.data.uploads.waitingPanel.chartLabel', { values: { name: target.name } })}
 				form="area"
 				{hours}
 				series={backlog}
 				format={formatCount}
-				totalLabel="waiting"
+				totalLabel={$_('routes.settings.data.uploads.waitingPanel.totalLabel')}
 				flagged={droppedHours}
-				flagLabel="Hours with items not uploaded"
+				flagLabel={$_('routes.settings.data.uploads.waitingPanel.flagLabel')}
 				notes={backlogNotes}
-				empty="Nothing was waiting in this time."
+				empty={$_('routes.settings.data.uploads.waitingPanel.empty')}
 			/>
 		</Panel>
 
 		<Panel
-			title="By kind"
-			description="Counted over the time shown."
+			title={$_('routes.settings.data.uploads.byKindPanel.title')}
+			description={$_('routes.settings.data.uploads.byKindPanel.description')}
 			flush
 		>
 			<div class="overflow-x-auto">
 				<table class="data-table">
 					<thead>
 						<tr>
-							<th>Kind</th>
-							<th>Last upload</th>
-							<th class="num">Uploaded</th>
-							<th class="num">Size</th>
-							<th class="num">Waiting now</th>
-							<th class="num">Not uploaded</th>
+							<th>{$_('routes.settings.data.uploads.byKindPanel.columns.kind')}</th>
+							<th>{$_('routes.settings.data.uploads.byKindPanel.columns.lastUpload')}</th>
+							<th class="num">{$_('routes.settings.data.uploads.byKindPanel.columns.uploaded')}</th>
+							<th class="num">{$_('routes.settings.data.uploads.byKindPanel.columns.size')}</th>
+							<th class="num">{$_('routes.settings.data.uploads.byKindPanel.columns.waitingNow')}</th>
+							<th class="num">{$_('routes.settings.data.uploads.byKindPanel.columns.notUploaded')}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -334,11 +355,13 @@
 								<td>
 									<span class="flex items-center gap-2 whitespace-nowrap">
 										{kind.label}
-										{#if streamOff(kind)}<Badge>Off for this Hive</Badge>{/if}
+										{#if streamOff(kind)}<Badge>{$_('routes.settings.data.uploads.byKindPanel.offBadge')}</Badge>{/if}
 									</span>
 								</td>
 								<td class="whitespace-nowrap text-ink-muted">
-									{last == null ? 'Never' : formatAgo(stats.now - last)}
+									{last == null
+										? $_('routes.settings.data.uploads.byKindPanel.never')
+										: formatAgo(stats.now - last)}
 								</td>
 								<td class="num">{formatCount(sentItems[k])}</td>
 								<td class="num whitespace-nowrap">{formatBytes(sentBytes[k])}</td>

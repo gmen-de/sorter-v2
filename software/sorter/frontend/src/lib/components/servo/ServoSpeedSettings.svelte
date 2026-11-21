@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Undo2 from '@lucide/svelte/icons/undo-2';
+	import { _ } from 'svelte-i18n';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import SettingRow from '$lib/components/ui/SettingRow.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -67,26 +68,36 @@
 			saveStatus = 'saved';
 		} catch (e: any) {
 			saveStatus = 'error';
-			saveError = e.message ?? 'Save failed';
+			saveError = e.message ?? $_('components.servo.servoSpeedSettings.saveFailed');
 		}
 	}
 </script>
 
-<Panel title="Servo speeds" description="For every layer. The standard speed is used at startup and for jogging." flush>
+<Panel
+	title={$_('components.servo.servoSpeedSettings.panelTitle')}
+	description={$_('components.servo.servoSpeedSettings.panelDescription')}
+	flush
+>
 	{#snippet actions()}
 		{#if saveStatus === 'saving'}
-			<span class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={14} /> Saving</span>
+			<span class="flex items-center gap-2 text-sm text-ink-muted"
+				><Spinner size={14} /> {$_('components.servo.servoSpeedSettings.savingLabel')}</span
+			>
 		{:else if saveStatus === 'saved'}
-			<span class="text-sm text-success-ink">Saved</span>
+			<span class="text-sm text-success-ink"
+				>{$_('components.servo.servoSpeedSettings.savedLabel')}</span
+			>
 		{:else if saveStatus === 'error'}
-			<span class="text-sm text-danger-ink" title={saveError}>Not saved</span>
+			<span class="text-sm text-danger-ink" title={saveError}
+				>{$_('components.servo.servoSpeedSettings.notSavedLabel')}</span
+			>
 		{/if}
 	{/snippet}
 	<div class="divide-y divide-line">
 		{#each [
-			{ id: 'open', label: 'Opening', get: () => openSpeed, set: (v: number | null) => { openSpeed = v; scheduleAutoSave(); } },
-			{ id: 'close', label: 'Closing', get: () => closeSpeed, set: (v: number | null) => { closeSpeed = v; scheduleAutoSave(); } },
-			{ id: 'standard', label: 'Standard', get: () => homingSpeed, set: (v: number | null) => { homingSpeed = v; scheduleAutoSave(); } }
+			{ id: 'open', label: $_('components.servo.servoSpeedSettings.speedLabels.opening'), get: () => openSpeed, set: (v: number | null) => { openSpeed = v; scheduleAutoSave(); } },
+			{ id: 'close', label: $_('components.servo.servoSpeedSettings.speedLabels.closing'), get: () => closeSpeed, set: (v: number | null) => { closeSpeed = v; scheduleAutoSave(); } },
+			{ id: 'standard', label: $_('components.servo.servoSpeedSettings.speedLabels.standard'), get: () => homingSpeed, set: (v: number | null) => { homingSpeed = v; scheduleAutoSave(); } }
 		] as entry (entry.id)}
 			<SettingRow label={entry.label} for="servo-speed-{entry.id}">
 				{#if entry.get() !== null}
@@ -94,7 +105,9 @@
 						variant="ghost"
 						size="sm"
 						icon={Undo2}
-						label="Back to the firmware default, {FW_DEFAULT} °/s"
+						label={$_('components.servo.servoSpeedSettings.backToDefaultLabel', {
+							values: { default: FW_DEFAULT }
+						})}
 						{disabled}
 						onclick={() => entry.set(null)}
 					/>

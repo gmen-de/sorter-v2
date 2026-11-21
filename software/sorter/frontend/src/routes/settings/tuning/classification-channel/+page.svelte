@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase } from '$lib/backend';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -25,7 +26,7 @@
 			fields = data.fields;
 			values = { ...data.config };
 		} catch (e: any) {
-			error = e.message ?? 'Failed to load config';
+			error = e.message ?? $_('routes.settings.tuning.classificationChannel.errors.load');
 		} finally {
 			loading = false;
 		}
@@ -50,7 +51,7 @@
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
 		} catch (e: any) {
-			error = e.message ?? 'Failed to save config';
+			error = e.message ?? $_('routes.settings.tuning.classificationChannel.errors.save');
 		} finally {
 			saving = false;
 		}
@@ -61,23 +62,23 @@
 	});
 </script>
 
-<svelte:head><title>Sorter - Classification channel tuning</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.tuning.classificationChannel.pageTitle')}</title></svelte:head>
 
 <PageHeader
-	title="Classification channel tuning"
-	description="The parameters of the rev01 state machine. Changes apply to the next piece, with no restart."
+	title={$_('routes.settings.tuning.classificationChannel.title')}
+	description={$_('routes.settings.tuning.classificationChannel.description')}
 />
 
 {#if error}
 	<Alert tone="danger">{error}</Alert>
 {/if}
 {#if saved}
-	<Alert tone="success">Saved. The changes apply to the next piece.</Alert>
+	<Alert tone="success">{$_('routes.settings.tuning.classificationChannel.saved')}</Alert>
 {/if}
 
-<Panel title="Parameters" flush>
+<Panel title={$_('routes.settings.tuning.classificationChannel.parametersPanelTitle')} flush>
 	{#if loading}
-		<div class="px-(--pad-panel) pb-(--pad-panel)"><div class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={14} /> Loading</div></div>
+		<div class="px-(--pad-panel) pb-(--pad-panel)"><div class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={14} /> {$_('routes.settings.tuning.classificationChannel.loading')}</div></div>
 	{:else}
 		<div class="divide-y divide-line">
 			{#each fields as field}

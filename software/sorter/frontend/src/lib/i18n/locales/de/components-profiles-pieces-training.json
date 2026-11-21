@@ -1,0 +1,234 @@
+{
+	"components": {
+		"profiles": {
+			"activeProfileBinsModal": {
+				"modalTitle": "Wohin diese Maschine sortiert",
+				"loadingBins": "Behälter werden geladen",
+				"noProfile": "Diese Maschine hat kein Profil zum Anzeigen."
+			},
+			"activeProfilePanel": {
+				"panelTitle": "Auf dieser Maschine",
+				"panelDescription": "Das Profil, mit dem diese Maschine jetzt sortiert.",
+				"seeCategories": "Kategorien ansehen",
+				"noName": "Ein Profil ohne Namen",
+				"savedAsFile": "Auf dieser Maschine gespeichert als {filename}",
+				"aFile": "eine Datei",
+				"fromTarget": "Von {target}",
+				"fromHiveTarget": "Von Hive, {target}",
+				"appliedAt": "angewendet {applied}",
+				"category": "Kategorie",
+				"categories": "Kategorien",
+				"allSorted": "{bins}; alle {total} bekannten Teile sind sortiert.",
+				"partialSorted": "{bins}; {sorted} von {total} bekannten Teilen sind sortiert, der Rest geht nach Alles andere.",
+				"updateAlertTitle": "v{latest} ist auf Hive; diese Maschine läuft auf v{current}",
+				"updateAlertBody": "Die Behälter behalten, was in ihnen ist.",
+				"updateButton": "Aktualisieren"
+			},
+			"bsxSection": {
+				"loadFailed": "Inventare konnten nicht geladen werden",
+				"uploadSuccess": "{name} hochgeladen ({count} Teile).",
+				"uploadFailed": "Inventar konnte nicht hochgeladen werden",
+				"deactivated": "{name} deaktiviert.",
+				"nowActive": "{name} ist jetzt das aktive Inventar.",
+				"setActiveFailed": "Aktives Inventar konnte nicht geändert werden",
+				"deleted": "{name} gelöscht.",
+				"deleteFailed": "Inventar konnte nicht gelöscht werden",
+				"panelTitle": "BrickLink-Inventare (.bsx)",
+				"panelDescription": "Der Lagerbestand eines Shops. Es kann eines aktiv sein; ein Profil mit Inventar-Routing schickt Teile, die nicht im aktiven Inventar sind, in den Nicht-im-Inventar-Behälter.",
+				"uploadButton": ".bsx hochladen",
+				"loadingInventories": "Inventare werden geladen",
+				"noInventories": "Noch keine Inventare hochgeladen.",
+				"activeBadge": "Aktiv",
+				"errorBadge": "Fehler",
+				"partsSummary": "{parts} Teile · {items} Artikel · hochgeladen am {date}",
+				"deactivateButton": "Deaktivieren",
+				"setActiveButton": "Aktivieren",
+				"deleteLabel": "{name} löschen"
+			},
+			"localProfileCard": {
+				"rule": "Regel",
+				"rules": "Regeln",
+				"category": "Kategorie",
+				"categories": "Kategorien",
+				"activeBadge": "Aktiv",
+				"activateButton": "Aktivieren",
+				"deleteLabel": "Dieses lokale Profil löschen",
+				"unreadable": "Nicht lesbar: {error}",
+				"seeCategories": "Kategorien ansehen"
+			},
+			"profileApplyModal": {
+				"modalTitle": "Das Profil auf dieser Maschine aktivieren",
+				"warningTitle": "Zuerst alle physischen Behälter leeren.",
+				"warningBody": "Das Aktivieren eines anderen Sortierprofils setzt jede gelernte Behälterzuweisung auf dieser Maschine zurück. Danach werden Behälter wieder zugewiesen, während Teile sortiert werden.",
+				"targetLabel": "Ziel",
+				"profileLabel": "Profil",
+				"versionLabel": "Version",
+				"cancelButton": "Abbrechen",
+				"confirmButton": "Behälter leeren und aktivieren"
+			},
+			"profileBinsView": {
+				"binsLabel": "Behälter",
+				"partsWithBinLabel": "Teile mit eigenem Behälter",
+				"everyKnownPartHint": "jedes bekannte Teil",
+				"ofKnownPartsHint": "von {total} bekannten Teilen",
+				"knownPartsLabel": "Bekannte Teile",
+				"noBins": "Diese Version hat keine Behälter.",
+				"namesOnlyNotice": "Diese Version wurde gespeichert, bevor Behälter beschrieben wurden, daher sind nur ihre Namen bekannt.",
+				"bin": "Behälter",
+				"bins": "Behälter"
+			},
+			"profileCard": {
+				"activeBadge": "Aktiv",
+				"hiveDefaultBadge": "Hive-Standard",
+				"publicBadge": "Öffentlich",
+				"updateNotice": "v{latest} ist auf Hive; diese Maschine läuft auf v{current}.",
+				"activateButton": "Aktivieren",
+				"versionsMenuLabel": "Versionen von {name}",
+				"chooseVersionLabel": "Eine Version zum Aktivieren wählen",
+				"loadingLabel": "Wird geladen",
+				"unavailableBadge": "Nicht verfügbar",
+				"seeAllCategories": "Alle Kategorien ansehen",
+				"moreRules": "+{count} weitere Regeln",
+				"noRulesDefined": "Keine Regeln definiert",
+				"lastUsed": "Zuletzt verwendet {time}",
+				"recentlyFallback": "vor Kurzem",
+				"versionDraftHint": "Entwurf",
+				"updatedLabel": "Aktualisiert {time}",
+				"couldNotLoadVersions": "Versionen konnten nicht geladen werden: {error}",
+				"currentlyActive": "Derzeit auf dieser Maschine aktiv.",
+				"activeOnVersion": "Dieses Profil ist auf v{version} aktiv."
+			},
+			"profileDetailsModal": {
+				"modalTitle": "Profildetails",
+				"noDetailsTitle": "Keine Profildetails geladen",
+				"hiveDefaultBadge": "Hive-Standard",
+				"setProfileBadge": "Set-Profil",
+				"ownerLabel": "Besitzer: {name}",
+				"unknownOwner": "Unbekannt",
+				"tagsLabel": "Tags: {tags}",
+				"versionFieldLabel": "Version",
+				"draftSuffix": " (Entwurf)",
+				"loadingBins": "Behälter werden geladen",
+				"noVersionDetails": "Für dieses Profil sind keine Versionsdetails verfügbar.",
+				"recentlyFallback": "vor Kurzem",
+				"versionHelp": "{note}Aktualisiert {time}{by}."
+			},
+			"profilePagination": {
+				"perPageLabel": "Pro Seite",
+				"selectLabel": "Profile pro Seite",
+				"pagesNavLabel": "Seiten",
+				"previousButton": "Zurück",
+				"nextButton": "Weiter"
+			},
+			"routeCheckPanel": {
+				"anyColorOption": "Beliebige Farbe",
+				"colorFallback": "Farbe {id}",
+				"couldNotAsk": "Das Profil konnte nicht gefragt werden",
+				"panelTitle": "Wohin würde ein Teil gehen?",
+				"panelDescription": "Fragt das Profil, mit dem diese Maschine läuft. Nichts bewegt sich.",
+				"partFieldLabel": "BrickLink-Teil",
+				"partPlaceholder": "Z. B. 3001",
+				"colorFieldLabel": "Farbe",
+				"colorFieldHelp": "Einen Namen eingeben, um dorthin zu springen.",
+				"submitButton": "Wohin es geht",
+				"inColor": " in {color}",
+				"goesTo": " geht nach"
+			}
+		},
+		"pieces": {
+			"noPieceImage": {
+				"ariaLabel": "Kein Bild von diesem Teil vorhanden"
+			},
+			"pieceOverview": {
+				"noFrames": "Keine Burst-Bilder für dieses Teil.",
+				"brickognizeLabel": "Brickognizes Bild dieses Teils",
+				"enlargeBrickognizeLabel": "Brickognizes Bild dieses Teils vergrößern",
+				"brickognizeCaption": "Brickognize",
+				"brickognizeZoomLabel": "Brickognize: {name}"
+			},
+			"piecePredictions": {
+				"partLabel": "Teil",
+				"colorLabel": "Farbe",
+				"combinedLabel": "Kombiniert (fusionierter Satz)",
+				"singleBurstLabel": "Einzelnes Burst-Bild",
+				"whileSortingLabel": "Während des Sortierens",
+				"linkLabel": "Link",
+				"burstLabel": "Burst",
+				"panelTitle": "Vorhersagen",
+				"panelDescription": "{count} {requestWord} von {sources} {sourceWord}.",
+				"requestWord": "Anfrage",
+				"requestsWord": "Anfragen",
+				"sourceWord": "Quelle",
+				"sourcesWord": "Quellen",
+				"appliedTitle": "Das Teil hat diese Antwort übernommen",
+				"appliedBadge": "Übernommen",
+				"sawLabel": "Gesehen",
+				"notRecorded": "Nicht aufgezeichnet",
+				"noStoredImages": "Keine gespeicherten Bilder",
+				"imageGoneTitle": "Dieses Bild ist nicht mehr auf der Maschine"
+			},
+			"pieceProblems": {
+				"labels": {
+					"timedOut": "Zeitüberschreitung",
+					"trackLost": "Von der Kamera verloren",
+					"lateDoubleFeed": "Zweites Teil kam zu spät",
+					"doubleFeed": "Doppelte Zufuhr",
+					"stray": "Nie fotografiert",
+					"bucketHold": "Für Sonstiges zurückgehalten",
+					"ejectTimeout": "Ist nicht gefallen",
+					"pushedOff": "Vom Ausgang geschoben",
+					"circling": "Kam wieder herum",
+					"swept": "Weggefegt",
+					"classifyFailed": "Identifizierung fehlgeschlagen",
+					"colorFallback": "Farbmodell hat nicht geantwortet"
+				}
+			}
+		},
+		"training": {
+			"colorDropdown": {
+				"popoverLabel": "Die zugeführte Farbe",
+				"pickColor": "Farbe wählen",
+				"loadingColors": "Farben werden geladen",
+				"noColorsLoaded": "Die Farbliste wurde nicht geladen: Die Maschine hat Hive noch nicht erreicht.",
+				"noteUsedLately": "Zuletzt verwendete zuerst, dann die häufigsten"
+			},
+			"pieceFeed": {
+				"piece": "Teil",
+				"pieces": "Teile",
+				"fromTime": "von {start}",
+				"toTime": " bis {end}",
+				"outsideSegment": "Außerhalb eines Segments"
+			},
+			"runButton": {
+				"endRun": "Lauf beenden",
+				"startRun": "Lauf starten",
+				"pickColorFirstTitle": "Zuerst eine Farbe wählen"
+			},
+			"runColors": {
+				"colorFallback": "Farbe {id}"
+			},
+			"trainingPanel": {
+				"piece": "Teil",
+				"pieces": "Teile",
+				"runLabel": "Lauf:",
+				"sinceLabel": "seit",
+				"noRun": "Kein Lauf",
+				"allRunsButton": "Alle Läufe",
+				"fixedBinPrefix": "Alle Teile nach:",
+				"noPiecesYet": "Noch keine Teile.",
+				"lastRunLabel": "Letzter Lauf:",
+				"excludedFromLabel": "ausgeschlossen, von"
+			},
+			"trainingPieceRow": {
+				"excludedTitle": "Ausgeschlossen. Klicken, um es zurückzuholen.",
+				"includeTitle": "Klicken, um es auszuschließen.",
+				"unknownPart": "Unbekanntes Teil",
+				"colorFallback": "Farbe {id}",
+				"noLabel": "Keine Kennzeichnung",
+				"machineSawTitle": "Die Maschine hat es als {name} gesehen",
+				"machineLabel": "Maschine",
+				"excludedBadge": "Ausgeschlossen"
+			}
+		}
+	}
+}

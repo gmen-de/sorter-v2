@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 
@@ -16,19 +17,25 @@
 <div class="flex flex-col gap-2">
 	<Input
 		bind:value={query}
-		aria-label="Find a bin"
-		placeholder="Find a part, color or category"
+		aria-label={$_('components.bins.binSearchBar.findBinAria')}
+		placeholder={$_('components.bins.binSearchBar.findPlaceholder')}
 		class="max-w-xl"
 	>
 		{#snippet end()}
-			{#if query}<Button size="sm" variant="ghost" onclick={() => (query = '')}>Clear</Button>{/if}
+			{#if query}
+				<Button size="sm" variant="ghost" onclick={() => (query = '')}>
+					{$_('components.bins.binSearchBar.clearButton')}
+				</Button>
+			{/if}
 		{/snippet}
 	</Input>
 	{#if matchCount !== null}
 		<p class="text-sm {matchCount === 0 ? 'text-warning-ink' : 'text-ink-muted'}">
 			{matchCount === 0
-				? 'No bins match. The part may have gone to the discard passthrough.'
-				: `${matchCount} of ${totalBins} bin${totalBins === 1 ? '' : 's'} match and are highlighted below.`}
+				? $_('components.bins.binSearchBar.noMatch')
+				: totalBins === 1
+					? $_('components.bins.binSearchBar.matchSummarySingular', { values: { match: matchCount, total: totalBins } })
+					: $_('components.bins.binSearchBar.matchSummaryPlural', { values: { match: matchCount, total: totalBins } })}
 		</p>
 	{/if}
 </div>

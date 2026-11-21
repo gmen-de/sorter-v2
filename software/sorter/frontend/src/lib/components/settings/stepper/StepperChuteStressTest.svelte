@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachinesContext } from '$lib/machines/context';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -152,7 +153,8 @@
 			activeRun = data?.run ?? null;
 			return true;
 		} catch (e: any) {
-			errorMsg = e?.message ?? 'Request failed';
+			errorMsg =
+				e?.message ?? $_('components.settings.stepper.stepperChuteStressTest.errors.requestFailed');
 			return false;
 		} finally {
 			busy = false;
@@ -161,11 +163,13 @@
 
 	async function startRun() {
 		if (mode !== 'acceleration_ramp' && (targetMaxDeg <= 0 || targetMaxDeg > CHUTE_STRESS_MAX_ANGLE)) {
-			errorMsg = `Target angle must be in (0, ${CHUTE_STRESS_MAX_ANGLE}]`;
+			errorMsg = $_('components.settings.stepper.stepperChuteStressTest.errors.targetRange', {
+				values: { max: CHUTE_STRESS_MAX_ANGLE }
+			});
 			return;
 		}
 		if (durationSec <= 0) {
-			errorMsg = 'Duration must be > 0 seconds';
+			errorMsg = $_('components.settings.stepper.stepperChuteStressTest.errors.durationPositive');
 			return;
 		}
 		const ok = await postAction('/api/chute/stress-test/start', {
@@ -183,25 +187,26 @@
 				: {})
 		});
 		if (ok) {
-			statusMsg = 'Stress test started.';
+			statusMsg = $_('components.settings.stepper.stepperChuteStressTest.status.started');
 			await loadRuns();
 		}
 	}
 
 	async function pauseRun() {
 		const ok = await postAction('/api/chute/stress-test/pause');
-		if (ok) statusMsg = 'Pause requested (finishing current leg).';
+		if (ok)
+			statusMsg = $_('components.settings.stepper.stepperChuteStressTest.status.pauseRequested');
 	}
 
 	async function resumeRun() {
 		const ok = await postAction('/api/chute/stress-test/resume');
-		if (ok) statusMsg = 'Resumed.';
+		if (ok) statusMsg = $_('components.settings.stepper.stepperChuteStressTest.status.resumed');
 	}
 
 	async function stopRun() {
 		const ok = await postAction('/api/chute/stress-test/stop');
 		if (ok) {
-			statusMsg = 'Stop requested.';
+			statusMsg = $_('components.settings.stepper.stepperChuteStressTest.status.stopRequested');
 			await loadRuns();
 		}
 	}
@@ -227,21 +232,22 @@
 	}
 
 	function statusLabel(status: RunStatus): string {
+		const base = 'components.settings.stepper.stepperChuteStressTest.runStatus';
 		switch (status) {
 			case 'running':
-				return 'Running';
+				return $_(`${base}.running`);
 			case 'paused':
-				return 'Paused';
+				return $_(`${base}.paused`);
 			case 'stopping':
-				return 'Stopping';
+				return $_(`${base}.stopping`);
 			case 'completed':
-				return 'Completed';
+				return $_(`${base}.completed`);
 			case 'stopped':
-				return 'Stopped';
+				return $_(`${base}.stopped`);
 			case 'failed':
-				return 'Failed';
+				return $_(`${base}.failed`);
 			case 'stalled':
-				return 'Stalled';
+				return $_(`${base}.stalled`);
 			default:
 				return status;
 		}
@@ -284,7 +290,8 @@
 		const stallMsg = activeRun?.error;
 		untrack(() => {
 			if (status === 'stalled') {
-				errorMsg = stallMsg ?? 'Chute stalled — run halted.';
+				errorMsg =
+					stallMsg ?? $_('components.settings.stepper.stepperChuteStressTest.errors.stalled');
 			}
 			if (
 				status === 'completed' ||
@@ -407,7 +414,9 @@
 					telemetryPoints = [];
 					telemetrySettings = null;
 					telemetryRunId = null;
-					telemetryError = 'No driver telemetry recorded for this run yet.';
+					telemetryError = $_(
+						'components.settings.stepper.stepperChuteStressTest.telemetry.noTelemetryRecorded'
+					);
 				}
 				return;
 			}
@@ -507,8 +516,8 @@
 {/snippet}
 
 <Panel
-	title="Stress test"
-	description="Bounce the chute back and forth at speed to exercise the mechanics and the stepper."
+	title={$_('components.settings.stepper.stepperChuteStressTest.panel.stressTest.title')}
+	description={$_('components.settings.stepper.stepperChuteStressTest.panel.stressTest.description')}
 >
 	<div class="flex flex-col gap-6">
 		{#if active && activeRun}
@@ -518,18 +527,40 @@
 					<span class="text-sm text-ink-muted">{activeRun.mode}</span>
 				</div>
 				{@render facts([
-					['Elapsed', `${formatDuration(activeRun.total_time_s)} of ${formatDuration(activeRun.duration_target_s)}`],
-					['Distance', `${activeRun.total_distance_deg.toFixed(1)}°`],
-					['Last target', activeRun.last_target_deg != null ? `${activeRun.last_target_deg.toFixed(1)}°` : 'None'],
-					['Speed', `${activeRun.speed_microsteps_per_sec} µsteps/s`],
+					[
+						$_('components.settings.stepper.stepperChuteStressTest.facts.elapsed'),
+						$_('components.settings.stepper.stepperChuteStressTest.facts.elapsedValue', {
+							values: {
+								elapsed: formatDuration(activeRun.total_time_s),
+								total: formatDuration(activeRun.duration_target_s)
+							}
+						})
+					],
+					[
+						$_('components.settings.stepper.stepperChuteStressTest.facts.distance'),
+						`${activeRun.total_distance_deg.toFixed(1)}°`
+					],
+					[
+						$_('components.settings.stepper.stepperChuteStressTest.facts.lastTarget'),
+						activeRun.last_target_deg != null
+							? `${activeRun.last_target_deg.toFixed(1)}°`
+							: $_('components.settings.stepper.stepperChuteStressTest.facts.none')
+					],
+					[
+						$_('components.settings.stepper.stepperChuteStressTest.facts.speed'),
+						`${activeRun.speed_microsteps_per_sec} µsteps/s`
+					],
 					...(activeRun.mode === 'acceleration_ramp'
 						? [
-								['Current acceleration', `${activeRun.current_acceleration ?? '?'} µsteps/s²`] as [string, string],
 								[
-									'Highest clean',
+									$_('components.settings.stepper.stepperChuteStressTest.facts.currentAcceleration'),
+									`${activeRun.current_acceleration ?? '?'} µsteps/s²`
+								] as [string, string],
+								[
+									$_('components.settings.stepper.stepperChuteStressTest.facts.highestClean'),
 									activeRun.highest_clean_acceleration != null
 										? `${activeRun.highest_clean_acceleration} µsteps/s²`
-										: 'None yet'
+										: $_('components.settings.stepper.stepperChuteStressTest.facts.noneYet')
 								] as [string, string]
 							]
 						: [])
@@ -539,20 +570,40 @@
 
 		<div class="flex flex-col gap-4">
 			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				<Field label="Pattern" for="stress-mode">
+				<Field
+					label={$_('components.settings.stepper.stepperChuteStressTest.field.pattern')}
+					for="stress-mode"
+				>
 					<Select
 						id="stress-mode"
 						bind:value={mode}
 						disabled={active || busy}
 						options={[
-							{ value: 'sweep', label: 'Sweep between home and the target' },
-							{ value: 'random', label: 'Random, from 0° to the target' },
-							{ value: 'acceleration_ramp', label: 'Acceleration ramp, random bins until it fails' }
+							{
+								value: 'sweep',
+								label: $_('components.settings.stepper.stepperChuteStressTest.mode.sweep')
+							},
+							{
+								value: 'random',
+								label: $_('components.settings.stepper.stepperChuteStressTest.mode.random')
+							},
+							{
+								value: 'acceleration_ramp',
+								label: $_(
+									'components.settings.stepper.stepperChuteStressTest.mode.accelerationRamp'
+								)
+							}
 						]}
 					/>
 				</Field>
 				{#if mode !== 'acceleration_ramp'}
-					<Field label="Target" for="stress-target" help="At most {CHUTE_STRESS_MAX_ANGLE}°.">
+					<Field
+						label={$_('components.settings.stepper.stepperChuteStressTest.field.target')}
+						for="stress-target"
+						help={$_('components.settings.stepper.stepperChuteStressTest.field.targetHelp', {
+							values: { max: CHUTE_STRESS_MAX_ANGLE }
+						})}
+					>
 						<Input
 							id="stress-target"
 							type="number"
@@ -565,11 +616,17 @@
 						/>
 					</Field>
 				{/if}
-				<Field label="Duration" for="stress-duration">
+				<Field
+					label={$_('components.settings.stepper.stepperChuteStressTest.field.duration')}
+					for="stress-duration"
+				>
 					<Input id="stress-duration" type="number" min={1} step={1} bind:value={durationSec} disabled={active || busy} unit="s" />
 				</Field>
 				{#if !useMaxSpeed}
-					<Field label="Speed" for="stress-speed">
+					<Field
+						label={$_('components.settings.stepper.stepperChuteStressTest.field.speed')}
+						for="stress-speed"
+					>
 						<Input
 							id="stress-speed"
 							type="number"
@@ -582,7 +639,10 @@
 					</Field>
 				{/if}
 				{#if mode === 'acceleration_ramp'}
-					<Field label="Start acceleration" for="stress-accel-start">
+					<Field
+						label={$_('components.settings.stepper.stepperChuteStressTest.field.startAcceleration')}
+						for="stress-accel-start"
+					>
 						<Input
 							id="stress-accel-start"
 							type="number"
@@ -593,7 +653,10 @@
 							unit="µsteps/s²"
 						/>
 					</Field>
-					<Field label="Step" for="stress-accel-step">
+					<Field
+						label={$_('components.settings.stepper.stepperChuteStressTest.field.step')}
+						for="stress-accel-step"
+					>
 						<Input
 							id="stress-accel-step"
 							type="number"
@@ -604,7 +667,10 @@
 							unit="µsteps/s²"
 						/>
 					</Field>
-					<Field label="Moves per step" for="stress-accel-moves">
+					<Field
+						label={$_('components.settings.stepper.stepperChuteStressTest.field.movesPerStep')}
+						for="stress-accel-moves"
+					>
 						<Input
 							id="stress-accel-moves"
 							type="number"
@@ -618,10 +684,14 @@
 			</div>
 			<div class="flex flex-wrap gap-x-6 gap-y-2">
 				<Checkbox bind:checked={useMaxSpeed} disabled={active || busy}>
-					Use the operating speed ({operatingSpeed} µsteps/s)
+					{$_('components.settings.stepper.stepperChuteStressTest.checkbox.useOperatingSpeed', {
+						values: { speed: operatingSpeed }
+					})}
 				</Checkbox>
 				{#if mode !== 'acceleration_ramp'}
-					<Checkbox bind:checked={invertDirection} disabled={active || busy}>Invert the direction</Checkbox>
+					<Checkbox bind:checked={invertDirection} disabled={active || busy}
+						>{$_('components.settings.stepper.stepperChuteStressTest.checkbox.invertDirection')}</Checkbox
+					>
 				{/if}
 			</div>
 		</div>
@@ -635,27 +705,40 @@
 			<p class="mr-auto min-w-0 text-sm text-ink-muted">{statusMsg}</p>
 		{/if}
 		{#if !active}
-			<Button variant="primary" icon={Play} loading={busy} onclick={startRun}>Start the stress test</Button>
+			<Button variant="primary" icon={Play} loading={busy} onclick={startRun}
+				>{$_('components.settings.stepper.stepperChuteStressTest.buttons.startStressTest')}</Button
+			>
 		{:else}
 			{#if activeRun?.status === 'paused'}
-				<Button icon={Play} loading={busy} onclick={resumeRun}>Resume</Button>
+				<Button icon={Play} loading={busy} onclick={resumeRun}
+					>{$_('components.settings.stepper.stepperChuteStressTest.buttons.resume')}</Button
+				>
 			{:else}
 				<Button icon={Pause} loading={busy} disabled={activeRun?.status === 'stopping'} onclick={pauseRun}>
-					Pause
+					{$_('components.settings.stepper.stepperChuteStressTest.buttons.pause')}
 				</Button>
 			{/if}
-			<Button variant="danger" icon={Square} disabled={busy} onclick={stopRun}>Stop</Button>
+			<Button variant="danger" icon={Square} disabled={busy} onclick={stopRun}
+				>{$_('components.settings.stepper.stepperChuteStressTest.buttons.stop')}</Button
+			>
 		{/if}
 	{/snippet}
 </Panel>
 
-<Panel title="Stress test runs" description="What each run did, and what the driver read while it ran.">
+<Panel
+	title={$_('components.settings.stepper.stepperChuteStressTest.panel.runs.title')}
+	description={$_('components.settings.stepper.stepperChuteStressTest.panel.runs.description')}
+>
 	{#snippet actions()}
-		<Button variant="ghost" size="sm" onclick={() => void loadRuns()}>Refresh</Button>
+		<Button variant="ghost" size="sm" onclick={() => void loadRuns()}
+			>{$_('components.settings.stepper.stepperChuteStressTest.buttons.refresh')}</Button
+		>
 	{/snippet}
 	<div class="flex flex-col gap-4">
 		{#if runs.length === 0}
-			<p class="text-sm text-ink-muted">No stress runs yet.</p>
+			<p class="text-sm text-ink-muted">
+				{$_('components.settings.stepper.stepperChuteStressTest.runsList.empty')}
+			</p>
 		{:else}
 			<ul class="divide-y divide-line overflow-hidden rounded-control bg-well">
 				{#each shownRuns as run (run.id)}
@@ -681,7 +764,13 @@
 						icon={showAllRuns ? ChevronUp : ChevronDown}
 						onclick={() => (showAllRuns = !showAllRuns)}
 					>
-						{showAllRuns ? `Show the latest ${RUNS_SHOWN}` : `Show all ${runs.length} runs`}
+						{showAllRuns
+							? $_('components.settings.stepper.stepperChuteStressTest.runsList.showLatest', {
+									values: { n: RUNS_SHOWN }
+								})
+							: $_('components.settings.stepper.stepperChuteStressTest.runsList.showAll', {
+									values: { n: runs.length }
+								})}
 					</Button>
 				</div>
 			{/if}
@@ -690,16 +779,16 @@
 		{#if selectedRun}
 			<div class="rounded-control bg-well p-3">
 				{@render facts([
-					['Started', formatTimestamp(selectedRun.started_at)],
-					['Ended', formatTimestamp(selectedRun.ended_at)],
-					['Pattern', selectedRun.mode],
-					['Target', `${selectedRun.target_max_deg.toFixed(1)}°`],
-					['Planned', formatDuration(selectedRun.duration_target_s)],
-					['Ran', formatDuration(selectedRun.total_time_s)],
-					['Distance', `${selectedRun.total_distance_deg.toFixed(1)}°`],
-					['Speed', `${selectedRun.speed_microsteps_per_sec} µsteps/s`],
+					[$_('components.settings.stepper.stepperChuteStressTest.facts.started'), formatTimestamp(selectedRun.started_at)],
+					[$_('components.settings.stepper.stepperChuteStressTest.facts.ended'), formatTimestamp(selectedRun.ended_at)],
+					[$_('components.settings.stepper.stepperChuteStressTest.facts.pattern'), selectedRun.mode],
+					[$_('components.settings.stepper.stepperChuteStressTest.facts.target'), `${selectedRun.target_max_deg.toFixed(1)}°`],
+					[$_('components.settings.stepper.stepperChuteStressTest.facts.planned'), formatDuration(selectedRun.duration_target_s)],
+					[$_('components.settings.stepper.stepperChuteStressTest.facts.ran'), formatDuration(selectedRun.total_time_s)],
+					[$_('components.settings.stepper.stepperChuteStressTest.facts.distance'), `${selectedRun.total_distance_deg.toFixed(1)}°`],
+					[$_('components.settings.stepper.stepperChuteStressTest.facts.speed'), `${selectedRun.speed_microsteps_per_sec} µsteps/s`],
 					...(selectedRun.highest_clean_acceleration != null
-						? [['Highest clean acceleration', `${selectedRun.highest_clean_acceleration} µsteps/s²`] as [string, string]]
+						? [[$_('components.settings.stepper.stepperChuteStressTest.facts.highestCleanAcceleration'), `${selectedRun.highest_clean_acceleration} µsteps/s²`] as [string, string]]
 						: [])
 				])}
 				{#if selectedRun.error}
@@ -712,56 +801,95 @@
 			<div class="flex flex-col gap-3 border-t border-line pt-4">
 				<div class="flex items-center justify-between gap-2">
 					<div class="flex items-center gap-2">
-						<span class="label">Driver readings</span>
-						{#if telemetryLive}<Badge tone="success" dot>Live</Badge>{/if}
+						<span class="label"
+							>{$_('components.settings.stepper.stepperChuteStressTest.telemetry.driverReadings')}</span
+						>
+						{#if telemetryLive}<Badge tone="success" dot
+								>{$_('components.settings.stepper.stepperChuteStressTest.telemetry.live')}</Badge
+							>{/if}
 					</div>
 					<Button variant="ghost" size="sm" onclick={() => selectedRunId && void loadTelemetry(selectedRunId)}>
-						Refresh
+						{$_('components.settings.stepper.stepperChuteStressTest.buttons.refresh')}
 					</Button>
 				</div>
 
 				{#if telemetryLoading}
-					<p class="flex items-center gap-2 text-sm text-ink-muted"><Spinner size={14} /> Loading the readings</p>
+					<p class="flex items-center gap-2 text-sm text-ink-muted">
+						<Spinner size={14} />
+						{$_('components.settings.stepper.stepperChuteStressTest.telemetry.loadingReadings')}
+					</p>
 				{:else if telemetryError}
 					<p class="text-sm text-ink-muted">{telemetryError}</p>
 				{:else if telemetryPoints.length === 0}
-					<p class="text-sm text-ink-muted">No readings for this run.</p>
+					<p class="text-sm text-ink-muted">
+						{$_('components.settings.stepper.stepperChuteStressTest.telemetry.noReadingsForRun')}
+					</p>
 				{:else}
 					{#if telemetrySettings}
 						<div class="rounded-control bg-well p-3">
-							<div class="label mb-2">Driver settings, read from the hardware as the run started</div>
+							<div class="label mb-2">
+								{$_(
+									'components.settings.stepper.stepperChuteStressTest.telemetry.driverSettingsHeading'
+								)}
+							</div>
 							{@render facts([
 								[
-									'Chopper mode',
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.chopperMode'),
 									decodedField('gconf', 'stealthchop') === undefined
-										? 'Unknown'
+										? $_('components.settings.stepper.stepperChuteStressTest.telemetry.unknown')
 										: decodedField('gconf', 'stealthchop')
 											? 'StealthChop'
 											: 'SpreadCycle',
 									decodedField('gconf', 'stealthchop') ? 'text-warning-ink' : undefined
 								],
-								['Microsteps', String(decodedField('chopconf', 'microsteps') ?? 'Unknown')],
 								[
-									'Interpolation to 256',
-									decodedField('chopconf', 'intpol') === undefined
-										? 'Unknown'
-										: decodedField('chopconf', 'intpol')
-											? 'On'
-											: 'Off'
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.microsteps'),
+									String(
+										decodedField('chopconf', 'microsteps') ??
+											$_('components.settings.stepper.stepperChuteStressTest.telemetry.unknown')
+									)
 								],
-								['Run current (IRUN)', `${configuredCurrent()?.['irun'] ?? '?'} of 31`],
-								['Hold current (IHOLD)', `${configuredCurrent()?.['ihold'] ?? '?'} of 31`],
-								['CS_ACTUAL at the start', `${decodedField('drv_status', 'cs_actual') ?? '?'} of 31`],
 								[
-									'Heat warning at the start',
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.interpolation'),
+									decodedField('chopconf', 'intpol') === undefined
+										? $_('components.settings.stepper.stepperChuteStressTest.telemetry.unknown')
+										: decodedField('chopconf', 'intpol')
+											? $_('components.settings.stepper.stepperChuteStressTest.telemetry.on')
+											: $_('components.settings.stepper.stepperChuteStressTest.telemetry.off')
+								],
+								[
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.runCurrent'),
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.ofMax31', {
+										values: { val: configuredCurrent()?.['irun'] ?? '?' }
+									})
+								],
+								[
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.holdCurrent'),
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.ofMax31', {
+										values: { val: configuredCurrent()?.['ihold'] ?? '?' }
+									})
+								],
+								[
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.csActualAtStart'),
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.ofMax31', {
+										values: { val: decodedField('drv_status', 'cs_actual') ?? '?' }
+									})
+								],
+								[
+									$_(
+										'components.settings.stepper.stepperChuteStressTest.telemetry.heatWarningAtStart'
+									),
 									decodedField('drv_status', 'otpw') === undefined
-										? 'Unknown'
+										? $_('components.settings.stepper.stepperChuteStressTest.telemetry.unknown')
 										: decodedField('drv_status', 'otpw')
-											? 'Yes'
-											: 'No',
+											? $_('components.settings.stepper.stepperChuteStressTest.telemetry.yes')
+											: $_('components.settings.stepper.stepperChuteStressTest.telemetry.no'),
 									decodedField('drv_status', 'otpw') ? 'text-danger-ink' : undefined
 								],
-								['Driver temperature at the start', snapshotTempBand()]
+								[
+									$_('components.settings.stepper.stepperChuteStressTest.telemetry.driverTempAtStart'),
+									snapshotTempBand()
+								]
 							])}
 							<div class="mt-2 border-t border-line pt-2">
 								{@render facts([
@@ -784,15 +912,58 @@
 					<ChuteStressTelemetryChart points={telemetryPoints} {showSg} {showCs} {showPwm} {showTstep} height={260} />
 
 					<p class="text-sm text-ink-muted">
-						Each series is scaled to its own range; the ranges below are absolute.
-						<span class="num">{telemetryPoints.length}</span> readings.
+						{$_('components.settings.stepper.stepperChuteStressTest.telemetry.scaleNote')}
+						{$_('components.settings.stepper.stepperChuteStressTest.telemetry.readingsCount', {
+							values: { count: telemetryPoints.length }
+						})}
 					</p>
 					{@render facts([
-						...(sgStat ? [['SG_RESULT', `${sgStat.min} to ${sgStat.max} (now ${sgStat.last})`] as [string, string]] : []),
-						...(pwmStat ? [['PWM_SCALE', `${pwmStat.min} to ${pwmStat.max} (now ${pwmStat.last})`] as [string, string]] : []),
-						...(csStat ? [['CS_ACTUAL', `${csStat.min} to ${csStat.max} (now ${csStat.last})`] as [string, string]] : []),
-						...(tstepStat ? [['TSTEP', `${tstepStat.min} to ${tstepStat.max}`] as [string, string]] : []),
-						['Overheat or heat warning readings', String(warnCount), warnCount > 0 ? 'text-danger-ink' : undefined]
+						...(sgStat
+							? [
+									[
+										'SG_RESULT',
+										$_('components.settings.stepper.stepperChuteStressTest.telemetry.rangeValue', {
+											values: { min: sgStat.min, max: sgStat.max, last: sgStat.last }
+										})
+									] as [string, string]
+								]
+							: []),
+						...(pwmStat
+							? [
+									[
+										'PWM_SCALE',
+										$_('components.settings.stepper.stepperChuteStressTest.telemetry.rangeValue', {
+											values: { min: pwmStat.min, max: pwmStat.max, last: pwmStat.last }
+										})
+									] as [string, string]
+								]
+							: []),
+						...(csStat
+							? [
+									[
+										'CS_ACTUAL',
+										$_('components.settings.stepper.stepperChuteStressTest.telemetry.rangeValue', {
+											values: { min: csStat.min, max: csStat.max, last: csStat.last }
+										})
+									] as [string, string]
+								]
+							: []),
+						...(tstepStat
+							? [
+									[
+										'TSTEP',
+										$_(
+											'components.settings.stepper.stepperChuteStressTest.telemetry.rangeValueSimple',
+											{ values: { min: tstepStat.min, max: tstepStat.max } }
+										)
+									] as [string, string]
+								]
+							: []),
+						[
+							$_('components.settings.stepper.stepperChuteStressTest.telemetry.overheatReadings'),
+							String(warnCount),
+							warnCount > 0 ? 'text-danger-ink' : undefined
+						]
 					])}
 				{/if}
 			</div>

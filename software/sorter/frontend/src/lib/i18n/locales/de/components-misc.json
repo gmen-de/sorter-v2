@@ -1,0 +1,289 @@
+{
+	"components": {
+		"servo": {
+			"chuteFlapDiagram": {
+				"ariaLabel": {
+					"open": "Die Klappe offen: Sie liegt flach in der Rutschenwand, und Teile fallen daran vorbei die Rutsche hinunter.",
+					"closed": "Die Klappe geschlossen: Sie quert die Rutsche und lenkt Teile durch den Trichter in diese Ebene."
+				}
+			},
+			"servoLayerCalibrator": {
+				"loadFailed": "Laden der Servo-Ebenen fehlgeschlagen",
+				"actionFailed": "{action} für Ebene {layer} fehlgeschlagen",
+				"layerLabel": "Ebene {n}",
+				"hint": {
+					"noChannel": "Wähle den Kanal, an den der Servo angeschlossen ist (unter Erweitert), speichere die Ebenen und referenziere die Maschine, um die Klappe zu bewegen.",
+					"unsaved": "Speichere die Ebenen und referenziere die Maschine, um die Klappe zu bewegen.",
+					"needsHome": "Referenziere die Maschine, um die Klappe zu bewegen."
+				},
+				"status": {
+					"lockedOpen": "Öffnungswinkel von Ebene {layer} gesperrt.",
+					"lockedClosed": "Schließwinkel von Ebene {layer} gesperrt.",
+					"cleared": "Kalibrierung von Ebene {layer} zurückgesetzt.",
+					"saveFailed": "Speichern fehlgeschlagen",
+					"clearFailed": "Zurücksetzen fehlgeschlagen",
+					"saved": "Servo-Ebenen-Einstellungen gespeichert.",
+					"saveSettingsFailed": "Speichern der Servo-Ebenen-Einstellungen fehlgeschlagen"
+				},
+				"validation": {
+					"invalidChannel": "Ebene {layer} hat einen ungültigen Kanal.",
+					"needsChannel": "Ebene {layer} benötigt einen Kanal, solange sie aktiv ist.",
+					"binLimit": "Das Bin-Limit von {label} muss eine ganze Zahl über 0 sein.",
+					"settleAdjust": "Die Wartezeit-Korrektur von {label} muss eine ganze Zahl in Millisekunden sein."
+				},
+				"alert": {
+					"wrongBackend": "Dieser Kalibrator ist für das PCA9685-(PWM)-Servo-Backend, aber diese Maschine ist für den Waveshare-Bus eingerichtet."
+				},
+				"panelTitle": {
+					"flap": "Klappe jeder Ebene",
+					"layers": "Ebenen"
+				},
+				"flapDiagram": {
+					"openLabel": "Offen.",
+					"openDescription": "Die Klappe liegt flach in der Rutschenwand, sodass Teile daran vorbei in die darunterliegenden Ebenen fallen.",
+					"closedLabel": "Geschlossen.",
+					"closedDescription": "Die Klappe quert die Rutsche, sodass Teile durch den Trichter dieser Ebene in ihre Bins rutschen."
+				},
+				"instructions": {
+					"moveFlap": "Bewege für jede Ebene ihre Klappe mit den Pfeilen (oder den Pfeiltasten), bis sie wie im Bild aussieht, und sperre dann diesen Winkel: erst offen, dann geschlossen. Eine Ebene sortiert erst, wenn beide gesperrt sind.",
+					"stepOpen": "Bewege die Klappe, bis sie flach in der Rutschenwand liegt, und sperre sie dann offen.",
+					"stepClosed": "Bewege die Klappe nun, bis sie die Rutsche quert, und sperre sie dann geschlossen."
+				},
+				"advancedLabel": "Erweitert",
+				"addLayerButton": "Ebene hinzufügen",
+				"emptyState": {
+					"title": "Noch keine Lagerebenen",
+					"body": "Füge eine Ebene hinzu, um zu starten."
+				},
+				"loadingLayers": "Ebenen werden geladen",
+				"badge": {
+					"off": "Aus",
+					"calibrated": "Kalibriert",
+					"needsCalibrating": "Muss kalibriert werden",
+					"moveHint": "Hoch und runter bewegen die Klappe um 1°, links und rechts um 5°; Escape lässt los",
+					"unsavedChanges": "Nicht gespeicherte Änderungen"
+				},
+				"activeLabel": "Aktiv",
+				"removeLabel": "{label} entfernen",
+				"bins": {
+					"label": "Bins",
+					"info": "Wie viele Bins auf dieser Ebene um die Rutsche stehen. Passend zu den verbauten Bins: {counts}."
+				},
+				"binLimit": {
+					"label": "Bin-Limit",
+					"info": "Die meisten Teile, die ein Bin auf dieser Ebene aufnimmt. Erreicht ein Bin dieses Limit, zählt die Maschine es als voll und schickt die nächsten Teile der Kategorie in ein anderes Bin. Leer lassen für kein Limit."
+				},
+				"channel": {
+					"label": "Kanal",
+					"info": "Der Servo-Ausgang am Steuerungsboard, an den der Klappen-Servo dieser Ebene angeschlossen ist.",
+					"none": "Keiner"
+				},
+				"invertLabel": "Invertieren",
+				"flapLabel": "Klappe",
+				"moveFlapGroupLabel": "Klappe von {label} bewegen",
+				"lowerAngleLabel": "Zu einem kleineren Winkel bewegen",
+				"higherAngleLabel": "Zu einem größeren Winkel bewegen",
+				"unknownAngle": "Unbekannt",
+				"openWord": "Offen",
+				"closedWord": "Geschlossen",
+				"notSet": "nicht gesetzt",
+				"lockOpenButton": "Offen sperren",
+				"lockClosedButton": "Geschlossen sperren",
+				"goToOpenButton": "Zu Offen fahren",
+				"goToClosedButton": "Zu Geschlossen fahren",
+				"startOverButton": "Neu beginnen",
+				"savingLabel": "Speichert",
+				"savedLabel": "Gespeichert",
+				"notSavedLabel": "Nicht gespeichert",
+				"reloadButton": "Neu laden",
+				"saveLayersButton": "Ebenen speichern",
+				"ble": {
+					"connected": "Verbunden",
+					"notConnected": "Nicht verbunden",
+					"rescan": "Erneut suchen",
+					"gateLabel": "Klappe",
+					"gateNone": "Keine",
+					"gateOption": "Klappe {id}",
+					"gateState": {
+						"open": "Offen",
+						"closed": "Geschlossen",
+						"blocked": "Blockiert",
+						"unknown": "Unbekannt",
+						"error": "Fehler",
+						"untested": "Ungetestet"
+					},
+					"buttons": {
+						"open": "Öffnen",
+						"close": "Schließen",
+						"calibrate": "Kalibrieren"
+					},
+					"errors": {
+						"statusFailed": "Bridge-Status konnte nicht gelesen werden.",
+						"moveGateFailed": "Klappe {gate} konnte nicht bewegt werden.",
+						"calibrateGateFailed": "Klappe {gate} konnte nicht kalibriert werden."
+					},
+					"status": {
+						"gateCalibrated": "Klappe {gate} kalibriert."
+					}
+				},
+				"settle": {
+					"label": "Wartezeit-Korrektur",
+					"info": "Berechnete Wartezeit nach dem Abwurf: {base}ms. Korrektur kommt dazu; gesamt: {total}ms."
+				}
+			},
+			"servoSpeedSettings": {
+				"panelTitle": "Servo-Geschwindigkeiten",
+				"panelDescription": "Für jede Ebene. Die Standardgeschwindigkeit wird beim Start und beim Jogging verwendet.",
+				"savingLabel": "Speichert",
+				"savedLabel": "Gespeichert",
+				"notSavedLabel": "Nicht gespeichert",
+				"saveFailed": "Speichern fehlgeschlagen",
+				"speedLabels": {
+					"opening": "Öffnen",
+					"closing": "Schließen",
+					"standard": "Standard"
+				},
+				"backToDefaultLabel": "Zurück zum Firmware-Standard, {default} °/s"
+			}
+		},
+		"data": {
+			"hourlyChart": {
+				"defaultFlagLabel": "Etwas wurde verworfen",
+				"defaultEmptyLabel": "Nichts in diesem Zeitraum.",
+				"tableHour": "Stunde",
+				"tableTotal": "Gesamt",
+				"showChartButton": "Als Diagramm anzeigen",
+				"showTableButton": "Als Tabelle anzeigen",
+				"unknownValue": "Unbekannt",
+				"timeRange": "{start} bis {end}",
+				"nowWord": "jetzt",
+				"xLabelNow": "Jetzt",
+				"ariaLabelHint": "Pfeiltasten verwenden, um jede Stunde vorzulesen."
+			},
+			"localDataPanel": {
+				"confirmTitle": "Alle Muster löschen?",
+				"confirmMessage": "Jedes Trainingsmuster auf dieser Maschine wird gelöscht, auch die, die noch kein Hive hat. Das kann nicht rückgängig gemacht werden.",
+				"confirmAction": "Alle löschen",
+				"deletedFallback": "Alle Muster auf dieser Maschine wurden gelöscht.",
+				"deleteFailed": "Löschen der Muster fehlgeschlagen.",
+				"loadErrorPrefix": "Konnte nicht laden, was hier gespeichert ist: {message}",
+				"deleteButtonLabel": "Alle Muster auf dieser Maschine löschen",
+				"panelTitle": "Auf dieser Maschine",
+				"panelDescription": "Hier gespeichert, bis jedes Hive, das es haben sollte, es hat.",
+				"loadingLabel": "Lädt",
+				"nothingStored": "Auf dieser Maschine ist nichts gespeichert.",
+				"tableHeaders": {
+					"kind": "Art",
+					"stored": "Gespeichert",
+					"size": "Größe",
+					"waitingForHive": "Wartet auf ein Hive"
+				},
+				"capLabel": "von {cap}",
+				"diskStatus": {
+					"low": "frei auf der Festplatte, daher werden keine Muster gespeichert, bis {min} frei sind.",
+					"ok": "frei auf der Festplatte. Das Speichern von Mustern stoppt, wenn weniger als {min} frei sind."
+				}
+			},
+			"sharingPanel": {
+				"loadErrorPrefix": "Konnte nicht laden, was dieser Sorter teilt: {message}",
+				"resetButton": {
+					"useEveryHive": "Einstellungen jedes Hives verwenden",
+					"resetDefaults": "Auf Standard zurücksetzen"
+				},
+				"tryAgainButton": "Erneut versuchen",
+				"loadingLabel": "Lädt",
+				"alertTitle": {
+					"needsConsent": "Mit keinem Hive wird noch etwas geteilt",
+					"needsReview": "Was dieser Sorter teilt, hat sich geändert"
+				},
+				"alertBody": {
+					"needsConsent": "Sieh dir die Liste an und stimme dann zu, um mit dem Teilen zu beginnen.",
+					"needsReview": "Maschinentelemetrie ist neu. Sieh dir die Liste an und drücke dann OK."
+				},
+				"agreeButton": "Zustimmen",
+				"okButton": "OK",
+				"sharedWithLabel": "Geteilt mit",
+				"sharedWithInfo": "Jedes Hive bekommt dasselbe, sofern du eines nicht anders einstellst. Wähle ein Hive, um zu sehen und zu ändern, was es erhält.",
+				"everyHiveOption": "Jedes Hive",
+				"description": {
+					"noHive": "Noch ist kein Hive verbunden. Was du hier wählst, gilt für jedes, das du verbindest.",
+					"default": "Was jedes Hive erhalten darf. Das Symbol nach einem Namen sagt, wofür es ist."
+				},
+				"panelTitle": "Mit Hive geteilt",
+				"stateOn": "an",
+				"stateOff": "aus",
+				"resetToEveryHive": "jedes Hive ({state})",
+				"resetToEveryHiveHelp": "Jedes Hive hat dies {state}. Gib {hive} dasselbe."
+			},
+			"streamRows": {
+				"alwaysLabel": "Immer"
+			}
+		},
+		"zones": {
+			"zoneOverlay": {
+				"ariaLabel": {
+					"zones": "Zonen",
+					"dropZone": "Die Fallzone",
+					"exitZone": "Die Ausgangszone",
+					"preciseZone": "Die Präzisionszone",
+					"dropZoneFirstEdge": "Die erste Kante der Fallzone",
+					"dropZoneLastEdge": "Die letzte Kante der Fallzone",
+					"exitZoneFirstEdge": "Die erste Kante der Ausgangszone",
+					"exitZoneLastEdge": "Die letzte Kante der Ausgangszone",
+					"preciseZoneFirstEdge": "Die erste Kante der Präzisionszone",
+					"ringInnerEdge": "Die innere Kante des Rings",
+					"ringOuterEdge": "Die äußere Kante des Rings",
+					"exitOuterEdge": "Die äußere Kante des Ausgangs",
+					"innerCircleCenter": "Der Mittelpunkt des inneren Kreises",
+					"ringCenter": "Der Mittelpunkt des Rings"
+				}
+			},
+			"zonePanel": {
+				"panelTitle": "Zonen",
+				"findButton": "Suchen",
+				"cancelButton": "Abbrechen",
+				"saveButton": "Speichern",
+				"editButton": "Bearbeiten",
+				"rows": {
+					"ring": {
+						"name": "Ring",
+						"help": "Die Spur, auf der die Teile am Rand entlanglaufen."
+					},
+					"drop": {
+						"name": "Ablage",
+						"help": "Wo Teile aus dem vorherigen Kanal landen."
+					},
+					"precise": {
+						"name": "Präzise",
+						"help": "Der schmale Bereich vor dem Ausgang, wo Teile einzeln abgegeben werden."
+					},
+					"exit": {
+						"name": "Ausgang",
+						"help": "Wo Teile am Rand bei der Öffnung austreten."
+					}
+				},
+				"source": {
+					"default": "Noch nicht gesetzt",
+					"drawn": "Von Hand gesetzt",
+					"found": "Im Bild gefunden",
+					"learned": "Aus Teilen gelernt"
+				},
+				"noneLabel": "Keine",
+				"nudge": {
+					"sizeOf": "Größe von {name}",
+					"makeSmaller": "{name} verkleinern",
+					"makeBigger": "{name} vergrößern",
+					"eachPress": "Jeder Druck ändert es um"
+				},
+				"lockLabel": "{name} sperren",
+				"emptyState": "Noch keine Zonen. Suche sie im Bild, dann anpassen und speichern.",
+				"footerFallback": "Die Zonen ändern sich nur, wenn jemand sie speichert. Sperre einen Teil, damit Suchen ihn nicht bewegt."
+			}
+		},
+		"machine3d": {
+			"binFrontCard": {
+				"unassignedLabel": "Nicht zugewiesen"
+			}
+		}
+	}
+}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import SettingRow from '$lib/components/ui/SettingRow.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
@@ -82,29 +83,30 @@
 
 {#if loading}
 	<div class="flex items-center gap-2 px-(--pad-panel) py-(--pad-row) text-sm text-ink-muted">
-		<Spinner size={14} /> Reading the driver
+		<Spinner size={14} />
+		{$_('components.settings.stepper.stepperDriverSettings.loading')}
 	</div>
 {:else}
 	<div class="divide-y divide-line">
 		{@render current(
 			'tmc-irun',
-			'Run current',
-			'IRUN, 0 to 31.',
+			$_('components.settings.stepper.stepperDriverSettings.runCurrent.label'),
+			$_('components.settings.stepper.stepperDriverSettings.runCurrent.help'),
 			() => tmcIrun,
 			(v) => (tmcIrun = v)
 		)}
 		{@render current(
 			'tmc-ihold',
-			'Hold current',
-			'IHOLD, 0 to 31.',
+			$_('components.settings.stepper.stepperDriverSettings.holdCurrent.label'),
+			$_('components.settings.stepper.stepperDriverSettings.holdCurrent.help'),
 			() => tmcIhold,
 			(v) => (tmcIhold = v)
 		)}
 		<SettingRow
-			label="Microstepping"
+			label={$_('components.settings.stepper.stepperDriverSettings.microstepping.label')}
 			for="tmc-microsteps"
 			help={microstepsLocked
-				? 'Locked: the chute’s bin-aiming math is calibrated for this value.'
+				? $_('components.settings.stepper.stepperDriverSettings.microstepping.lockedHelp')
 				: undefined}
 		>
 			<div class="w-28">
@@ -124,7 +126,9 @@
 		<div class="flex flex-wrap gap-x-6 gap-y-2 px-(--pad-panel) py-(--pad-row)">
 			<Checkbox bind:checked={tmcStealthchop}>StealthChop</Checkbox>
 			<Checkbox bind:checked={tmcCoolstep}>CoolStep</Checkbox>
-			<Checkbox bind:checked={stepperDirectionInverted}>Invert the direction</Checkbox>
+			<Checkbox bind:checked={stepperDirectionInverted}
+				>{$_('components.settings.stepper.stepperDriverSettings.invertDirection')}</Checkbox
+			>
 		</div>
 		<div class="px-(--pad-panel) py-(--pad-row)">
 			<StepperStallGuardSettings

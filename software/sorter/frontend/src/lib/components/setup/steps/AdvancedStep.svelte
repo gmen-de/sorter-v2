@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Check from '@lucide/svelte/icons/check';
 	import Panel from '$lib/components/ui/Panel.svelte';
 </script>
@@ -9,8 +10,7 @@
 			<Check size={24} />
 		</span>
 		<p class="max-w-md text-sm text-ink-muted">
-			The sorter is configured and ready. Open the dashboard, home the machine if it is still in
-			standby, and give it a first run.
+			{$_('components.setup.steps.advancedStep.readyMessage')}
 		</p>
 	</div>
 </Panel>

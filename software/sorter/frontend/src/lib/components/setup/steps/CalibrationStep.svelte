@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachinesContext } from '$lib/machines/context';
 	import { onMount } from 'svelte';
@@ -89,10 +90,12 @@
 		error: string | undefined,
 		liveAvailable: boolean
 	): string {
-		if (error) return 'Read error';
-		if (!liveAvailable) return 'Offline';
+		if (error) return $_('components.setup.steps.calibrationStep.endstop.readError');
+		if (!liveAvailable) return $_('components.setup.steps.calibrationStep.endstop.offline');
 		if (triggered === null) return '--';
-		return triggered ? 'Triggered' : 'Not triggered';
+		return triggered
+			? $_('components.setup.steps.calibrationStep.endstop.triggered')
+			: $_('components.setup.steps.calibrationStep.endstop.notTriggered');
 	}
 
 	function endstopStatusClass(triggered: boolean | null, error: string | undefined): string {
@@ -156,10 +159,16 @@
 				}
 			);
 			if (!res.ok) throw new Error(await res.text());
-			chuteStatus = `Chute direction set to ${!current ? 'inverted' : 'normal'}.`;
+			chuteStatus = $_('components.setup.steps.calibrationStep.status.directionSet', {
+				values: {
+					state: !current
+						? $_('components.setup.steps.calibrationStep.direction.inverted')
+						: $_('components.setup.steps.calibrationStep.direction.normal')
+				}
+			});
 			await loadChuteSettings();
 		} catch (e: any) {
-			chuteError = e.message ?? 'Failed to flip chute direction';
+			chuteError = e.message ?? $_('components.setup.steps.calibrationStep.errors.flipDirectionFailed');
 		} finally {
 			chuteSaving = false;
 		}
@@ -181,10 +190,11 @@
 			});
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
-			chuteStatus = payload?.message ?? 'Chute settings saved.';
+			chuteStatus =
+				payload?.message ?? $_('components.setup.steps.calibrationStep.status.chuteSettingsSaved');
 			await loadChuteSettings();
 		} catch (e: any) {
-			chuteError = e.message ?? 'Failed to save chute settings';
+			chuteError = e.message ?? $_('components.setup.steps.calibrationStep.errors.saveSettingsFailed');
 		} finally {
 			chuteSaving = false;
 		}
@@ -201,10 +211,12 @@
 			);
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
-			chuteStatus = payload?.message ?? 'Chute reference found.';
+			chuteStatus =
+				payload?.message ?? $_('components.setup.steps.calibrationStep.status.chuteReferenceFound');
 			await loadChuteSettings();
 		} catch (e: any) {
-			chuteError = e.message ?? 'Failed to find the chute reference';
+			chuteError =
+				e.message ?? $_('components.setup.steps.calibrationStep.errors.findReferenceFailed');
 		} finally {
 			chuteHoming = false;
 		}
@@ -223,10 +235,12 @@
 			});
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
-			chuteStatus = payload?.message ?? 'Chute settings saved.';
+			chuteStatus =
+				payload?.message ?? $_('components.setup.steps.calibrationStep.status.chuteSettingsSaved');
 			await loadChuteSettings();
 		} catch (e: any) {
-			chuteError = e.message ?? 'Failed to save the encoder calibration';
+			chuteError =
+				e.message ?? $_('components.setup.steps.calibrationStep.errors.saveEncoderCalibrationFailed');
 		} finally {
 			chuteSaving = false;
 		}
@@ -243,10 +257,11 @@
 			);
 			if (!res.ok) throw new Error(await res.text());
 			const payload = await res.json();
-			chuteStatus = payload?.message ?? 'Chute motion canceled.';
+			chuteStatus =
+				payload?.message ?? $_('components.setup.steps.calibrationStep.status.chuteMotionCanceled');
 			await loadChuteSettings();
 		} catch (e: any) {
-			chuteError = e.message ?? 'Failed to cancel chute motion';
+			chuteError = e.message ?? $_('components.setup.steps.calibrationStep.errors.cancelMotionFailed');
 		} finally {
 			chuteCanceling = false;
 		}
@@ -282,18 +297,21 @@
 
 <div class="flex flex-col gap-(--gap-panels)">
 	{#if systemState === 'initializing' || systemState === 'homing'}
-		<Alert tone="warning" title="Powering on the steppers…">
-			{homingStep ?? 'Finding the hardware'}. The endstop checks unlock once the boards are ready.
+		<Alert tone="warning" title={$_('components.setup.steps.calibrationStep.poweringOn.title')}>
+			{homingStep ?? $_('components.setup.steps.calibrationStep.poweringOn.fallbackStep')}.
+			{$_('components.setup.steps.calibrationStep.poweringOn.unlockHint')}
 		</Alert>
 	{:else if systemState === 'standby'}
-		<Alert tone="info" title="The steppers are off.">
+		<Alert tone="info" title={$_('components.setup.steps.calibrationStep.steppersOff.title')}>
 			{#snippet actions()}
-				<Button size="sm" onclick={onInitialize}>Power on the steppers</Button>
+				<Button size="sm" onclick={onInitialize}
+					>{$_('components.setup.steps.calibrationStep.steppersOff.powerOnButton')}</Button
+				>
 			{/snippet}
 		</Alert>
 	{:else if systemState === 'error'}
-		<Alert tone="danger" title="The hardware connection failed">
-			{homingStep ?? 'The steppers could not start. Check the USB cables and reset the wizard.'}
+		<Alert tone="danger" title={$_('components.setup.steps.calibrationStep.connectionFailed.title')}>
+			{homingStep ?? $_('components.setup.steps.calibrationStep.connectionFailed.fallbackMessage')}
 		</Alert>
 	{/if}
 
@@ -314,8 +332,8 @@
 		/>
 	{:else}
 		<Panel
-			title="Chute endstop and home"
-			description="Check the chute's endstop before homing: set its polarity, and make sure the chute can find its mechanical reference."
+			title={$_('components.setup.steps.calibrationStep.endstopPanel.title')}
+			description={$_('components.setup.steps.calibrationStep.endstopPanel.description')}
 		>
 			{#snippet actions()}
 				<Button
@@ -325,7 +343,9 @@
 					onclick={() => (showEndstopWiringHelp = !showEndstopWiringHelp)}
 				>
 					<span class="max-sm:sr-only"
-						>{showEndstopWiringHelp ? 'Hide the wiring' : 'Show the wiring'}</span
+						>{showEndstopWiringHelp
+							? $_('components.setup.steps.calibrationStep.wiring.hide')
+							: $_('components.setup.steps.calibrationStep.wiring.show')}</span
 					>
 				</Button>
 			{/snippet}
@@ -342,18 +362,22 @@
 						>
 							<img
 								src={SKR_PICO_WIRING_DIAGRAM_URL}
-								alt="SKR Pico V1.0 board with labeled headers"
+								alt={$_('components.setup.steps.calibrationStep.wiringDiagram.imageAlt')}
 								loading="lazy"
 								class="block h-auto w-full rounded-control"
 							/>
 						</a>
 						<div class="flex flex-col gap-2 text-sm">
-							<h3 class="font-medium text-ink">SKR Pico endstop wiring</h3>
+							<h3 class="font-medium text-ink">
+								{$_('components.setup.steps.calibrationStep.wiringDiagram.heading')}
+							</h3>
 							<p class="text-ink-muted">
-								The SKR Pico V1.0 endstop header the distributor board uses.
+								{$_('components.setup.steps.calibrationStep.wiringDiagram.description')}
 							</p>
 							<p>
-								<span class="text-ink-muted">Chute endstop</span>
+								<span class="text-ink-muted"
+									>{$_('components.setup.steps.calibrationStep.wiringDiagram.chuteEndstopLabel')}</span
+								>
 								<span class="font-mono text-ink">Distributor · E0-STOP</span>
 							</p>
 						</div>
@@ -361,8 +385,7 @@
 				{/if}
 
 				<p class="text-sm text-ink-muted">
-					First, trigger the chute's endstop by hand and check that it reads Triggered below. If it
-					stays Not triggered, flip the polarity.
+					{$_('components.setup.steps.calibrationStep.triggerHint')}
 				</p>
 				<div
 					class="flex items-center justify-between rounded-control px-4 py-3 transition-colors {endstopStatusClass(
@@ -370,7 +393,7 @@
 						chuteLive.endstop_error
 					)}"
 				>
-					<span class="text-sm">Chute endstop</span>
+					<span class="text-sm">{$_('components.setup.steps.calibrationStep.chuteEndstopLabel')}</span>
 					<span class="text-base font-semibold">
 						{endstopStatusLabel(
 							chuteLive.endstop_triggered,
@@ -380,23 +403,38 @@
 					</span>
 				</div>
 				<p class="text-sm text-ink-muted">
-					Input channel <span class="font-medium text-ink">{chuteLive.home_pin_channel ?? '–'}</span
-					>
+					{$_('components.setup.steps.calibrationStep.inputChannelLabel')}
+					<span class="font-medium text-ink">{chuteLive.home_pin_channel ?? '–'}</span>
 					{#if chuteLive.raw_endstop_high !== null}
-						· raw signal <span class="font-medium text-ink"
-							>{chuteLive.raw_endstop_high ? 'high' : 'low'}</span
+						· {$_('components.setup.steps.calibrationStep.rawSignalLabel')}
+						<span class="font-medium text-ink"
+							>{chuteLive.raw_endstop_high
+								? $_('components.setup.steps.calibrationStep.signal.high')
+								: $_('components.setup.steps.calibrationStep.signal.low')}</span
 						>
 					{/if}
 				</p>
 				{#if chuteLive.endstop_error}
-					<Alert tone="danger">The live endstop read failed: {chuteLive.endstop_error}</Alert>
+					<Alert tone="danger"
+						>{$_('components.setup.steps.calibrationStep.liveReadFailed', {
+							values: { error: chuteLive.endstop_error }
+						})}</Alert
+					>
 				{/if}
 
 				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<Field label="First bin center" for="setup-first-bin" help="Saved when you continue.">
+					<Field
+						label={$_('components.setup.steps.calibrationStep.firstBinCenter.label')}
+						for="setup-first-bin"
+						help={$_('components.setup.steps.calibrationStep.savedWhenContinueHelp')}
+					>
 						<Input id="setup-first-bin" type="number" step={0.1} bind:value={chuteFirstBinCenter} />
 					</Field>
-					<Field label="Pillar width" for="setup-pillar" help="Saved when you continue.">
+					<Field
+						label={$_('components.setup.steps.calibrationStep.pillarWidth.label')}
+						for="setup-pillar"
+						help={$_('components.setup.steps.calibrationStep.savedWhenContinueHelp')}
+					>
 						<Input
 							id="setup-pillar"
 							type="number"
@@ -410,27 +448,29 @@
 				<div class="flex flex-col gap-3 text-sm text-ink-muted">
 					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 						<Button size="sm" loading={chuteSaving} onclick={flipChutePolarity}
-							>Flip the polarity</Button
+							>{$_('components.setup.steps.calibrationStep.buttons.flipPolarity')}</Button
 						>
 						<span>
-							If the trigger looks inverted. The input reads as
+							{$_('components.setup.steps.calibrationStep.polarityHint')}
 							<span class="font-medium text-ink"
-								>{chuteEndstopActiveHigh ? 'active-high' : 'active-low'}</span
+								>{chuteEndstopActiveHigh
+									? $_('components.setup.steps.calibrationStep.polarity.activeHigh')
+									: $_('components.setup.steps.calibrationStep.polarity.activeLow')}</span
 							>.
 						</span>
 					</div>
 					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 						<Button size="sm" loading={chuteSaving} onclick={flipChuteDirection}
-							>Flip the direction</Button
+							>{$_('components.setup.steps.calibrationStep.buttons.flipDirection')}</Button
 						>
 						<span>
-							If the chute moves the wrong way. Its direction is
+							{$_('components.setup.steps.calibrationStep.directionHint')}
 							<span class="font-medium text-ink">
 								{chuteLive.stepper_direction_inverted === null
 									? '–'
 									: chuteLive.stepper_direction_inverted
-										? 'inverted'
-										: 'normal'}</span
+										? $_('components.setup.steps.calibrationStep.direction.inverted')
+										: $_('components.setup.steps.calibrationStep.direction.normal')}</span
 							>.
 						</span>
 					</div>
@@ -444,7 +484,7 @@
 			</div>
 			{#snippet footer()}
 				<Button variant="ghost" loading={chuteCanceling} onclick={cancelChute}
-					>Stop the motion</Button
+					>{$_('components.setup.steps.calibrationStep.buttons.stopMotion')}</Button
 				>
 				<Button
 					variant="primary"
@@ -452,7 +492,7 @@
 					disabled={!(systemState === 'ready' || systemState === 'initialized')}
 					onclick={findChuteEndstop}
 				>
-					Find the chute endstop
+					{$_('components.setup.steps.calibrationStep.buttons.findChuteEndstop')}
 				</Button>
 			{/snippet}
 		</Panel>

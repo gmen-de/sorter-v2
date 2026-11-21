@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { binCenterAngle, reachInfo, type ChuteGeometry } from '$lib/chute/geometry';
 
 	type Selected = { section: number; bin: number; binCount: number };
@@ -69,13 +70,24 @@
 
 <div class="flex flex-col gap-1 rounded-control bg-well p-3">
 	<div class="flex items-baseline justify-between gap-2 text-sm">
-		<span class="font-medium text-ink">{binCount} {binCount === 1 ? 'bin' : 'bins'} a section</span>
+		<span class="font-medium text-ink"
+			>{$_('routes.settings.chuteAiming.binLayoutViz.binsASection', { values: { count: binCount } })}</span
+		>
 		<span class={unreachableCount === 0 ? 'text-success-ink' : 'text-danger-ink'}>
-			{unreachableCount === 0 ? `All ${total} reachable` : `${unreachableCount} of ${total} unreachable`}
+			{unreachableCount === 0
+				? $_('routes.settings.chuteAiming.binLayoutViz.allReachable', { values: { total } })
+				: $_('routes.settings.chuteAiming.binLayoutViz.someUnreachable', {
+						values: { count: unreachableCount, total }
+					})}
 		</span>
 	</div>
 
-	<svg viewBox="0 0 220 220" class="w-full" role="img" aria-label={`${binCount}-bin layout`}>
+	<svg
+		viewBox="0 0 220 220"
+		class="w-full"
+		role="img"
+		aria-label={$_('routes.settings.chuteAiming.binLayoutViz.ariaLabel', { values: { count: binCount } })}
+	>
 		<circle cx={CX} cy={CY} r={R} class="fill-surface stroke-line" stroke-width="1" />
 
 		<!-- The single mechanical deadzone: the wedge between max travel and home. -->
@@ -108,9 +120,11 @@
 			{@const isSel = selected?.binCount === binCount && selected?.section === b.section && selected?.bin === b.bin}
 			<g>
 				<title>
-					Section {b.section + 1}, bin {b.bin + 1} → {b.angle.toFixed(1)}°{b.reachable
+					{$_('routes.settings.chuteAiming.binLayoutViz.binTooltip', {
+						values: { section: b.section + 1, bin: b.bin + 1, angle: b.angle.toFixed(1) }
+					})}{b.reachable
 						? ''
-						: `, unreachable: ${b.reason}`}
+						: $_('routes.settings.chuteAiming.binLayoutViz.unreachableSuffix', { values: { reason: b.reason } })}
 				</title>
 				<circle
 					cx={b.x}
@@ -144,8 +158,9 @@
 
 	{#if unreachableCount > 0}
 		<p class="text-sm text-danger-ink">
-			{unreachableCount}
-			{unreachableCount === 1 ? 'bin falls' : 'bins fall'} in the {maxAngleDeg.toFixed(0)}° no-go wedge by home.
+			{$_('routes.settings.chuteAiming.binLayoutViz.wedgeWarning', {
+				values: { count: unreachableCount, deg: maxAngleDeg.toFixed(0) }
+			})}
 		</p>
 	{/if}
 </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { onMount } from 'svelte';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
@@ -113,17 +114,19 @@
 	let liveSnapshot = $state<Snapshot | null>(null);
 	const liveProfile = $derived(deriveProfile(liveSnapshot));
 	const machineName = $derived(
-		ctx.machine?.identity?.nickname || ctx.machine?.identity?.machine_id || 'this machine'
+		ctx.machine?.identity?.nickname ||
+			ctx.machine?.identity?.machine_id ||
+			$_('routes.settings.performance.defaultMachineName')
 	);
 
 	// ── Time-range history (sparklines + recent-window rates) ───────────────
-	const RANGES: { label: string; window_s: number }[] = [
-		{ label: 'Live', window_s: 15 },
-		{ label: '1 min', window_s: 60 },
-		{ label: '5 min', window_s: 300 },
-		{ label: '15 min', window_s: 900 },
-		{ label: '60 min', window_s: 3600 }
-	];
+	const RANGES = $derived<{ label: string; window_s: number }[]>([
+		{ label: $_('routes.settings.performance.ranges.live'), window_s: 15 },
+		{ label: $_('routes.settings.performance.ranges.oneMin'), window_s: 60 },
+		{ label: $_('routes.settings.performance.ranges.fiveMin'), window_s: 300 },
+		{ label: $_('routes.settings.performance.ranges.fifteenMin'), window_s: 900 },
+		{ label: $_('routes.settings.performance.ranges.sixtyMin'), window_s: 3600 }
+	]);
 	let rangeIdx = $state(2);
 	const windowS = $derived(RANGES[rangeIdx].window_s);
 
@@ -144,7 +147,7 @@
 			windowRates = body.rates ?? { hz: {}, cameras_hz: {}, current: {} };
 			historyError = null;
 		} catch (e: any) {
-			historyError = e?.message ?? 'Failed to load history';
+			historyError = e?.message ?? $_('routes.settings.performance.historyError');
 		}
 	}
 
@@ -255,9 +258,9 @@
 		if (v == null) return undefined;
 		return v >= good ? 'success' : v >= warn ? 'warning' : 'danger';
 	}
-	const rangeOptions = RANGES.map((r, i) => ({ value: String(i), label: r.label }));
+	const rangeOptions = $derived(RANGES.map((r, i) => ({ value: String(i), label: r.label })));
 	const recordOptions = $derived([
-		{ value: '', label: 'None' },
+		{ value: '', label: $_('routes.settings.performance.recordNone') },
 		...records.map((rec) => ({
 			value: rec.record_id,
 			label: new Date(rec.started_at * 1000).toLocaleString(),
@@ -266,21 +269,21 @@
 	]);
 </script>
 
-<svelte:head><title>Sorter - Performance</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.performance.pageTitle')}</title></svelte:head>
 
 <div class="flex flex-col gap-(--gap-panels)">
 	<PageHeader
-		title="Performance"
-		description="How fast this machine is thinking and how fresh the data behind each decision is."
+		title={$_('routes.settings.performance.title')}
+		description={$_('routes.settings.performance.description')}
 	/>
 	<div class="flex flex-wrap items-center justify-between gap-3">
 		<p class="text-sm text-ink-muted">
-			Showing <span class="font-medium text-ink">{machineName}</span>
+			{$_('routes.settings.performance.showing')} <span class="font-medium text-ink">{machineName}</span>
 			{#if liveProfile.lifecycle}· <span class="text-ink">{liveProfile.lifecycle}</span>{/if}
-			· running {fmtDuration(liveProfile.running_time_s)}
+			· {$_('routes.settings.performance.running')} {fmtDuration(liveProfile.running_time_s)}
 		</p>
 		<SegmentedControl
-			label="Time range"
+			label={$_('routes.settings.performance.timeRangeLabel')}
 			size="sm"
 			value={String(rangeIdx)}
 			options={rangeOptions}
@@ -289,23 +292,23 @@
 	</div>
 	{#if historyError}<Alert tone="danger">{historyError}</Alert>{/if}
 
-	<Panel title="Decision loop" flush>
+	<Panel title={$_('routes.settings.performance.decisionLoop.panelTitle')} flush>
 		{@render stats([
-			{ label: 'Decisions a second', value: fmtHz(liveProfile.decision_hz), unit: 'Hz', hint: 'Classification ticks', tone: hzTone(liveProfile.decision_hz, 60, 30) },
-			{ label: 'Decision data age', value: fmtMs(liveProfile.decision_frame_age_ms), unit: 'ms', hint: 'Age of the camera data', tone: msTone(liveProfile.decision_frame_age_ms, 150, 300) },
-			{ label: 'Control loop rate', value: fmtHz(liveProfile.loop_hz), unit: 'Hz', hint: 'Target 100', tone: hzTone(liveProfile.loop_hz, 80, 50) },
-			{ label: 'GIL stall', value: fmtMs(liveProfile.gil_stall_ms), unit: 'ms', hint: 'Loop contention', tone: msTone(liveProfile.gil_stall_ms, 5, 15) }
+			{ label: $_('routes.settings.performance.decisionLoop.decisionsPerSecond'), value: fmtHz(liveProfile.decision_hz), unit: 'Hz', hint: $_('routes.settings.performance.decisionLoop.classificationTicks'), tone: hzTone(liveProfile.decision_hz, 60, 30) },
+			{ label: $_('routes.settings.performance.decisionLoop.decisionDataAge'), value: fmtMs(liveProfile.decision_frame_age_ms), unit: 'ms', hint: $_('routes.settings.performance.decisionLoop.ageOfCameraData'), tone: msTone(liveProfile.decision_frame_age_ms, 150, 300) },
+			{ label: $_('routes.settings.performance.decisionLoop.controlLoopRate'), value: fmtHz(liveProfile.loop_hz), unit: 'Hz', hint: $_('routes.settings.performance.decisionLoop.target100'), tone: hzTone(liveProfile.loop_hz, 80, 50) },
+			{ label: $_('routes.settings.performance.decisionLoop.gilStall'), value: fmtMs(liveProfile.gil_stall_ms), unit: 'ms', hint: $_('routes.settings.performance.decisionLoop.loopContention'), tone: msTone(liveProfile.gil_stall_ms, 5, 15) }
 		])}
 		<div class="grid grid-cols-1 gap-3 border-t border-line p-(--pad-panel) md:grid-cols-3">
-			{@render spark('Decision data age (ms)', decisionAgeSeries, 'Over ' + RANGES[rangeIdx].label)}
-			{@render spark('Control loop interval (ms)', loopIntervalSeries, 'Lower is faster')}
-			{@render spark('Decisions a second', decisionHzSeries, 'Over ' + RANGES[rangeIdx].label)}
+			{@render spark($_('routes.settings.performance.decisionLoop.sparkDecisionDataAge'), decisionAgeSeries, $_('routes.settings.performance.decisionLoop.overRange', { values: { range: RANGES[rangeIdx].label } }))}
+			{@render spark($_('routes.settings.performance.decisionLoop.sparkControlLoopInterval'), loopIntervalSeries, $_('routes.settings.performance.decisionLoop.lowerIsFaster'))}
+			{@render spark($_('routes.settings.performance.decisionLoop.sparkDecisionsPerSecond'), decisionHzSeries, $_('routes.settings.performance.decisionLoop.overRange', { values: { range: RANGES[rangeIdx].label } }))}
 		</div>
 	</Panel>
 
-	<Panel title="Perception" description="Inference on each camera." flush>
+	<Panel title={$_('routes.settings.performance.perception.panelTitle')} description={$_('routes.settings.performance.perception.panelDescription')} flush>
 		{#if liveProfile.cameras.length === 0}
-			<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">No inference cameras are reporting yet.</p>
+			<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">{$_('routes.settings.performance.perception.none')}</p>
 		{:else}
 			<div class="divide-y divide-line">
 				{#each liveProfile.cameras as cam (cam.source_id)}
@@ -313,10 +316,10 @@
 						<div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
 							<span class="font-medium text-ink">{cam.source_id}</span>
 							<span class="flex flex-wrap gap-x-4">
-								{@render reading('Rate', fmtHz(cam.infer_hz), 'Hz', hzTone(cam.infer_hz, 15, 8))}
-								{@render reading('Infer', fmtMs(cam.infer_ms), 'ms', msTone(cam.infer_ms, 40, 80))}
-								{@render reading('Cycle', fmtMs(cam.cycle_ms), 'ms')}
-								{@render reading('Frame age', fmtMs(cam.frame_age_ms), 'ms', msTone(cam.frame_age_ms, 80, 160))}
+								{@render reading($_('routes.settings.performance.perception.rate'), fmtHz(cam.infer_hz), 'Hz', hzTone(cam.infer_hz, 15, 8))}
+								{@render reading($_('routes.settings.performance.perception.infer'), fmtMs(cam.infer_ms), 'ms', msTone(cam.infer_ms, 40, 80))}
+								{@render reading($_('routes.settings.performance.perception.cycle'), fmtMs(cam.cycle_ms), 'ms')}
+								{@render reading($_('routes.settings.performance.perception.frameAge'), fmtMs(cam.frame_age_ms), 'ms', msTone(cam.frame_age_ms, 80, 160))}
 							</span>
 						</div>
 						{@render line(rateSeries(`infer.${cam.source_id}`), 'mt-2 h-8')}
@@ -326,58 +329,58 @@
 		{/if}
 	</Panel>
 
-	<Panel title="Subsystem step cost" description="Each control tick." flush>
+	<Panel title={$_('routes.settings.performance.subsystem.panelTitle')} description={$_('routes.settings.performance.subsystem.panelDescription')} flush>
 		{@render stats([
-			{ label: 'Distribution', value: fmtMs(liveProfile.distribution_ms), unit: 'ms', tone: msTone(liveProfile.distribution_ms, 2, 6) },
-			{ label: 'Classification', value: fmtMs(liveProfile.classification_ms), unit: 'ms', tone: msTone(liveProfile.classification_ms, 2, 6) },
-			{ label: 'Feeder', value: fmtMs(liveProfile.feeder_ms), unit: 'ms', tone: msTone(liveProfile.feeder_ms, 2, 6) },
-			{ label: 'Controller step', value: fmtMs(liveProfile.controller_step_ms), unit: 'ms', tone: msTone(liveProfile.controller_step_ms, 4, 10) }
+			{ label: $_('routes.settings.performance.subsystem.distribution'), value: fmtMs(liveProfile.distribution_ms), unit: 'ms', tone: msTone(liveProfile.distribution_ms, 2, 6) },
+			{ label: $_('routes.settings.performance.subsystem.classification'), value: fmtMs(liveProfile.classification_ms), unit: 'ms', tone: msTone(liveProfile.classification_ms, 2, 6) },
+			{ label: $_('routes.settings.performance.subsystem.feeder'), value: fmtMs(liveProfile.feeder_ms), unit: 'ms', tone: msTone(liveProfile.feeder_ms, 2, 6) },
+			{ label: $_('routes.settings.performance.subsystem.controllerStep'), value: fmtMs(liveProfile.controller_step_ms), unit: 'ms', tone: msTone(liveProfile.controller_step_ms, 4, 10) }
 		])}
 	</Panel>
 
-	<Panel title="Throughput" flush>
+	<Panel title={$_('routes.settings.performance.throughput.panelTitle')} flush>
 		{@render stats([
-			{ label: 'Pieces a minute (5 min)', value: fmtPpm(liveProfile.rolling_5min_ppm), unit: 'ppm' },
-			{ label: 'Pieces a minute (average)', value: fmtPpm(liveProfile.overall_ppm), unit: 'ppm' },
-			{ label: 'Pieces seen', value: liveProfile.pieces_seen?.toString() ?? '–' },
-			{ label: 'Distributed', value: liveProfile.distributed?.toString() ?? '–' }
+			{ label: $_('routes.settings.performance.throughput.piecesPerMinute5min'), value: fmtPpm(liveProfile.rolling_5min_ppm), unit: 'ppm' },
+			{ label: $_('routes.settings.performance.throughput.piecesPerMinuteAverage'), value: fmtPpm(liveProfile.overall_ppm), unit: 'ppm' },
+			{ label: $_('routes.settings.performance.throughput.piecesSeen'), value: liveProfile.pieces_seen?.toString() ?? '–' },
+			{ label: $_('routes.settings.performance.throughput.distributed'), value: liveProfile.distributed?.toString() ?? '–' }
 		])}
 	</Panel>
 
 	<Panel
-		title="Compare to a past run"
-		description="This machine's current session beside a finished run, the same numbers side by side. Useful for comparing machines or spotting a regression."
+		title={$_('routes.settings.performance.compare.panelTitle')}
+		description={$_('routes.settings.performance.compare.panelDescription')}
 		flush
 	>
 		<div class="flex flex-wrap items-center gap-3 px-(--pad-panel) pb-4">
 			<Select
-				label="Past run"
+				label={$_('routes.settings.performance.compare.pastRunLabel')}
 				class="w-72 max-w-full"
 				bind:value={selectedRecordId}
 				options={recordOptions}
 				onchange={(id) => void loadCompare(id)}
 			/>
-			{#if records.length === 0}<span class="text-sm text-ink-muted">No saved runs yet.</span>{/if}
+			{#if records.length === 0}<span class="text-sm text-ink-muted">{$_('routes.settings.performance.compare.noSavedRuns')}</span>{/if}
 		</div>
 		{#if compareProfile}
 			<div class="overflow-x-auto">
 				<table class="data-table">
 					<thead>
-						<tr><th>Metric</th><th class="num">{machineName} (now)</th><th class="num">{compareLabel}</th></tr>
+						<tr><th>{$_('routes.settings.performance.compare.metric')}</th><th class="num">{$_('routes.settings.performance.compare.nowSuffix', { values: { machine: machineName } })}</th><th class="num">{compareLabel}</th></tr>
 					</thead>
 					<tbody>
-						{@render cmp('Decisions a second', fmtHz(liveProfile.decision_hz), fmtHz(compareProfile.decision_hz))}
-						{@render cmp('Decision data age (ms)', fmtMs(liveProfile.decision_frame_age_ms), fmtMs(compareProfile.decision_frame_age_ms))}
-						{@render cmp('Control loop rate (Hz)', fmtHz(liveProfile.loop_hz), fmtHz(compareProfile.loop_hz))}
-						{@render cmp('GIL stall (ms)', fmtMs(liveProfile.gil_stall_ms), fmtMs(compareProfile.gil_stall_ms))}
-						{@render cmp('Controller step (ms)', fmtMs(liveProfile.controller_step_ms), fmtMs(compareProfile.controller_step_ms))}
-						{@render cmp('Distribution step (ms)', fmtMs(liveProfile.distribution_ms), fmtMs(compareProfile.distribution_ms))}
-						{@render cmp('Classification step (ms)', fmtMs(liveProfile.classification_ms), fmtMs(compareProfile.classification_ms))}
-						{@render cmp('Feeder step (ms)', fmtMs(liveProfile.feeder_ms), fmtMs(compareProfile.feeder_ms))}
-						{@render cmp('Pieces a minute (average)', fmtPpm(liveProfile.overall_ppm), fmtPpm(compareProfile.overall_ppm))}
+						{@render cmp($_('routes.settings.performance.compare.rows.decisionsPerSecond'), fmtHz(liveProfile.decision_hz), fmtHz(compareProfile.decision_hz))}
+						{@render cmp($_('routes.settings.performance.compare.rows.decisionDataAgeMs'), fmtMs(liveProfile.decision_frame_age_ms), fmtMs(compareProfile.decision_frame_age_ms))}
+						{@render cmp($_('routes.settings.performance.compare.rows.controlLoopRateHz'), fmtHz(liveProfile.loop_hz), fmtHz(compareProfile.loop_hz))}
+						{@render cmp($_('routes.settings.performance.compare.rows.gilStallMs'), fmtMs(liveProfile.gil_stall_ms), fmtMs(compareProfile.gil_stall_ms))}
+						{@render cmp($_('routes.settings.performance.compare.rows.controllerStepMs'), fmtMs(liveProfile.controller_step_ms), fmtMs(compareProfile.controller_step_ms))}
+						{@render cmp($_('routes.settings.performance.compare.rows.distributionStepMs'), fmtMs(liveProfile.distribution_ms), fmtMs(compareProfile.distribution_ms))}
+						{@render cmp($_('routes.settings.performance.compare.rows.classificationStepMs'), fmtMs(liveProfile.classification_ms), fmtMs(compareProfile.classification_ms))}
+						{@render cmp($_('routes.settings.performance.compare.rows.feederStepMs'), fmtMs(liveProfile.feeder_ms), fmtMs(compareProfile.feeder_ms))}
+						{@render cmp($_('routes.settings.performance.compare.rows.piecesPerMinuteAverage'), fmtPpm(liveProfile.overall_ppm), fmtPpm(compareProfile.overall_ppm))}
 						{#each unionCameras(liveProfile, compareProfile) as id (id)}
 							{@render cmp(
-								`Inference ${id} (Hz)`,
+								$_('routes.settings.performance.compare.rows.inferenceHz', { values: { id } }),
 								fmtHz(liveProfile.cameras.find((c) => c.source_id === id)?.infer_hz ?? null),
 								fmtHz(compareProfile.cameras.find((c) => c.source_id === id)?.infer_hz ?? null)
 							)}

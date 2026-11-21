@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import AppShell from '$lib/components/AppShell.svelte';
 	import SideNav from '$lib/components/ui/SideNav.svelte';
@@ -72,7 +73,9 @@
 			const detail =
 				error instanceof Error && error.message
 					? error.message
-					: `${stepperLabels[stepperKey]} hotkey failed.`;
+					: $_('routes.settings.layout.hotkeyFailed', {
+							values: { label: stepperLabels[stepperKey] }
+						});
 			showHotkeyStatus(`${stepperLabels[stepperKey]}: ${detail}`, true);
 		} finally {
 			hotkeyBusy = { ...hotkeyBusy, [stepperKey]: false };
@@ -118,7 +121,7 @@
 <AppShell fit>
 	<div class="flex min-h-0 flex-1">
 		<aside class="hidden w-60 shrink-0 overflow-y-auto bg-surface px-3 py-5 lg:block">
-			<SideNav groups={settingsNavGroups} label="Settings" />
+			<SideNav groups={settingsNavGroups} label={$_('routes.settings.layout.settingsNavLabel')} />
 		</aside>
 		<div class="min-w-0 flex-1 lg:overflow-y-auto">
 			<div
@@ -128,7 +131,7 @@
 			>
 				<div class="lg:hidden">
 					<Select
-						label="Settings page"
+						label={$_('routes.settings.layout.settingsPageLabel')}
 						value={here}
 						options={navOptions}
 						onchange={(href) => goto(href)}

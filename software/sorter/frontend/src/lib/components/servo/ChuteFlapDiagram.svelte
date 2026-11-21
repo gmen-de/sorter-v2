@@ -8,6 +8,8 @@
 	small form for buttons is FlapOpenIcon and FlapClosedIcon.
 -->
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
+
 	let {
 		state,
 		size = 96,
@@ -70,8 +72,8 @@
 	class="shrink-0 {className}"
 	role="img"
 	aria-label={state === 'open'
-		? 'The flap open: it lies flat in the chute wall and pieces fall on down the chute.'
-		: 'The flap closed: it crosses the chute and turns pieces down the funnel into this layer.'}
+		? $_('components.servo.chuteFlapDiagram.ariaLabel.open')
+		: $_('components.servo.chuteFlapDiagram.ariaLabel.closed')}
 >
 	<g class="stroke-ink-faint" stroke-width="3" stroke-linecap="square" fill="none">
 		<!-- The tube: its left wall whole, its right wall broken by the funnel's mouth. -->

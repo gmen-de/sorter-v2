@@ -7,6 +7,8 @@
 	// gives the canvas its size; `shape` is the frame's size, for a box that
 	// should hug it. `stale` turns true when no frame has come for STALE_MS.
 	import { onDestroy, untrack } from 'svelte';
+	import { get } from 'svelte/store';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
 	import {
@@ -222,7 +224,15 @@
 			g.strokeRect(x1, y1, x2 - x1, y2 - y1);
 			if (kind === 'merged') {
 				// What the machine acts on, named under the box.
-				label(g, id === undefined ? 'merged' : `merged #${id}`, x1, y2 + px, BOX[kind], px);
+				const mergedWord = get(_)('components.cameraPicture.merged');
+				label(
+					g,
+					id === undefined ? mergedWord : `${mergedWord} #${id}`,
+					x1,
+					y2 + px,
+					BOX[kind],
+					px
+				);
 			} else if (kind === 'piece' && id !== undefined) {
 				const h = (LABEL_PX + 4) * px;
 				label(g, `#${id}`, x1, Math.max(0, y1 - h - px), BOX[kind], px);

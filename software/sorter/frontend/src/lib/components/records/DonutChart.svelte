@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
+
 	// A donut drawn in SVG on a well. Segments are stroke-dasharray on a circle,
 	// so there is no arc math to get wrong; the legend carries the exact numbers.
 	export type DonutSegment = { label: string; value: number; color: string };
@@ -35,12 +37,17 @@
 
 {#if total === 0}
 	<div class="flex h-32 items-center justify-center rounded-control bg-well text-sm text-ink-muted">
-		No data yet.
+		{$_('components.records.donutChart.noData')}
 	</div>
 {:else}
 	<div class="flex flex-wrap items-center gap-4 rounded-control bg-well p-4">
 		<div class="relative size-36 shrink-0">
-			<svg viewBox="0 0 120 120" class="size-full" role="img" aria-label="{centerLabel || 'Total'}: {total.toLocaleString()}">
+			<svg
+				viewBox="0 0 120 120"
+				class="size-full"
+				role="img"
+				aria-label="{centerLabel || $_('components.records.donutChart.totalFallback')}: {total.toLocaleString()}"
+			>
 				<circle cx="60" cy="60" r={R} fill="none" stroke="var(--line)" stroke-width={STROKE} />
 				{#each arcs as a (a.label)}
 					<circle

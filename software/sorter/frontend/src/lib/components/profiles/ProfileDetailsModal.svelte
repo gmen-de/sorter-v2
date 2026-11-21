@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import ProfileBinsView from '$lib/components/profiles/ProfileBinsView.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
@@ -40,21 +41,30 @@
 		if (!version) return undefined;
 		const note = version.change_note ? `${version.change_note.replace(/[.!?]+$/, '')}. ` : '';
 		const by = savedBy(version);
-		return `${note}Updated ${formatRelativeTime(version.created_at) ?? 'recently'}${by ? ` ${by}` : ''}.`;
+		const time =
+			formatRelativeTime(version.created_at) ??
+			$_('components.profiles.profileDetailsModal.recentlyFallback');
+		return $_('components.profiles.profileDetailsModal.versionHelp', {
+			values: { note, time, by: by ? ` ${by}` : '' }
+		});
 	});
 </script>
 
-<Modal bind:open title="Profile details" size="lg">
+<Modal bind:open title={$_('components.profiles.profileDetailsModal.modalTitle')} size="lg">
 	{#if !summary}
-		<EmptyState title="No profile details are loaded" />
+		<EmptyState title={$_('components.profiles.profileDetailsModal.noDetailsTitle')} />
 	{:else}
 		<div class="flex flex-col gap-6">
 			<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">
 						<h3 class="text-base font-semibold text-ink">{summary.name}</h3>
-						{#if summary.is_default}<Badge>Hive default</Badge>{/if}
-						{#if summary.profile_type === 'set'}<Badge>Set profile</Badge>{/if}
+						{#if summary.is_default}<Badge
+								>{$_('components.profiles.profileDetailsModal.hiveDefaultBadge')}</Badge
+							>{/if}
+						{#if summary.profile_type === 'set'}<Badge
+								>{$_('components.profiles.profileDetailsModal.setProfileBadge')}</Badge
+							>{/if}
 						{#if summary.visibility && !summary.is_default}<Badge>{summary.visibility}</Badge>{/if}
 					</div>
 					{#if summary.description}
@@ -63,21 +73,38 @@
 					{#if !summary.is_default || summary.tags.length > 0}
 						<p class="mt-2 text-ink-muted">
 							{#if !summary.is_default}
-								Owner: {summary.owner?.display_name ?? summary.owner?.github_login ?? 'Unknown'}
+								{$_('components.profiles.profileDetailsModal.ownerLabel', {
+									values: {
+										name:
+											summary.owner?.display_name ??
+											summary.owner?.github_login ??
+											$_('components.profiles.profileDetailsModal.unknownOwner')
+									}
+								})}
 							{/if}
 							{#if !summary.is_default && summary.tags.length > 0}<br />{/if}
-							{#if summary.tags.length > 0}Tags: {summary.tags.join(', ')}{/if}
+							{#if summary.tags.length > 0}{$_('components.profiles.profileDetailsModal.tagsLabel', {
+									values: { tags: summary.tags.join(', ') }
+								})}{/if}
 						</p>
 					{/if}
 				</div>
 				<div class="w-full shrink-0 sm:w-64">
-					<Field label="Version" for={versionSelectId} help={versionHelp}>
+					<Field
+						label={$_('components.profiles.profileDetailsModal.versionFieldLabel')}
+						for={versionSelectId}
+						help={versionHelp}
+					>
 						<Select
 							id={versionSelectId}
 							value={selectedVersionId ?? ''}
 							options={visibleVersions(summary).map((version) => ({
 								value: version.id,
-								label: `v${version.version_number}${version.label ? ` - ${version.label}` : ''}${version.is_published ? '' : ' (draft)'}`
+								label: `v${version.version_number}${version.label ? ` - ${version.label}` : ''}${
+									version.is_published
+										? ''
+										: $_('components.profiles.profileDetailsModal.draftSuffix')
+								}`
 							}))}
 							onchange={onVersionChange}
 						/>
@@ -90,7 +117,7 @@
 			{#if loading && !detail}
 				<p class="flex items-center justify-center gap-2 py-8 text-ink-muted">
 					<Spinner size={16} />
-					Loading the bins
+					{$_('components.profiles.profileDetailsModal.loadingBins')}
 				</p>
 			{:else if detail?.current_version}
 				{@const version = detail.current_version}
@@ -102,7 +129,7 @@
 					stats={version.compiled_stats}
 				/>
 			{:else}
-				<p class="text-ink-muted">No version details are available for this profile.</p>
+				<p class="text-ink-muted">{$_('components.profiles.profileDetailsModal.noVersionDetails')}</p>
 			{/if}
 		</div>
 	{/if}

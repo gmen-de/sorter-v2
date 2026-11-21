@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -46,27 +47,29 @@
 		<Panel>
 			<p class="flex items-center gap-2 text-sm text-ink-muted">
 				<Spinner size={16} />
-				Checking the Hive connection…
+				{$_('components.setup.steps.hiveStep.checkingConnection')}
 			</p>
 		</Panel>
 	{:else if officialHiveTarget}
-		<Alert tone="success" title="Connected to Hive">
-			This sorter is registered with <span class="font-mono">{officialHiveTarget.url}</span>.
+		<Alert tone="success" title={$_('components.setup.steps.hiveStep.connected.title')}>
+			{$_('components.setup.steps.hiveStep.connected.registeredWith')}
+			<span class="font-mono">{officialHiveTarget.url}</span>.
 			{#if officialHiveTarget.machine_id}
-				Machine ID <span class="font-mono">{officialHiveTarget.machine_id}</span>.
+				{$_('components.setup.steps.hiveStep.connected.machineIdLabel')}
+				<span class="font-mono">{officialHiveTarget.machine_id}</span>.
 			{/if}
-			You can manage the connection later in Settings > Hive; Continue finishes the setup.
+			{$_('components.setup.steps.hiveStep.connected.manageHint')}
 		</Alert>
 	{:else}
 		<Panel
-			title="Link to Hive"
-			description="Continue takes you to the Hive server below. Sign in there (or make an account first) and confirm the machine's name; Hive brings you straight back here and finishes the link. No password is ever stored on this sorter."
+			title={$_('components.setup.steps.hiveStep.linkPanel.title')}
+			description={$_('components.setup.steps.hiveStep.linkPanel.description')}
 		>
 			<div class="flex max-w-xl flex-col gap-4">
 				<Field
-					label="Hive server"
+					label={$_('components.setup.steps.hiveStep.linkPanel.serverLabel')}
 					for="setup-hive-url"
-					help="The official community platform by default; a local or custom Hive for development."
+					help={$_('components.setup.steps.hiveStep.linkPanel.serverHelp')}
 				>
 					<Input
 						id="setup-hive-url"
@@ -77,13 +80,22 @@
 						disabled={hiveConnecting}
 					/>
 				</Field>
-				<KeyValue items={[{ label: 'Machine name', value: machineDisplayName }]} />
+				<KeyValue
+					items={[
+						{
+							label: $_('components.setup.steps.hiveStep.linkPanel.machineNameLabel'),
+							value: machineDisplayName
+						}
+					]}
+				/>
 				<p class="text-sm text-ink-muted">
-					This is how the sorter appears in Hive. Change it in the first step if it needs to.
+					{$_('components.setup.steps.hiveStep.linkPanel.appearanceHint')}
 				</p>
 			</div>
 			{#snippet footer()}
-				<Button variant="ghost" disabled={hiveConnecting} onclick={onSkip}>Skip for now</Button>
+				<Button variant="ghost" disabled={hiveConnecting} onclick={onSkip}
+					>{$_('components.setup.steps.hiveStep.linkPanel.skipButton')}</Button
+				>
 				<Button
 					variant="primary"
 					icon={ExternalLink}
@@ -91,14 +103,18 @@
 					disabled={!hiveUrl.trim()}
 					onclick={onConnect}
 				>
-					{hiveConnecting ? 'Opening Hive…' : 'Continue on Hive'}
+					{hiveConnecting
+						? $_('components.setup.steps.hiveStep.linkPanel.openingButton')
+						: $_('components.setup.steps.hiveStep.linkPanel.continueButton')}
 				</Button>
 			{/snippet}
 		</Panel>
 	{/if}
 
 	{#if hiveError}
-		<Alert tone="danger" title="The Hive connection failed">{hiveError}</Alert>
+		<Alert tone="danger" title={$_('components.setup.steps.hiveStep.connectionFailedTitle')}
+			>{hiveError}</Alert
+		>
 	{:else if hiveStatus}
 		<Alert tone="success">{hiveStatus}</Alert>
 	{/if}

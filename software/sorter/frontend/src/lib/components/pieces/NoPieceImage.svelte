@@ -3,6 +3,8 @@
 	// line, with a question mark on its side, in the gray of whatever text color
 	// the caller gives it (text-ink-faint for a placeholder). The same drawing
 	// wherever a piece has no image, so it reads as "a piece we never saw".
+	import { _ } from 'svelte-i18n';
+
 	let { class: className = '' }: { class?: string } = $props();
 
 	// Studs on the top face, back row first so the front row draws over it.
@@ -34,7 +36,7 @@
 	viewBox="0 0 56 42"
 	class={className}
 	role="img"
-	aria-label="No picture of this piece"
+	aria-label={$_('components.pieces.noPieceImage.ariaLabel')}
 	fill="none"
 	stroke="currentColor"
 	stroke-width="1.4"

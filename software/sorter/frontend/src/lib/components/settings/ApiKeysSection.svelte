@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
 	import Field from '$lib/components/ui/Field.svelte';
@@ -43,7 +44,7 @@
 			const data = await res.json();
 			savedKeys = data.keys ?? {};
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to load API keys.';
+			errorMsg = e.message ?? $_('components.settings.apiKeysSection.loadError');
 		} finally {
 			loading = false;
 		}
@@ -63,11 +64,11 @@
 			});
 			if (!res.ok) throw new Error(await res.text());
 			const data = await res.json();
-			statusMsg = data.message ?? 'Saved.';
+			statusMsg = data.message ?? $_('components.settings.apiKeysSection.saved');
 			inputKeys[providerId] = '';
 			await loadKeys();
 		} catch (e: any) {
-			errorMsg = e.message ?? 'Failed to save API key.';
+			errorMsg = e.message ?? $_('components.settings.apiKeysSection.saveError');
 		} finally {
 			saving = { ...saving, [providerId]: false };
 		}
@@ -80,17 +81,19 @@
 
 <div class="flex flex-col gap-4">
 	<div class="flex items-center gap-2">
-		<span class="text-sm font-medium text-ink">{PROVIDER.label} key</span>
+		<span class="text-sm font-medium text-ink">
+			{$_('components.settings.apiKeysSection.providerKeyLabel', { values: { provider: PROVIDER.label } })}
+		</span>
 		{#if savedKeys[PROVIDER.id]}
 			<Badge tone="success" dot><span class="font-mono">{savedKeys[PROVIDER.id]}</span></Badge>
 		{:else}
-			<Badge tone="warning" dot>Not set</Badge>
+			<Badge tone="warning" dot>{$_('components.settings.apiKeysSection.notSet')}</Badge>
 		{/if}
 	</div>
 	<Field
-		label="New key"
+		label={$_('components.settings.apiKeysSection.newKey.label')}
 		for="openrouter-key"
-		help="Used for cloud-assisted detection, as {PROVIDER.envVar}."
+		help={$_('components.settings.apiKeysSection.newKey.help', { values: { envVar: PROVIDER.envVar } })}
 	>
 		<div class="flex gap-2">
 			<Input
@@ -105,7 +108,7 @@
 				disabled={!inputKeys[PROVIDER.id]?.trim()}
 				onclick={() => void saveKey(PROVIDER.id)}
 			>
-				Save
+				{$_('components.settings.apiKeysSection.save')}
 			</Button>
 		</div>
 	</Field>

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import Alert from '$lib/components/ui/Alert.svelte';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import { _ } from 'svelte-i18n';
+	import Alert from '$lib/components/ui/Alert.svelte';
 	import type { PieceProblem } from '$lib/pieces';
 
 	// What went wrong with a piece on its way through the machine, as one warning
@@ -20,24 +21,23 @@
 		class?: string;
 	} = $props();
 
-	const LABELS: Record<string, string> = {
-		timed_out: 'Timed out',
-		track_lost: 'Lost by the camera',
-		late_double_feed: 'Second piece came in late',
-		double_feed: 'Double feed',
-		stray: 'Never photographed',
-		bucket_hold: 'Held for misc',
-		eject_timeout: "Didn't fall",
-		pushed_off: 'Pushed off the exit',
-		circling: 'Came back around',
-		swept: 'Swept off',
-		classify_failed: 'Identification failed',
-		color_fallback: "Color model didn't answer"
-	};
-
 	// A kind this page has no name for yet reads as its code in words.
 	function label(kind: string): string {
-		const known = LABELS[kind];
+		const labels: Record<string, string> = {
+			timed_out: $_('components.pieces.pieceProblems.labels.timedOut'),
+			track_lost: $_('components.pieces.pieceProblems.labels.trackLost'),
+			late_double_feed: $_('components.pieces.pieceProblems.labels.lateDoubleFeed'),
+			double_feed: $_('components.pieces.pieceProblems.labels.doubleFeed'),
+			stray: $_('components.pieces.pieceProblems.labels.stray'),
+			bucket_hold: $_('components.pieces.pieceProblems.labels.bucketHold'),
+			eject_timeout: $_('components.pieces.pieceProblems.labels.ejectTimeout'),
+			pushed_off: $_('components.pieces.pieceProblems.labels.pushedOff'),
+			circling: $_('components.pieces.pieceProblems.labels.circling'),
+			swept: $_('components.pieces.pieceProblems.labels.swept'),
+			classify_failed: $_('components.pieces.pieceProblems.labels.classifyFailed'),
+			color_fallback: $_('components.pieces.pieceProblems.labels.colorFallback')
+		};
+		const known = labels[kind];
 		if (known) return known;
 		const words = kind.replace(/_/g, ' ').trim();
 		return words.charAt(0).toUpperCase() + words.slice(1);

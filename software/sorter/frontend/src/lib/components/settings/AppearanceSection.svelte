@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { settings } from '$lib/stores/settings';
 	import { getCurrentThemeColorId, setThemeColor } from '$lib/stores/themeColor.svelte';
+	import { locale, setLocale } from '$lib/i18n';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import SettingRow from '$lib/components/ui/SettingRow.svelte';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
@@ -11,24 +13,42 @@
 	let colorId = $state(getCurrentThemeColorId());
 </script>
 
-<Panel title="Appearance" flush>
+<Panel title={$_('components.settings.appearanceSection.panelTitle')} flush>
 	<div class="divide-y divide-line">
-		<SettingRow label="Theme" help="Applies at once, on this browser.">
+		<SettingRow
+			label={$_('components.settings.appearanceSection.theme.label')}
+			help={$_('components.settings.appearanceSection.theme.help')}
+		>
 			<SegmentedControl
-				label="Theme"
+				label={$_('components.settings.appearanceSection.theme.label')}
 				value={$settings.theme}
 				onchange={(mode) => settings.setTheme(mode)}
 				options={[
-					{ value: 'light', label: 'Light', icon: Sun },
-					{ value: 'dark', label: 'Dark', icon: Moon }
+					{ value: 'light', label: $_('components.settings.appearanceSection.theme.light'), icon: Sun },
+					{ value: 'dark', label: $_('components.settings.appearanceSection.theme.dark'), icon: Moon }
+				]}
+			/>
+		</SettingRow>
+		<SettingRow
+			label={$_('components.settings.appearanceSection.language.label')}
+			help={$_('components.settings.appearanceSection.language.help')}
+		>
+			<SegmentedControl
+				label={$_('components.settings.appearanceSection.language.label')}
+				value={$locale ?? 'en'}
+				onchange={(loc) => setLocale(loc as 'en' | 'de')}
+				options={[
+					{ value: 'en', label: 'English' },
+					{ value: 'de', label: 'Deutsch' }
 				]}
 			/>
 		</SettingRow>
 		<div class="px-(--pad-panel) py-(--pad-row)">
-			<div class="text-sm font-medium text-ink">Theme color</div>
+			<div class="text-sm font-medium text-ink">
+				{$_('components.settings.appearanceSection.themeColor.title')}
+			</div>
 			<p class="mt-0.5 text-sm text-ink-muted">
-				The LEGO color of buttons, focus rings and the current page, on every browser pointed at
-				this machine. Applies at once.
+				{$_('components.settings.appearanceSection.themeColor.description')}
 			</p>
 			<div class="mt-3 rounded-control bg-well p-4">
 				<ColorPicker bind:value={colorId} onchange={(id) => void setThemeColor(id)} />

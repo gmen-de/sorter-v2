@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import SendToBack from '@lucide/svelte/icons/send-to-back';
 	import Shapes from '@lucide/svelte/icons/shapes';
 
@@ -41,12 +42,21 @@
 			{@render toggle(
 				SendToBack,
 				annotated,
-				annotated ? 'Hide annotations' : 'Show annotations',
+				annotated
+					? $_('components.streamControlsOverlay.hideAnnotations')
+					: $_('components.streamControlsOverlay.showAnnotations'),
 				() => (annotated = !annotated)
 			)}
 		{/if}
 		{#if showZones}
-			{@render toggle(Shapes, zones, zones ? 'Hide zones' : 'Show zones', () => (zones = !zones))}
+			{@render toggle(
+				Shapes,
+				zones,
+				zones
+					? $_('components.streamControlsOverlay.hideZones')
+					: $_('components.streamControlsOverlay.showZones'),
+				() => (zones = !zones)
+			)}
 		{/if}
 	</div>
 {/if}

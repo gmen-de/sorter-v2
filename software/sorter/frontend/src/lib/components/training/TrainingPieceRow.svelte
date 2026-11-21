@@ -6,6 +6,7 @@
 	faded and says so.
 -->
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import ColorChip from '$lib/components/ui/ColorChip.svelte';
 	import PartImage from '$lib/components/ui/PartImage.svelte';
@@ -34,7 +35,13 @@
 
 	function color(id: string, name: string | null) {
 		const known = findLegoColor(id, name);
-		return { name: known?.name ?? name ?? `Color ${id}`, rgb: known?.hex ?? null };
+		return {
+			name:
+				known?.name ??
+				name ??
+				$_('components.training.trainingPieceRow.colorFallback', { values: { id } }),
+			rgb: known?.hex ?? null
+		};
 	}
 
 	const label = $derived(
@@ -52,7 +59,9 @@
 <button
 	type="button"
 	aria-pressed={piece.training_excluded}
-	title={piece.training_excluded ? 'Excluded. Click to bring it back.' : 'Click to exclude it.'}
+	title={piece.training_excluded
+		? $_('components.training.trainingPieceRow.excludedTitle')
+		: $_('components.training.trainingPieceRow.includeTitle')}
 	onclick={() => ontoggle(piece)}
 	class="flex w-full min-w-0 items-center gap-3 {pad} py-1.5 text-left transition-colors hover:bg-hover active:bg-pressed"
 >
@@ -60,7 +69,7 @@
 	<span class="flex min-w-0 flex-1 flex-col {fade}">
 		<span class="flex min-w-0 items-baseline gap-2">
 			<span class="truncate text-sm font-medium text-ink">
-				{piece.part_name ?? piece.part_id ?? 'Unknown part'}
+				{piece.part_name ?? piece.part_id ?? $_('components.training.trainingPieceRow.unknownPart')}
 			</span>
 			{#if piece.part_name && piece.part_id}
 				<span class="num shrink-0 text-sm text-ink-muted">{piece.part_id}</span>
@@ -70,14 +79,17 @@
 			{#if label}
 				<ColorChip name={label.name} rgb={label.rgb} />
 			{:else}
-				<span>No label</span>
+				<span>{$_('components.training.trainingPieceRow.noLabel')}</span>
 			{/if}
 			{#if machine}
 				<span
 					class="flex min-w-0 items-center gap-1.5 text-warning-ink"
-					title="The machine saw it as {machine.name}"
+					title={$_('components.training.trainingPieceRow.machineSawTitle', {
+						values: { name: machine.name }
+					})}
 				>
-					Machine <ColorChip name={machine.name} rgb={machine.rgb} />
+					{$_('components.training.trainingPieceRow.machineLabel')}
+					<ColorChip name={machine.name} rgb={machine.rgb} />
 				</span>
 			{/if}
 		</span>
@@ -86,6 +98,8 @@
 		<span class="num text-xs text-ink-muted" title={formatWhen(piece.seen_at)}>
 			{formatTime(piece.seen_at)}
 		</span>
-		{#if piece.training_excluded}<Badge>Excluded</Badge>{/if}
+		{#if piece.training_excluded}<Badge
+				>{$_('components.training.trainingPieceRow.excludedBadge')}</Badge
+			>{/if}
 	</span>
 </button>

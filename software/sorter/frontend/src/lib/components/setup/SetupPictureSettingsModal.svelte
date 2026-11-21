@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import CameraPicture from '$lib/components/CameraPicture.svelte';
 	import PictureSettingsSidebar from '$lib/components/settings/PictureSettingsSidebar.svelte';
 	import { pictureSettingsEqual, type PictureSettings } from '$lib/settings/picture-settings';
@@ -111,7 +112,7 @@
 			/>
 		{:else}
 			<p class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-ink-muted">
-				Choose a camera first to preview its picture.
+				{$_('components.setup.setupPictureSettingsModal.noCameraMessage')}
 			</p>
 		{/if}
 	</div>
@@ -121,7 +122,7 @@
 		{source}
 		{hasCamera}
 		showHeader={false}
-		primaryActionLabel="Confirm"
+		primaryActionLabel={$_('components.setup.setupPictureSettingsModal.confirm')}
 		allowPrimaryActionWithoutChanges={true}
 		onSaved={handleSidebarSaved}
 		onPreviewChange={(roleName, savedSettings, draftSettings) => {

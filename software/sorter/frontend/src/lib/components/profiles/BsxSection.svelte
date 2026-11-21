@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -34,7 +35,7 @@
 			files = lib.files;
 			activeFilename = lib.active_filename;
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to load inventories';
+			error = e instanceof Error ? e.message : $_('components.profiles.bsxSection.loadFailed');
 		} finally {
 			loading = false;
 		}
@@ -53,10 +54,12 @@
 		try {
 			const name = file.name.replace(/\.bsx$/i, '');
 			const entry = await uploadBsx(baseUrl, file, name);
-			success = `Uploaded ${entry.name} (${entry.num_parts ?? 0} parts).`;
+			success = $_('components.profiles.bsxSection.uploadSuccess', {
+				values: { name: entry.name, count: entry.num_parts ?? 0 }
+			});
 			await load();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to upload inventory';
+			error = e instanceof Error ? e.message : $_('components.profiles.bsxSection.uploadFailed');
 		} finally {
 			uploading = false;
 		}
@@ -70,9 +73,11 @@
 			const lib = file.is_active ? await deactivateBsx(baseUrl) : await activateBsx(baseUrl, file.filename);
 			files = lib.files;
 			activeFilename = lib.active_filename;
-			success = file.is_active ? `Deactivated ${file.name}.` : `${file.name} is now the active inventory.`;
+			success = file.is_active
+				? $_('components.profiles.bsxSection.deactivated', { values: { name: file.name } })
+				: $_('components.profiles.bsxSection.nowActive', { values: { name: file.name } });
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to change active inventory';
+			error = e instanceof Error ? e.message : $_('components.profiles.bsxSection.setActiveFailed');
 		} finally {
 			busyFilename = null;
 		}
@@ -86,9 +91,9 @@
 			const lib = await deleteBsx(baseUrl, file.filename);
 			files = lib.files;
 			activeFilename = lib.active_filename;
-			success = `Deleted ${file.name}.`;
+			success = $_('components.profiles.bsxSection.deleted', { values: { name: file.name } });
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to delete inventory';
+			error = e instanceof Error ? e.message : $_('components.profiles.bsxSection.deleteFailed');
 		} finally {
 			busyFilename = null;
 		}
@@ -102,12 +107,14 @@
 </script>
 
 <Panel
-	title="BrickLink inventories (.bsx)"
-	description="A store's on-hand inventory. One can be active; a profile with inventory routing sends pieces not in the active inventory to the not-in-inventory bin."
+	title={$_('components.profiles.bsxSection.panelTitle')}
+	description={$_('components.profiles.bsxSection.panelDescription')}
 	flush
 >
 	{#snippet footer()}
-		<Button icon={Upload} loading={uploading} onclick={() => fileInput?.click()}>Upload .bsx</Button>
+		<Button icon={Upload} loading={uploading} onclick={() => fileInput?.click()}
+			>{$_('components.profiles.bsxSection.uploadButton')}</Button
+		>
 	{/snippet}
 	<input bind:this={fileInput} type="file" accept=".bsx" class="hidden" onchange={handleUpload} />
 
@@ -121,10 +128,12 @@
 	{#if loading}
 		<p class="flex items-center gap-2 px-(--pad-panel) pb-4 text-sm text-ink-muted">
 			<Spinner size={16} />
-			Loading the inventories
+			{$_('components.profiles.bsxSection.loadingInventories')}
 		</p>
 	{:else if files.length === 0}
-		<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">No inventories uploaded yet.</p>
+		<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">
+			{$_('components.profiles.bsxSection.noInventories')}
+		</p>
 	{:else}
 		<ul class="divide-y divide-line">
 			{#each files as file (file.filename)}
@@ -132,13 +141,21 @@
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-center gap-2">
 							<span class="truncate text-sm font-medium text-ink">{file.name}</span>
-							{#if file.is_active}<Badge tone="success" dot>Active</Badge>{/if}
-							{#if file.error}<Badge tone="danger">Error</Badge>{/if}
+							{#if file.is_active}<Badge tone="success" dot
+									>{$_('components.profiles.bsxSection.activeBadge')}</Badge
+								>{/if}
+							{#if file.error}<Badge tone="danger"
+									>{$_('components.profiles.bsxSection.errorBadge')}</Badge
+								>{/if}
 						</div>
 						<div class="mt-0.5 text-sm text-ink-muted">
-							{file.num_parts ?? 0} parts · {file.num_unique_items ?? 0} items · uploaded {fmtDate(
-								file.uploaded_at
-							)}
+							{$_('components.profiles.bsxSection.partsSummary', {
+								values: {
+									parts: file.num_parts ?? 0,
+									items: file.num_unique_items ?? 0,
+									date: fmtDate(file.uploaded_at)
+								}
+							})}
 						</div>
 					</div>
 					<div class="flex shrink-0 items-center gap-1">
@@ -149,13 +166,15 @@
 							disabled={!!file.error}
 							onclick={() => setActive(file)}
 						>
-							{file.is_active ? 'Deactivate' : 'Set active'}
+							{file.is_active
+								? $_('components.profiles.bsxSection.deactivateButton')
+								: $_('components.profiles.bsxSection.setActiveButton')}
 						</Button>
 						<Button
 							variant="ghost"
 							size="sm"
 							icon={Trash2}
-							label="Delete {file.name}"
+							label={$_('components.profiles.bsxSection.deleteLabel', { values: { name: file.name } })}
 							disabled={busyFilename === file.filename}
 							onclick={() => remove(file)}
 						/>

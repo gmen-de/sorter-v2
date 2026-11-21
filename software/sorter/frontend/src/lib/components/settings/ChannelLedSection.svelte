@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -14,9 +15,9 @@
 	const brightnessId = $derived(`led-brightness-${channelKey}`);
 
 	const CHANNEL_LABELS: Record<string, string> = {
-		c_channel_2: 'C-channel 2',
-		c_channel_3: 'C-channel 3',
-		classification_channel: 'Classification C-channel'
+		c_channel_2: $_('components.settings.channelLedSection.channelLabel.cChannel2'),
+		c_channel_3: $_('components.settings.channelLedSection.channelLabel.cChannel3'),
+		classification_channel: $_('components.settings.channelLedSection.channelLabel.classificationCChannel')
 	};
 	// Applied while dragging the brightness slider so we don't POST per pixel.
 	const BRIGHTNESS_DEBOUNCE_MS = 200;
@@ -63,7 +64,7 @@
 			brightness = payload?.brightness ?? {};
 			errorMsg = null;
 		} catch (e: any) {
-			errorMsg = e?.message ?? 'Failed to reach the LED settings.';
+			errorMsg = e?.message ?? $_('components.settings.channelLedSection.loadError');
 		} finally {
 			loading = false;
 		}
@@ -97,31 +98,33 @@
 	{#if errorMsg}
 		<Alert tone="danger">{errorMsg}</Alert>
 	{:else if !loading && outputs.length === 0}
-		<Alert tone="info">No LED outputs are free to assign right now.</Alert>
+		<Alert tone="info">{$_('components.settings.channelLedSection.noOutputsFree')}</Alert>
 	{/if}
 	<Field
-		label="Output"
+		label={$_('components.settings.channelLedSection.output.label')}
 		for={outputId}
-		help="The board GPIO that drives this channel's light. Channels can share one GPIO; it is one physical pin."
+		help={$_('components.settings.channelLedSection.output.help')}
 	>
 		<Select
 			id={outputId}
 			value={assigned ?? ''}
 			disabled={loading || outputs.length === 0}
 			options={[
-				{ value: '', label: 'Not assigned' },
+				{ value: '', label: $_('components.settings.channelLedSection.output.notAssigned') },
 				...outputs.map((output) => ({
 					value: output.output_id,
-					label: `${output.board_role} board, GPIO ${output.gpio}`
+					label: $_('components.settings.channelLedSection.output.optionLabel', {
+						values: { role: output.board_role, gpio: output.gpio }
+					})
 				}))
 			]}
 			onchange={(id) => saveOutput(id || null)}
 		/>
 	</Field>
 	<Field
-		label="Brightness"
+		label={$_('components.settings.channelLedSection.brightness.label')}
 		for={brightnessId}
-		help="The PWM duty on the assigned GPIO. 0% is off; there is no separate switch."
+		help={$_('components.settings.channelLedSection.brightness.help')}
 	>
 		<div class="flex items-center gap-3">
 			<input
@@ -140,8 +143,9 @@
 	</Field>
 	{#if sharedWith.length > 0}
 		<p class="text-sm text-ink-muted">
-			Shares its GPIO with <span class="text-ink">{sharedWith.join(', ')}</span>: one pin, one
-			brightness.
+			{$_('components.settings.channelLedSection.sharedWith', {
+				values: { names: sharedWith.join(', ') }
+			})}
 		</p>
 	{/if}
 </div>

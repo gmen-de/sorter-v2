@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import LocalDataPanel from '$lib/components/data/LocalDataPanel.svelte';
 	import SharingPanel from '$lib/components/data/SharingPanel.svelte';
 	import SampleCaptureSection from '$lib/components/settings/SampleCaptureSection.svelte';
@@ -6,18 +7,18 @@
 	import Panel from '$lib/components/ui/Panel.svelte';
 </script>
 
-<svelte:head><title>Sorter - Data</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.data.index.pageTitle')}</title></svelte:head>
 
 <PageHeader
-	title="Data"
-	description="What this sorter shares with each Hive, how it captures samples, and what it keeps here."
+	title={$_('routes.settings.data.index.title')}
+	description={$_('routes.settings.data.index.description')}
 />
 
 <SharingPanel />
 
 <Panel
-	title="Sample capture"
-	description="Camera frames taken while the machine sorts, to train detection. Changes nothing about sorting."
+	title={$_('routes.settings.data.index.sampleCapture.title')}
+	description={$_('routes.settings.data.index.sampleCapture.description')}
 	flush
 >
 	<SampleCaptureSection />

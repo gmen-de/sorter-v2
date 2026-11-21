@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Minus from '@lucide/svelte/icons/minus';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -32,15 +33,21 @@
 
 	function formatUsbValue(control: UsbCameraControl): string {
 		const raw = draftUsbSettings[control.key];
-		if (typeof raw === 'boolean') return raw ? 'On' : 'Off';
-		if (typeof raw !== 'number') return 'n/a';
+		if (typeof raw === 'boolean')
+			return raw
+				? $_('components.settings.picture.deviceControlsPanel.onLabel')
+				: $_('components.settings.picture.deviceControlsPanel.offLabel');
+		if (typeof raw !== 'number') return $_('components.settings.picture.deviceControlsPanel.naLabel');
 		const step = typeof control.step === 'number' ? control.step : 1;
 		return step >= 1 ? String(Math.round(raw)) : raw.toFixed(2);
 	}
 </script>
 
 {#if deviceProvider === 'usb-opencv' && deviceSupported && usbControls.length > 0}
-	<Disclosure title="Manual settings" bind:open={manualSettingsOpen}>
+	<Disclosure
+		title={$_('components.settings.picture.deviceControlsPanel.manualSettingsTitle')}
+		bind:open={manualSettingsOpen}
+	>
 		<div class="flex flex-col gap-4 py-2 pr-(--pad-panel) pl-[calc(var(--pad-panel)+1.5rem)]">
 			{#each usbControls as control (control.key)}
 				{#if control.kind === 'boolean'}
@@ -68,7 +75,9 @@
 								variant="ghost"
 								size="sm"
 								icon={Minus}
-								label="Less {control.label}"
+								label={$_('components.settings.picture.deviceControlsPanel.lessLabel', {
+									values: { label: control.label }
+								})}
 								onclick={() => onUpdateUsbNumeric(control, Math.max(usbMin, usbVal - usbStep))}
 							/>
 							<input
@@ -85,7 +94,9 @@
 								variant="ghost"
 								size="sm"
 								icon={Plus}
-								label="More {control.label}"
+								label={$_('components.settings.picture.deviceControlsPanel.moreLabel', {
+									values: { label: control.label }
+								})}
 								onclick={() => onUpdateUsbNumeric(control, Math.min(usbMax, usbVal + usbStep))}
 							/>
 						</div>
@@ -97,6 +108,7 @@
 	</Disclosure>
 {:else}
 	<p class="px-(--pad-panel) py-(--pad-row) text-sm text-ink-muted">
-		{deviceMessage || 'This source offers no camera controls to adjust.'}
+		{deviceMessage ||
+			$_('components.settings.picture.deviceControlsPanel.noControlsMessage')}
 	</p>
 {/if}

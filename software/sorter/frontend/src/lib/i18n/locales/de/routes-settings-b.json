@@ -1,0 +1,116 @@
+{
+	"routes": {
+		"settings": {
+			"jitterTest": {
+				"pageTitle": "Sorter - Jitter-Test",
+				"title": "Jitter-Test",
+				"description": "Ein kurzes, scharfes Hin-und-Her an einem Schrittmotor, das die Haftreibung bricht: genug, um ein festsitzendes Teil aus einem C-Kanal zu lösen, ohne es heftig zu schütteln. Läuft auf dem Echtzeitkern der Firmware und endet dort, wo es begonnen hat.",
+				"motor": {
+					"panelTitle": "Motor",
+					"label": "Motor"
+				},
+				"presets": {
+					"panelTitle": "Presets",
+					"description": "Ein Preset füllt die Einstellungen unten aus; dann auf Jitter drücken. Amplituden gelten am Motor: der Rotor bewegt sich etwa {gearRatio}-mal weniger.",
+					"items": {
+						"heavyStuck": {
+							"name": "Stark festsitzend",
+							"blurb": "Referenz: überall mittig – die Einstellung, die funktioniert hat"
+						},
+						"quickStuck": {
+							"name": "Schnell festsitzend",
+							"blurb": "Gleiche Kraft & gleicher Weg, kürzer"
+						},
+						"briefStuck": {
+							"name": "Kurz festsitzend",
+							"blurb": "Gleiche Kraft & gleicher Weg, sehr kurzer Stoß"
+						},
+						"sharpShort": {
+							"name": "Scharf & kurz",
+							"blurb": "Stärkerer Ruck, kürzer"
+						},
+						"hardSnap": {
+							"name": "Harter Schlag",
+							"blurb": "Maximaler Ruck, winziger Stoß"
+						},
+						"softLong": {
+							"name": "Sanft & lang",
+							"blurb": "Sanfter, aber länger"
+						},
+						"gentleMarathon": {
+							"name": "Sanfter Marathon",
+							"blurb": "Sehr sanft, sehr lang"
+						},
+						"bigTravel": {
+							"name": "Großer Weg",
+							"blurb": "Mehr Weg, mittlere Länge"
+						},
+						"bigBrief": {
+							"name": "Groß & kurz",
+							"blurb": "Großer Weg, kurz"
+						},
+						"bigHard": {
+							"name": "Groß & hart",
+							"blurb": "Großer Weg, starker Ruck"
+						},
+						"maxShake": {
+							"name": "Maximales Schütteln",
+							"blurb": "Größter Weg, stark"
+						},
+						"wideSoft": {
+							"name": "Weit & sanft",
+							"blurb": "Großer Weg, aber sanft, lang"
+						},
+						"fastBuzz": {
+							"name": "Schnelles Summen",
+							"blurb": "Mittlerer Weg, schnell & lang"
+						},
+						"strongLong": {
+							"name": "Stark & lang",
+							"blurb": "Stark und anhaltend"
+						}
+					}
+				},
+				"settingsPanelTitle": "Einstellungen",
+				"fields": {
+					"amplitude": {
+						"label": "Amplitude",
+						"help": "Etwa {outputAmplitudeDeg}° am Rotor (Übersetzung {gearRatio}:1).",
+						"unit": "° pro Hub"
+					},
+					"cycles": {
+						"label": "Zyklen",
+						"help": "Hin- und Herbewegungen."
+					},
+					"speed": {
+						"label": "Geschwindigkeit"
+					},
+					"acceleration": {
+						"label": "Beschleunigung",
+						"help": "Höher bedeutet einen schärferen Ruck pro Hub."
+					}
+				},
+				"actions": {
+					"resetDefaults": "Zurück zu den Standardwerten",
+					"stop": "Stopp",
+					"jitter": "Jitter"
+				},
+				"status": {
+					"jittering": "Rüttle {stepper}: {cycles} Zyklen von ±{amplitude}° am Motor (~{duration}s, {microsteps} µSchritte/Hub).",
+					"stopped": "{stepper} gestoppt.",
+					"requestFailed": "Anfrage fehlgeschlagen mit Status {status}"
+				}
+			},
+			"servoControl": {
+				"pageTitle": "Sorter - Servosteuerung",
+				"title": "Servosteuerung",
+				"description": "Wohin Layer-Klappen-Servobefehle gehen: die PCA9685-Kanäle eines Control-Boards, oder die ESP32-BLE-Klappenbrücke.",
+				"tabs": {
+					"ariaLabel": "Servo-Steuerung Bereiche",
+					"settings": "Einstellungen",
+					"diagnostics": "Diagnose"
+				}
+			}
+		}
+	}
+}

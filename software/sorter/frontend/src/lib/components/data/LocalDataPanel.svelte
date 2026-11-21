@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
 	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { confirmDialog } from '$lib/confirm.svelte';
 	import { getMachineContext } from '$lib/machines/context';
@@ -45,7 +46,10 @@
 			stats = next;
 			loadError = null;
 		} catch (e) {
-			if (from === base) loadError = `Couldn't load what is stored here: ${message(e)}`;
+			if (from === base)
+				loadError = $_('components.data.localDataPanel.loadErrorPrefix', {
+					values: { message: message(e) }
+				});
 		}
 	}
 
@@ -58,10 +62,9 @@
 
 	async function deleteSamples() {
 		const sure = await confirmDialog({
-			title: 'Delete every sample?',
-			message:
-				'Every training sample on this machine is deleted, including the ones no Hive has yet. This cannot be undone.',
-			action: 'Delete all',
+			title: $_('components.data.localDataPanel.confirmTitle'),
+			message: $_('components.data.localDataPanel.confirmMessage'),
+			action: $_('components.data.localDataPanel.confirmAction'),
 			danger: true
 		});
 		if (!sure) return;
@@ -72,10 +75,10 @@
 			const res = await fetch(`${base}/api/samples/storage`, { method: 'DELETE' });
 			if (!res.ok) throw new Error(await res.text());
 			const data = await res.json().catch(() => null);
-			deleted = data?.message ?? 'Deleted every sample on this machine.';
+			deleted = data?.message ?? $_('components.data.localDataPanel.deletedFallback');
 			await load(base);
 		} catch (e) {
-			deleteError = message(e) || 'Failed to delete the samples.';
+			deleteError = message(e) || $_('components.data.localDataPanel.deleteFailed');
 		} finally {
 			deleting = false;
 		}
@@ -84,13 +87,13 @@
 
 {#snippet deleteButton()}
 	<Button variant="danger" size="sm" icon={Trash2} loading={deleting} onclick={deleteSamples}>
-		Delete all samples on this machine
+		{$_('components.data.localDataPanel.deleteButtonLabel')}
 	</Button>
 {/snippet}
 
 <Panel
-	title="On this machine"
-	description="Kept here until every Hive that should have it does."
+	title={$_('components.data.localDataPanel.panelTitle')}
+	description={$_('components.data.localDataPanel.panelDescription')}
 	footer={samples > 0 ? deleteButton : undefined}
 	flush
 >
@@ -100,20 +103,24 @@
 		</div>
 	{:else if !stats}
 		<p class="flex items-center gap-2 px-(--pad-panel) pb-4 text-sm text-ink-muted">
-			<Spinner size={14} /> Loading
+			<Spinner size={14} /> {$_('components.data.localDataPanel.loadingLabel')}
 		</p>
 	{:else}
 		{#if stats.local.length === 0}
-			<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">Nothing is stored on this machine.</p>
+			<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">
+				{$_('components.data.localDataPanel.nothingStored')}
+			</p>
 		{:else}
 			<div class="overflow-x-auto">
 				<table class="data-table">
 					<thead>
 						<tr>
-							<th>Kind</th>
-							<th class="num">Stored</th>
-							<th class="num">Size</th>
-							<th class="num">Waiting for a Hive</th>
+							<th>{$_('components.data.localDataPanel.tableHeaders.kind')}</th>
+							<th class="num">{$_('components.data.localDataPanel.tableHeaders.stored')}</th>
+							<th class="num">{$_('components.data.localDataPanel.tableHeaders.size')}</th>
+							<th class="num"
+								>{$_('components.data.localDataPanel.tableHeaders.waitingForHive')}</th
+							>
 						</tr>
 					</thead>
 					<tbody>
@@ -123,7 +130,9 @@
 								<td class="num">{formatCount(kind.count)}</td>
 								<td class="num whitespace-nowrap">
 									{formatBytes(kind.bytes)}{#if kind.cap_bytes}{' '}<span class="text-ink-muted"
-											>of {formatBytes(kind.cap_bytes)}</span
+											>{$_('components.data.localDataPanel.capLabel', {
+												values: { cap: formatBytes(kind.cap_bytes) }
+											})}</span
 										>{/if}
 								</td>
 								<td class="num">{formatCount(kind.waiting)}</td>
@@ -143,9 +152,12 @@
 				<span class="num font-medium {diskLow ? '' : 'text-ink'}">
 					{formatBytes(stats.disk.free_bytes)}
 				</span>
-				free on the disk{#if diskLow}, so no samples are saved until there is
-					{formatBytes(stats.disk.min_free_bytes)} free{:else}. Saving samples stops below
-					{formatBytes(stats.disk.min_free_bytes)} free{/if}.
+				{$_(
+					diskLow
+						? 'components.data.localDataPanel.diskStatus.low'
+						: 'components.data.localDataPanel.diskStatus.ok',
+					{ values: { min: formatBytes(stats.disk.min_free_bytes) } }
+				)}
 			</p>
 		{/if}
 	{/if}

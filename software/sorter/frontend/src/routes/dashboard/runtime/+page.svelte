@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { getMachineContext } from '$lib/machines/context';
 	import { getBackendHttpBase } from '$lib/backend';
 	import AppShell from '$lib/components/AppShell.svelte';
@@ -167,7 +168,8 @@
 			records = Array.isArray(body.records) ? body.records : [];
 		} catch (error) {
 			records = [];
-			records_error = error instanceof Error ? error.message : 'failed loading records';
+			records_error =
+				error instanceof Error ? error.message : $_('routes.dashboard.runtime.loadRecordsFailedFallback');
 		}
 	}
 
@@ -200,7 +202,8 @@
 			const body = (await response.json()) as { payload?: Record<string, unknown> };
 			loaded_runtime_stats = (body.payload ?? {}) as Record<string, unknown>;
 		} catch (error) {
-			records_error = error instanceof Error ? error.message : 'failed loading record';
+			records_error =
+				error instanceof Error ? error.message : $_('routes.dashboard.runtime.loadRecordFailedFallback');
 			loaded_runtime_stats = null;
 			selected_record_id = 'live';
 		}
@@ -276,50 +279,56 @@
 
 	function fmtRecordLabel(record: RuntimeStatsRecordItem): string {
 		const date = new Date(record.started_at * 1000).toLocaleString();
-		return `${date} • ${record.total_pieces} pcs • ${record.run_id.slice(0, 8)}`;
+		return `${date} • ${record.total_pieces} ${$_('routes.dashboard.runtime.pcsUnit')} • ${record.run_id.slice(0, 8)}`;
 	}
 </script>
 
-<svelte:head><title>Sorter - Runtime</title></svelte:head>
+<svelte:head><title>{$_('routes.dashboard.runtime.pageTitle')}</title></svelte:head>
 
 <AppShell>
 	<div class="mx-auto flex w-full max-w-[1500px] flex-col gap-(--gap-panels) px-4 py-6 sm:px-6">
-		<PageHeader title="Runtime" description="How long each part of the machine spent in each state.">
+		<PageHeader
+			title={$_('routes.dashboard.runtime.title')}
+			description={$_('routes.dashboard.runtime.description')}
+		>
 			{#snippet actions()}
 				<Select
-					label="Subsystem"
+					label={$_('routes.dashboard.runtime.subsystemLabel')}
 					class="w-full sm:w-44"
 					bind:value={selected_group}
 					options={[
-						{ value: 'all', label: 'All subsystems' },
-						{ value: 'feeder', label: 'Feeder' },
-						{ value: 'classification', label: 'Classification' },
-						{ value: 'distribution', label: 'Distribution' }
+						{ value: 'all', label: $_('routes.dashboard.runtime.subsystemAll') },
+						{ value: 'feeder', label: $_('routes.dashboard.runtime.subsystemFeeder') },
+						{ value: 'classification', label: $_('routes.dashboard.runtime.subsystemClassification') },
+						{ value: 'distribution', label: $_('routes.dashboard.runtime.subsystemDistribution') }
 					]}
 				/>
 				<Select
-					label="Run"
+					label={$_('routes.dashboard.runtime.runLabel')}
 					class="w-full sm:w-72"
 					value={selected_record_id}
 					onchange={selectRecord}
 					options={[
-						{ value: 'live', label: 'Live runtime' },
+						{ value: 'live', label: $_('routes.dashboard.runtime.liveRuntimeOption') },
 						...records.map((record) => ({ value: record.record_id, label: fmtRecordLabel(record) }))
 					]}
 				/>
-				<Button onclick={loadRecords}>Refresh</Button>
+				<Button onclick={loadRecords}>{$_('routes.dashboard.runtime.refreshButton')}</Button>
 			{/snippet}
 		</PageHeader>
 
-		{#if records_error}<Alert tone="danger">Could not load the records: {records_error}</Alert>{/if}
+		{#if records_error}<Alert tone="danger">{$_('routes.dashboard.runtime.recordsErrorPrefix')} {records_error}</Alert>{/if}
 
 		{#if !machine_ctx.machine && !loaded_runtime_stats}
-			<EmptyState title="No machine is selected" />
+			<EmptyState title={$_('routes.dashboard.runtime.noMachineSelected')} />
 		{:else}
 			<div class="grid grid-cols-1 gap-(--gap-panels) lg:grid-cols-2">
-				<Panel title="Occupancy share by subsystem" description="Percent of the run spent in each state.">
+				<Panel
+					title={$_('routes.dashboard.runtime.compositionPanelTitle')}
+					description={$_('routes.dashboard.runtime.compositionPanelDescription')}
+				>
 					{#if composition.length === 0}
-						<p class="text-sm text-ink-muted">No occupancy data yet.</p>
+						<p class="text-sm text-ink-muted">{$_('routes.dashboard.runtime.noOccupancyData')}</p>
 					{:else}
 						<div class="flex flex-col gap-4 rounded-control bg-well p-4">
 							<div class="flex flex-col gap-2">
@@ -350,9 +359,12 @@
 					{/if}
 				</Panel>
 
-				<Panel title="Occupancy over the last {WINDOW_S} seconds" description="Each bar is a state; hover it for its length.">
+				<Panel
+					title={$_('routes.dashboard.runtime.ganttPanelTitle', { values: { windowS: WINDOW_S } })}
+					description={$_('routes.dashboard.runtime.ganttPanelDescription')}
+				>
 					{#if gantt.length === 0}
-						<p class="text-sm text-ink-muted">No occupancy data yet.</p>
+						<p class="text-sm text-ink-muted">{$_('routes.dashboard.runtime.noOccupancyData')}</p>
 					{:else}
 						<div class="flex flex-col gap-2 rounded-control bg-well p-4">
 							{#each gantt as row (row.machine)}
@@ -372,16 +384,19 @@
 								</div>
 							{/each}
 							<div class="num ml-[10.75rem] flex justify-between text-xs text-ink-muted">
-								<span>{WINDOW_S} s ago</span><span>{WINDOW_S / 2} s</span><span>now</span>
+								<span>{$_('routes.dashboard.runtime.windowAgoLabel', { values: { seconds: WINDOW_S } })}</span><span>{$_('routes.dashboard.runtime.halfWindowLabel', { values: { seconds: WINDOW_S / 2 } })}</span><span>{$_('routes.dashboard.runtime.nowLabel')}</span>
 							</div>
 						</div>
 					{/if}
 				</Panel>
 			</div>
 
-			<Panel title="Top occupancy blocks" description="Run total.">
+			<Panel
+				title={$_('routes.dashboard.runtime.topBlocksPanelTitle')}
+				description={$_('routes.dashboard.runtime.topBlocksPanelDescription')}
+			>
 				{#if top_occupancy_states.length === 0}
-					<p class="text-sm text-ink-muted">No occupancy data yet.</p>
+					<p class="text-sm text-ink-muted">{$_('routes.dashboard.runtime.noOccupancyData')}</p>
 				{:else}
 					<ul class="grid grid-cols-1 gap-x-8 gap-y-1 text-sm md:grid-cols-2">
 						{#each top_occupancy_states as [name, seconds]}

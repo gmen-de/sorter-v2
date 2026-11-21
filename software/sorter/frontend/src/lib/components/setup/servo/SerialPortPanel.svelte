@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
@@ -25,21 +26,25 @@
 	} = $props();
 </script>
 
-<Panel title="Serial port">
+<Panel title={$_('components.setup.servo.serialPortPanel.panelTitle')}>
 	<div class="flex flex-wrap items-center gap-2">
 		<Select
-			label="Serial port"
+			label={$_('components.setup.servo.serialPortPanel.selectLabel')}
 			class="min-w-0 flex-[2_1_16rem]"
 			bind:value={port}
 			options={[
-				{ value: '', label: 'Detect it, or keep the current one' },
+				{ value: '', label: $_('components.setup.servo.serialPortPanel.detectOption') },
 				...availablePorts.map((candidate) => ({
 					value: candidate.device,
 					label: `${candidate.device} · ${candidate.product}`
 				}))
 			]}
 		/>
-		<Button loading={loadingPorts} onclick={onLoadPorts}>Refresh the ports</Button>
-		<Button variant="primary" onclick={onScan}>Scan the bus</Button>
+		<Button loading={loadingPorts} onclick={onLoadPorts}
+			>{$_('components.setup.servo.serialPortPanel.refreshPorts')}</Button
+		>
+		<Button variant="primary" onclick={onScan}
+			>{$_('components.setup.servo.serialPortPanel.scanBus')}</Button
+		>
 	</div>
 </Panel>

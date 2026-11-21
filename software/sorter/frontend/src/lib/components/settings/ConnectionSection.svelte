@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { getBackendWsBase } from '$lib/backend';
 	import { getMachinesContext } from '$lib/machines/context';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -16,10 +17,18 @@
 	}
 </script>
 
-<Panel title="Connection" description="The machine this page is talking to." flush>
+<Panel
+	title={$_('components.settings.connectionSection.panelTitle')}
+	description={$_('components.settings.connectionSection.panelDescription')}
+	flush
+>
 	<div class="divide-y divide-line">
 		<div class="px-(--pad-panel) pb-4">
-			<Field label="Address" for="machine-address" help="The machine's backend, as ws://host:8000/ws.">
+			<Field
+				label={$_('components.settings.connectionSection.address.label')}
+				for="machine-address"
+				help={$_('components.settings.connectionSection.address.help')}
+			>
 				<div class="flex gap-2">
 					<Input
 						id="machine-address"
@@ -28,12 +37,12 @@
 						placeholder="ws://host:port/ws"
 						class="min-w-0 flex-1 font-mono"
 					/>
-					<Button icon={Plug} onclick={handleConnect}>Connect</Button>
+					<Button icon={Plug} onclick={handleConnect}>{$_('components.settings.connectionSection.connect')}</Button>
 				</div>
 			</Field>
 		</div>
 		<div class="px-(--pad-panel) py-4">
-			<div class="label">Connected machines</div>
+			<div class="label">{$_('components.settings.connectionSection.connectedMachines')}</div>
 			{#if manager.machines.size > 0}
 				<ul class="mt-1 divide-y divide-line">
 					{#each [...manager.machines.entries()] as [id, m] (id)}
@@ -58,12 +67,14 @@
 									<span class="block truncate font-mono text-sm text-ink-muted">{m.url}</span>
 								</span>
 							</button>
-							<Button size="sm" variant="ghost" onclick={() => manager.disconnect(id)}>Disconnect</Button>
+							<Button size="sm" variant="ghost" onclick={() => manager.disconnect(id)}>
+								{$_('components.settings.connectionSection.disconnect')}
+							</Button>
 						</li>
 					{/each}
 				</ul>
 			{:else}
-				<p class="mt-1 text-sm text-ink-muted">No machines connected.</p>
+				<p class="mt-1 text-sm text-ink-muted">{$_('components.settings.connectionSection.noMachines')}</p>
 			{/if}
 		</div>
 	</div>

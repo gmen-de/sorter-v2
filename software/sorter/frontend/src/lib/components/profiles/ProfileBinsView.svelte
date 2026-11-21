@@ -3,6 +3,7 @@
 	// kit in the order a piece meets them, one row for each bin the fallback
 	// makes for the parts no rule takes (there can be hundreds), and Everything
 	// else. Used for a version on Hive and for the profile the machine runs.
+	import { _ } from 'svelte-i18n';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import ProfileBin, { type Bin } from '$lib/components/ui/ProfileBin.svelte';
 	import Stat from '$lib/components/ui/Stat.svelte';
@@ -43,17 +44,23 @@
 
 <div class="flex flex-col gap-4">
 	<div class="grid gap-px overflow-hidden rounded-control bg-line sm:grid-cols-2">
-		<div class="bg-well"><Stat label="Bins" value={whole(count)} /></div>
+		<div class="bg-well">
+			<Stat label={$_('components.profiles.profileBinsView.binsLabel')} value={whole(count)} />
+		</div>
 		{#if total != null && sorted != null}
 			<div class="bg-well">
 				<Stat
-					label="Parts with a bin of their own"
+					label={$_('components.profiles.profileBinsView.partsWithBinLabel')}
 					value={whole(sorted)}
-					hint={sorted === total ? 'every known part' : `of ${whole(total)} known parts`}
+					hint={sorted === total
+						? $_('components.profiles.profileBinsView.everyKnownPartHint')
+						: $_('components.profiles.profileBinsView.ofKnownPartsHint', { values: { total: whole(total) } })}
 				/>
 			</div>
 		{:else if total != null}
-			<div class="bg-well"><Stat label="Known parts" value={whole(total)} /></div>
+			<div class="bg-well">
+				<Stat label={$_('components.profiles.profileBinsView.knownPartsLabel')} value={whole(total)} />
+			</div>
 		{/if}
 	</div>
 
@@ -62,11 +69,11 @@
 	{/each}
 
 	{#if count === 0}
-		<p class="text-ink-muted">This version has no bins.</p>
+		<p class="text-ink-muted">{$_('components.profiles.profileBinsView.noBins')}</p>
 	{:else}
 		{#if namesOnly}
 			<p class="text-ink-muted">
-				This version was saved before bins were described, so only their names are known.
+				{$_('components.profiles.profileBinsView.namesOnlyNotice')}
 			</p>
 		{/if}
 
@@ -82,7 +89,9 @@
 			<section class="flex flex-col gap-2">
 				<p class="text-ink-muted">
 					{leftoverSentence(fallback).replace(/\.$/, '')} ({whole(groups.leftover.length)}
-					{groups.leftover.length === 1 ? 'bin' : 'bins'}).
+					{groups.leftover.length === 1
+						? $_('components.profiles.profileBinsView.bin')
+						: $_('components.profiles.profileBinsView.bins')}).
 				</p>
 				<ul class="max-h-96 divide-y divide-line overflow-y-auto rounded-control bg-well">
 					{#each groups.leftover as entry (entry.id)}

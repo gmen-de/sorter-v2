@@ -4,6 +4,7 @@
 	// The green Classified badge is gated strictly on classification_status ===
 	// 'classified': failed/unknown/not_found pieces set classified_at too, and
 	// must never read as a success.
+	import { _ } from 'svelte-i18n';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { effectiveStatus } from '$lib/pieces';
 
@@ -22,29 +23,32 @@
 
 	const spec = $derived.by<Spec>(() => {
 		const s = effectiveStatus(status, requestFailed);
-		if (s === 'classified') return { label: 'Classified', tone: 'success', title: undefined };
+		if (s === 'classified')
+			return { label: $_('components.pieceStatusBadge.classified'), tone: 'success', title: undefined };
 		if (s === 'failed')
 			return {
-				label: 'ID failed',
+				label: $_('components.pieceStatusBadge.idFailed'),
 				tone: 'danger',
-				title: 'The identification request failed (a network or transport error), so it was never identified'
+				title: $_('components.pieceStatusBadge.idFailedTitle')
 			};
 		if (s === 'unknown' || s === 'not_found')
 			return {
-				label: 'Unidentified',
+				label: $_('components.pieceStatusBadge.unidentified'),
 				tone: 'warning',
-				title: 'Identification found no usable match for this piece'
+				title: $_('components.pieceStatusBadge.unidentifiedTitle')
 			};
 		if (s === 'multi_drop_fail')
 			return {
-				label: 'Multi drop',
+				label: $_('components.pieceStatusBadge.multiDrop'),
 				tone: 'danger',
-				title: 'Several pieces dropped together and were rejected'
+				title: $_('components.pieceStatusBadge.multiDropTitle')
 			};
-		if (s === 'classifying') return { label: 'Classifying', tone: 'primary', title: undefined };
-		if (s === 'pending') return { label: 'Pending', tone: 'primary', title: undefined };
+		if (s === 'classifying')
+			return { label: $_('components.pieceStatusBadge.classifying'), tone: 'primary', title: undefined };
+		if (s === 'pending')
+			return { label: $_('components.pieceStatusBadge.pending'), tone: 'primary', title: undefined };
 		return {
-			label: s ? s.replace(/_/g, ' ') : 'No status',
+			label: s ? s.replace(/_/g, ' ') : $_('components.pieceStatusBadge.noStatus'),
 			tone: 'neutral',
 			title: undefined
 		};
@@ -53,10 +57,7 @@
 
 <span class="inline-flex" title={spec.title}><Badge tone={spec.tone}>{spec.label}</Badge></span>
 {#if dead}
-	<span
-		class="inline-flex"
-		title="Timed out: went silent without ever reaching the distributed stage"
-	>
-		<Badge tone="warning">Timed out</Badge>
+	<span class="inline-flex" title={$_('components.pieceStatusBadge.timedOutTitle')}>
+		<Badge tone="warning">{$_('components.pieceStatusBadge.timedOut')}</Badge>
 	</span>
 {/if}

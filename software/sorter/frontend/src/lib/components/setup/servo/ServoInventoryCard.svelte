@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -107,7 +108,9 @@
 		</span>
 		<div class="min-w-0 flex-1 text-sm">
 			<div class="flex flex-wrap items-baseline gap-x-2">
-				<span class="font-medium text-ink">{servo.model_name ?? 'Unknown model'}</span>
+				<span class="font-medium text-ink"
+					>{servo.model_name ?? $_('components.setup.servo.servoInventoryCard.unknownModel')}</span
+				>
 				{#if servo.voltage !== null && servo.voltage !== undefined}
 					<span class="num text-ink-muted">{servo.voltage} V</span>
 				{/if}
@@ -115,13 +118,22 @@
 			<div class="mt-1"><Badge tone={setup.tone} dot>{setup.title}</Badge></div>
 			<p class="mt-1 text-ink-muted">{setup.description}</p>
 		</div>
-		<Field label="Layer" for="servo-layer-{servo.id}" class="w-44 sm:ml-auto">
+		<Field
+			label={$_('components.setup.servo.servoInventoryCard.layer.label')}
+			for="servo-layer-{servo.id}"
+			class="w-44 sm:ml-auto"
+		>
 			<Select
 				id="servo-layer-{servo.id}"
 				value={String(layer)}
 				options={[
-					{ value: '0', label: 'Unassigned' },
-					...unassignedLayers.map((l) => ({ value: String(l), label: `Layer ${l}` }))
+					{ value: '0', label: $_('components.setup.servo.servoInventoryCard.layer.unassigned') },
+					...unassignedLayers.map((l) => ({
+						value: String(l),
+						label: $_('components.setup.servo.servoInventoryCard.layer.layerOption', {
+							values: { layer: l }
+						})
+					}))
 				]}
 				onchange={(value) => onAssignLayer(Number(value))}
 			/>
@@ -130,22 +142,39 @@
 
 	<div class="flex flex-wrap gap-2">
 		<Badge tone={calibrated ? 'info' : undefined} dot>
-			{calibrated ? `Calibrated, ${servo.min_limit} to ${servo.max_limit}` : 'Not calibrated'}
+			{calibrated
+				? $_('components.setup.servo.servoInventoryCard.badges.calibrated', {
+						values: { min: servo.min_limit, max: servo.max_limit }
+					})
+				: $_('components.setup.servo.servoInventoryCard.badges.notCalibrated')}
 		</Badge>
 		<Badge tone={layer > 0 ? 'success' : undefined} dot>
-			{layer > 0 ? `Layer ${layer}` : 'No layer'}
+			{layer > 0
+				? $_('components.setup.servo.servoInventoryCard.badges.layer', { values: { layer } })
+				: $_('components.setup.servo.servoInventoryCard.badges.noLayer')}
 		</Badge>
 		<Badge dot>
-			Direction {layer > 0 ? (inverted ? 'reversed' : 'normal') : 'set after a layer'}
+			{$_('components.setup.servo.servoInventoryCard.badges.direction', {
+				values: {
+					state:
+						layer > 0
+							? inverted
+								? $_('components.setup.servo.servoInventoryCard.direction.reversed')
+								: $_('components.setup.servo.servoInventoryCard.direction.normal')
+							: $_('components.setup.servo.servoInventoryCard.direction.setAfterLayer')
+				}
+			})}
 		</Badge>
 	</div>
 
 	{#if isFactory}
-		<Alert tone="warning" title="Factory ID found">
-			Promote this servo before plugging in the next one.
+		<Alert tone="warning" title={$_('components.setup.servo.servoInventoryCard.factory.title')}>
+			{$_('components.setup.servo.servoInventoryCard.factory.message')}
 			{#snippet actions()}
 				<Button size="sm" loading={busy === 'promoting'} disabled={!!busy} onclick={onPromote}>
-					Promote to ID {suggestedNextId}
+					{$_('components.setup.servo.servoInventoryCard.factory.promoteButton', {
+						values: { nextId: suggestedNextId }
+					})}
 				</Button>
 			{/snippet}
 		</Alert>
@@ -153,9 +182,11 @@
 
 	{#if layer > 0}
 		<div class="rounded-control bg-well p-3">
-			<h4 class="label">Angles for layer {layer}</h4>
+			<h4 class="label">
+				{$_('components.setup.servo.servoInventoryCard.angles.heading', { values: { layer } })}
+			</h4>
 			<div class="mt-2 grid grid-cols-1 max-w-sm gap-3 sm:grid-cols-2">
-				<Field label="Open" for="servo-open-{servo.id}">
+				<Field label={$_('components.setup.servo.servoInventoryCard.angles.open')} for="servo-open-{servo.id}">
 					<Input
 						id="servo-open-{servo.id}"
 						type="number"
@@ -170,7 +201,10 @@
 						}}
 					/>
 				</Field>
-				<Field label="Closed" for="servo-closed-{servo.id}">
+				<Field
+					label={$_('components.setup.servo.servoInventoryCard.angles.closed')}
+					for="servo-closed-{servo.id}"
+				>
 					<Input
 						id="servo-closed-{servo.id}"
 						type="number"
@@ -187,7 +221,9 @@
 				</Field>
 			</div>
 			<p class="mt-2 text-sm text-ink-muted">
-				Blank uses the defaults ({openAngle}° and {closedAngle}°).
+				{$_('components.setup.servo.servoInventoryCard.angles.blankHint', {
+					values: { openAngle, closedAngle }
+				})}
 			</p>
 		</div>
 	{/if}
@@ -200,27 +236,33 @@
 			disabled={!!busy}
 			onclick={onCalibrate}
 		>
-			{calibrated ? 'Calibrate again' : 'Calibrate'}
+			{calibrated
+				? $_('components.setup.servo.servoInventoryCard.buttons.calibrateAgain')
+				: $_('components.setup.servo.servoInventoryCard.buttons.calibrate')}
 		</Button>
 		<Button size="sm" loading={busy === 'moving'} disabled={!!busy || !calibrated} onclick={onToggleOpenClose}>
-			{lastMove === 'open' ? 'Test close' : 'Test open'}
+			{lastMove === 'open'
+				? $_('components.setup.servo.servoInventoryCard.buttons.testClose')
+				: $_('components.setup.servo.servoInventoryCard.buttons.testOpen')}
 		</Button>
 		<Button size="sm" disabled={!calibrated || layer === 0} onclick={onToggleInvert}>
-			{inverted ? 'Direction reversed' : 'Reverse the direction'}
+			{inverted
+				? $_('components.setup.servo.servoInventoryCard.buttons.directionReversed')
+				: $_('components.setup.servo.servoInventoryCard.buttons.reverseDirection')}
 		</Button>
 	</div>
 	{#if calibrated && layer === 0}
-		<p class="text-sm text-ink-muted">Give it a layer first: the direction is kept for the layer.</p>
+		<p class="text-sm text-ink-muted">{$_('components.setup.servo.servoInventoryCard.needsLayerHint')}</p>
 	{/if}
 
 	{#if calibrated}
 		<div class="flex flex-wrap items-center gap-2 text-sm">
-			<span class="text-ink-muted">Nudge</span>
+			<span class="text-ink-muted">{$_('components.setup.servo.servoInventoryCard.nudge.label')}</span>
 			<Button
 				size="sm"
 				variant="ghost"
 				icon={ChevronLeft}
-				label="Move left"
+				label={$_('components.setup.servo.servoInventoryCard.nudge.moveLeft')}
 				disabled={!!busy}
 				onclick={(e: MouseEvent) => {
 					e.stopPropagation();
@@ -234,7 +276,7 @@
 				min={1}
 				max={180}
 				class="w-20"
-				aria-label="Nudge by"
+				aria-label={$_('components.setup.servo.servoInventoryCard.nudge.ariaLabel')}
 				bind:value={nudgeDegrees}
 				onclick={(e) => e.stopPropagation()}
 			/>
@@ -242,7 +284,7 @@
 				size="sm"
 				variant="ghost"
 				icon={ChevronRight}
-				label="Move right"
+				label={$_('components.setup.servo.servoInventoryCard.nudge.moveRight')}
 				disabled={!!busy}
 				onclick={(e: MouseEvent) => {
 					e.stopPropagation();
@@ -250,7 +292,9 @@
 				}}
 			/>
 			<span class={selected ? 'text-info-ink' : 'text-ink-muted'}>
-				{selected ? 'Selected: the left and right arrows nudge it.' : 'Click the servo to nudge it with the arrow keys.'}
+				{selected
+					? $_('components.setup.servo.servoInventoryCard.nudge.selectedHint')
+					: $_('components.setup.servo.servoInventoryCard.nudge.unselectedHint')}
 			</span>
 			{#if estimatedAngleDeg !== null}
 				<span class="num ml-2 font-medium text-ink">{estimatedAngleDeg}°</span>

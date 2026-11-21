@@ -18,6 +18,7 @@
 </script>
 
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { previewUrl } from '$lib/components/bins/pieces';
 	import type { BinContentItem } from '$lib/components/bins/types';
 	import { CARD_SIZE } from '$lib/machine3d/layout';
@@ -69,7 +70,7 @@
 				: 'text-ink-muted'}">{number}</span
 		>
 		<span class="truncate text-sm leading-5 {name ? 'font-medium' : 'text-ink-muted'}">
-			{name || 'Unassigned'}
+			{name || $_('components.machine3d.binFrontCard.unassignedLabel')}
 		</span>
 	</div>
 	<div class="relative grid grid-cols-4 gap-1.5">

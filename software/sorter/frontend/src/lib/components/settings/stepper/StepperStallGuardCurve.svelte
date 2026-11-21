@@ -7,6 +7,7 @@
 	is the tuning's step 4, not here.
 -->
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -66,7 +67,11 @@
 	);
 
 	function kind(r: Run): string {
-		return r.source === 'stall_test' ? 'Stall' : r.source === 'sweep' ? 'Free running' : r.source;
+		return r.source === 'stall_test'
+			? $_('components.settings.stepper.stepperStallGuardCurve.kind.stall')
+			: r.source === 'sweep'
+				? $_('components.settings.stepper.stepperStallGuardCurve.kind.freeRunning')
+				: r.source;
 	}
 	function speedOf(r: Run): string {
 		const speed = r.params?.speed;
@@ -86,11 +91,14 @@
 </script>
 
 <Panel
-	title="Load curve"
-	description="SG_RESULT over time. Lower means more load; a stall drops it toward 0."
+	title={$_('components.settings.stepper.stepperStallGuardCurve.panel.title')}
+	description={$_('components.settings.stepper.stepperStallGuardCurve.panel.description')}
 >
 	<div class="flex flex-col gap-4">
-		<Field label="Recording" for="sg-recording">
+		<Field
+			label={$_('components.settings.stepper.stepperStallGuardCurve.recordingLabel')}
+			for="sg-recording"
+		>
 			<Select
 				id="sg-recording"
 				value={run.id}
@@ -100,20 +108,27 @@
 			/>
 		</Field>
 		{@render facts([
-			['Motor', run.stepper_name ?? '–'],
-			['Speed', speedOf(run)],
-			['Direction', params.direction ?? '–'],
-			['Duration', `${params.duration_s ?? '–'} s`],
-			...(run.sg_mean != null ? [['Mean SG', Math.round(run.sg_mean)] as [string, number]] : []),
-			['IRUN', params.irun ?? '–'],
-			['Acceleration', `${params.acceleration ?? '–'} µsteps/s²`],
-			['Microsteps', params.microsteps ?? '–'],
+			[$_('components.settings.stepper.stepperStallGuardCurve.facts.motor'), run.stepper_name ?? '–'],
+			[$_('components.settings.stepper.stepperStallGuardCurve.facts.speed'), speedOf(run)],
+			[$_('components.settings.stepper.stepperStallGuardCurve.facts.direction'), params.direction ?? '–'],
+			[$_('components.settings.stepper.stepperStallGuardCurve.facts.duration'), `${params.duration_s ?? '–'} s`],
+			...(run.sg_mean != null
+				? [[$_('components.settings.stepper.stepperStallGuardCurve.facts.meanSg'), Math.round(run.sg_mean)] as [string, number]]
+				: []),
+			[$_('components.settings.stepper.stepperStallGuardCurve.facts.irun'), params.irun ?? '–'],
+			[$_('components.settings.stepper.stepperStallGuardCurve.facts.acceleration'), `${params.acceleration ?? '–'} µsteps/s²`],
+			[$_('components.settings.stepper.stepperStallGuardCurve.facts.microsteps'), params.microsteps ?? '–'],
 			[
-				'Chopper',
+				$_('components.settings.stepper.stepperStallGuardCurve.facts.chopper'),
 				params.stealthchop == null ? '–' : params.stealthchop ? 'StealthChop' : 'SpreadCycle'
 			],
-			['Loaded', params.loaded ? 'Yes' : 'No'],
-			['Cruise TSTEP', params.cruise_tstep ?? '–']
+			[
+				$_('components.settings.stepper.stepperStallGuardCurve.facts.loaded'),
+				params.loaded
+					? $_('components.settings.stepper.stepperStallGuardCurve.facts.yes')
+					: $_('components.settings.stepper.stepperStallGuardCurve.facts.no')
+			],
+			[$_('components.settings.stepper.stepperStallGuardCurve.facts.cruiseTstep'), params.cruise_tstep ?? '–']
 		])}
 		<div class="flex flex-wrap gap-x-5 gap-y-2">
 			<Checkbox bind:checked={showCs}>CS_ACTUAL</Checkbox>
@@ -121,7 +136,8 @@
 		</div>
 		{#if loading}
 			<p class="flex items-center gap-2 text-sm text-ink-muted">
-				<Spinner size={14} /> Loading the samples
+				<Spinner size={14} />
+				{$_('components.settings.stepper.stepperStallGuardCurve.loadingSamples')}
 			</p>
 		{:else}
 			<div class="rounded-control bg-well p-3">
@@ -137,22 +153,24 @@
 		{/if}
 		{#if suggestion}
 			<section class="flex flex-col gap-3 rounded-control bg-well p-4">
-				<h3 class="text-base font-semibold text-ink">Threshold suggestion for {label}</h3>
+				<h3 class="text-base font-semibold text-ink">
+					{$_('components.settings.stepper.stepperStallGuardCurve.suggestion.heading', {
+						values: { label }
+					})}
+				</h3>
 				{@render facts([
-					['Unloaded floor', suggestion.unloaded_floor ?? '–'],
-					['Loaded dip', suggestion.loaded_dip ?? '–'],
-					['Trigger at or below', suggestion.trigger_level ?? '–'],
+					[$_('components.settings.stepper.stepperStallGuardCurve.suggestion.unloadedFloor'), suggestion.unloaded_floor ?? '–'],
+					[$_('components.settings.stepper.stepperStallGuardCurve.suggestion.loadedDip'), suggestion.loaded_dip ?? '–'],
+					[$_('components.settings.stepper.stepperStallGuardCurve.suggestion.triggerAtOrBelow'), suggestion.trigger_level ?? '–'],
 					['SGTHRS', suggestion.suggested_sgthrs ?? '–'],
-					['Measured cruise TSTEP', suggestion.measured_cruise_tstep ?? '–'],
-					['Gate TCOOLTHRS', suggestion.cruise_tstep],
-					['Real-motion floor', suggestion.realistic_floor ?? '–']
+					[$_('components.settings.stepper.stepperStallGuardCurve.suggestion.measuredCruiseTstep'), suggestion.measured_cruise_tstep ?? '–'],
+					[$_('components.settings.stepper.stepperStallGuardCurve.suggestion.gateTcoolthrs'), suggestion.cruise_tstep],
+					[$_('components.settings.stepper.stepperStallGuardCurve.suggestion.realMotionFloor'), suggestion.realistic_floor ?? '–']
 				])}
 				<p class="text-sm text-ink-muted">
-					SGTHRS is the geometric midpoint of the gap between the measured floor and dip. TCOOLTHRS
-					is the measured cruise TSTEP (the fastest sustained) times 1.75, so the gate stays open
-					through cruise and off while speeding up or slowing down.
+					{$_('components.settings.stepper.stepperStallGuardCurve.suggestion.explanation')}
 					{#if !suggestion.enough_data}
-						There is no stall at this speed to pair it with yet, so these numbers are provisional.
+						{$_('components.settings.stepper.stepperStallGuardCurve.suggestion.provisionalNote')}
 					{/if}
 				</p>
 			</section>

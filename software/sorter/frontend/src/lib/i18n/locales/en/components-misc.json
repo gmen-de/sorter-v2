@@ -1,0 +1,289 @@
+{
+	"components": {
+		"servo": {
+			"chuteFlapDiagram": {
+				"ariaLabel": {
+					"open": "The flap open: it lies flat in the chute wall and pieces fall on down the chute.",
+					"closed": "The flap closed: it crosses the chute and turns pieces down the funnel into this layer."
+				}
+			},
+			"servoLayerCalibrator": {
+				"loadFailed": "Failed to load servo layers",
+				"actionFailed": "Failed to {action} layer {layer}",
+				"layerLabel": "Layer {n}",
+				"hint": {
+					"noChannel": "Choose the channel its servo is wired to (under Advanced), save the layers, then home the machine to move its flap.",
+					"unsaved": "Save the layers, then home the machine to move its flap.",
+					"needsHome": "Home the machine to move its flap."
+				},
+				"status": {
+					"lockedOpen": "Layer {layer} open angle locked.",
+					"lockedClosed": "Layer {layer} closed angle locked.",
+					"cleared": "Layer {layer} calibration cleared.",
+					"saveFailed": "Save failed",
+					"clearFailed": "Clear failed",
+					"saved": "Servo layer settings saved.",
+					"saveSettingsFailed": "Failed to save servo layer settings"
+				},
+				"validation": {
+					"invalidChannel": "Layer {layer} has an invalid channel.",
+					"needsChannel": "Layer {layer} needs a channel while it is active.",
+					"binLimit": "{label}'s bin limit must be a whole number above 0.",
+					"settleAdjust": "{label}'s settle adjustment must be a whole number of milliseconds."
+				},
+				"alert": {
+					"wrongBackend": "This calibrator is for the PCA9685 (PWM) servo backend, and this machine is set up for the Waveshare bus."
+				},
+				"panelTitle": {
+					"flap": "Each layer's flap",
+					"layers": "Layers"
+				},
+				"flapDiagram": {
+					"openLabel": "Open.",
+					"openDescription": "The flap lies flat in the chute wall, so pieces fall past it to the layers below.",
+					"closedLabel": "Closed.",
+					"closedDescription": "The flap crosses the chute, so pieces slide down this layer's funnel into its bins."
+				},
+				"instructions": {
+					"moveFlap": "For each layer, move its flap with the arrows (or the arrow keys) until it looks like the picture, then lock that angle: open first, then closed. A layer sorts once both are locked.",
+					"stepOpen": "Move the flap until it lies flat in the chute wall, then lock it open.",
+					"stepClosed": "Now move the flap until it crosses the chute, then lock it closed."
+				},
+				"advancedLabel": "Advanced",
+				"addLayerButton": "Add a layer",
+				"emptyState": {
+					"title": "No storage layers yet",
+					"body": "Add a layer to start."
+				},
+				"loadingLayers": "Loading the layers",
+				"badge": {
+					"off": "Off",
+					"calibrated": "Calibrated",
+					"needsCalibrating": "Needs calibrating",
+					"moveHint": "Up and down move its flap 1°, left and right 5°; Escape lets go",
+					"unsavedChanges": "Unsaved changes"
+				},
+				"activeLabel": "Active",
+				"removeLabel": "Remove {label}",
+				"bins": {
+					"label": "Bins",
+					"info": "How many bins sit around the chute on this layer. Match the bins fitted on it: {counts}."
+				},
+				"binLimit": {
+					"label": "Bin limit",
+					"info": "The most pieces one bin on this layer takes. When a bin reaches it, the machine counts that bin full and sends the category's next pieces to another bin. Leave it empty for no limit."
+				},
+				"channel": {
+					"label": "Channel",
+					"info": "The servo output on the control board that this layer's flap servo is plugged into.",
+					"none": "None"
+				},
+				"invertLabel": "Invert",
+				"flapLabel": "Flap",
+				"moveFlapGroupLabel": "Move the flap of {label}",
+				"lowerAngleLabel": "Move toward a lower angle",
+				"higherAngleLabel": "Move toward a higher angle",
+				"unknownAngle": "Unknown",
+				"openWord": "Open",
+				"closedWord": "Closed",
+				"notSet": "not set",
+				"lockOpenButton": "Lock open",
+				"lockClosedButton": "Lock closed",
+				"goToOpenButton": "Go to open",
+				"goToClosedButton": "Go to closed",
+				"startOverButton": "Start over",
+				"savingLabel": "Saving",
+				"savedLabel": "Saved",
+				"notSavedLabel": "Not saved",
+				"reloadButton": "Reload",
+				"saveLayersButton": "Save the layers",
+				"ble": {
+					"connected": "Connected",
+					"notConnected": "Not connected",
+					"rescan": "Rescan",
+					"gateLabel": "Gate",
+					"gateNone": "None",
+					"gateOption": "Gate {id}",
+					"gateState": {
+						"open": "Open",
+						"closed": "Closed",
+						"blocked": "Blocked",
+						"unknown": "Unknown",
+						"error": "Error",
+						"untested": "Untested"
+					},
+					"buttons": {
+						"open": "Open",
+						"close": "Close",
+						"calibrate": "Calibrate"
+					},
+					"errors": {
+						"statusFailed": "Failed to read bridge status.",
+						"moveGateFailed": "Failed to move gate {gate}.",
+						"calibrateGateFailed": "Failed to calibrate gate {gate}."
+					},
+					"status": {
+						"gateCalibrated": "Gate {gate} calibrated."
+					}
+				},
+				"settle": {
+					"label": "Settle adjust",
+					"info": "Computed wait after a drop: {base}ms. Adjustment applies on top; total: {total}ms."
+				}
+			},
+			"servoSpeedSettings": {
+				"panelTitle": "Servo speeds",
+				"panelDescription": "For every layer. The standard speed is used at startup and for jogging.",
+				"savingLabel": "Saving",
+				"savedLabel": "Saved",
+				"notSavedLabel": "Not saved",
+				"saveFailed": "Save failed",
+				"speedLabels": {
+					"opening": "Opening",
+					"closing": "Closing",
+					"standard": "Standard"
+				},
+				"backToDefaultLabel": "Back to the firmware default, {default} °/s"
+			}
+		},
+		"data": {
+			"hourlyChart": {
+				"defaultFlagLabel": "Some was dropped",
+				"defaultEmptyLabel": "Nothing in this time.",
+				"tableHour": "Hour",
+				"tableTotal": "Total",
+				"showChartButton": "Show as chart",
+				"showTableButton": "Show as table",
+				"unknownValue": "Unknown",
+				"timeRange": "{start} to {end}",
+				"nowWord": "now",
+				"xLabelNow": "Now",
+				"ariaLabelHint": "Use the arrow keys to read each hour."
+			},
+			"localDataPanel": {
+				"confirmTitle": "Delete every sample?",
+				"confirmMessage": "Every training sample on this machine is deleted, including the ones no Hive has yet. This cannot be undone.",
+				"confirmAction": "Delete all",
+				"deletedFallback": "Deleted every sample on this machine.",
+				"deleteFailed": "Failed to delete the samples.",
+				"loadErrorPrefix": "Couldn't load what is stored here: {message}",
+				"deleteButtonLabel": "Delete all samples on this machine",
+				"panelTitle": "On this machine",
+				"panelDescription": "Kept here until every Hive that should have it does.",
+				"loadingLabel": "Loading",
+				"nothingStored": "Nothing is stored on this machine.",
+				"tableHeaders": {
+					"kind": "Kind",
+					"stored": "Stored",
+					"size": "Size",
+					"waitingForHive": "Waiting for a Hive"
+				},
+				"capLabel": "of {cap}",
+				"diskStatus": {
+					"low": "free on the disk, so no samples are saved until there is {min} free.",
+					"ok": "free on the disk. Saving samples stops below {min} free."
+				}
+			},
+			"sharingPanel": {
+				"loadErrorPrefix": "Couldn't load what this sorter shares: {message}",
+				"resetButton": {
+					"useEveryHive": "Use every Hive's settings",
+					"resetDefaults": "Reset to defaults"
+				},
+				"tryAgainButton": "Try again",
+				"loadingLabel": "Loading",
+				"alertTitle": {
+					"needsConsent": "Nothing is shared with a Hive yet",
+					"needsReview": "What this sorter shares has changed"
+				},
+				"alertBody": {
+					"needsConsent": "Look over the list, then agree to start sharing it.",
+					"needsReview": "Machine telemetry is new. Look over the list, then press OK."
+				},
+				"agreeButton": "Agree",
+				"okButton": "OK",
+				"sharedWithLabel": "Shared with",
+				"sharedWithInfo": "Every Hive gets the same unless you set one differently. Choose a Hive to see and change what it receives.",
+				"everyHiveOption": "Every Hive",
+				"description": {
+					"noHive": "No Hive is connected yet. What you choose here applies to each one you connect.",
+					"default": "What each Hive may receive. The icon after a name says what it is for."
+				},
+				"panelTitle": "Shared with Hive",
+				"stateOn": "on",
+				"stateOff": "off",
+				"resetToEveryHive": "every Hive ({state})",
+				"resetToEveryHiveHelp": "Every Hive gets this {state}. Give {hive} the same."
+			},
+			"streamRows": {
+				"alwaysLabel": "Always"
+			}
+		},
+		"zones": {
+			"zoneOverlay": {
+				"ariaLabel": {
+					"zones": "Zones",
+					"dropZone": "The drop zone",
+					"exitZone": "The exit zone",
+					"preciseZone": "The precise zone",
+					"dropZoneFirstEdge": "The drop zone's first edge",
+					"dropZoneLastEdge": "The drop zone's last edge",
+					"exitZoneFirstEdge": "The exit zone's first edge",
+					"exitZoneLastEdge": "The exit zone's last edge",
+					"preciseZoneFirstEdge": "The precise zone's first edge",
+					"ringInnerEdge": "The ring inner edge",
+					"ringOuterEdge": "The ring outer edge",
+					"exitOuterEdge": "The exit's outer edge",
+					"innerCircleCenter": "The inner circle's center",
+					"ringCenter": "The ring's center"
+				}
+			},
+			"zonePanel": {
+				"panelTitle": "Zones",
+				"findButton": "Find",
+				"cancelButton": "Cancel",
+				"saveButton": "Save",
+				"editButton": "Edit",
+				"rows": {
+					"ring": {
+						"name": "Ring",
+						"help": "The band pieces ride, at the rim."
+					},
+					"drop": {
+						"name": "Drop",
+						"help": "Where pieces land from the channel before."
+					},
+					"precise": {
+						"name": "Precise",
+						"help": "The sliver before the exit, where pieces are let off one at a time."
+					},
+					"exit": {
+						"name": "Exit",
+						"help": "Where pieces leave, along the rim at the opening."
+					}
+				},
+				"source": {
+					"default": "Not set yet",
+					"drawn": "Set by hand",
+					"found": "Found in the picture",
+					"learned": "Learned from pieces"
+				},
+				"noneLabel": "None",
+				"nudge": {
+					"sizeOf": "Size of the {name}",
+					"makeSmaller": "Make the {name} smaller",
+					"makeBigger": "Make the {name} bigger",
+					"eachPress": "Each press changes it by"
+				},
+				"lockLabel": "Lock the {name}",
+				"emptyState": "No zones yet. Find them in the picture, then adjust and save.",
+				"footerFallback": "The zones change only when someone saves them. Lock a part to keep Find from moving it."
+			}
+		},
+		"machine3d": {
+			"binFrontCard": {
+				"unassignedLabel": "Unassigned"
+			}
+		}
+	}
+}

@@ -7,14 +7,15 @@
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import { getMachinesContext } from '$lib/machines/context';
+	import { _ } from 'svelte-i18n';
 
 	const manager = getMachinesContext();
 
-	const channels = [
-		{ id: 2, label: 'C-channel 2 (c_channel_2)' },
-		{ id: 3, label: 'C-channel 3 (c_channel_3)' },
-		{ id: 4, label: 'Carousel / classification (channel 4)' }
-	];
+	const channels = $derived([
+		{ id: 2, label: $_('routes.perceptionDebug.channelLabel2') },
+		{ id: 3, label: $_('routes.perceptionDebug.channelLabel3') },
+		{ id: 4, label: $_('routes.perceptionDebug.channelLabel4') }
+	]);
 
 	function baseUrl(): string {
 		return (
@@ -62,43 +63,37 @@
 </script>
 
 <svelte:head>
-	<title>Perception debug - Sorter</title>
+	<title>{$_('routes.perceptionDebug.pageTitle')}</title>
 </svelte:head>
 
 <AppShell>
 	<div class="mx-auto flex w-full max-w-[1600px] flex-col gap-(--gap-panels) px-4 py-6 sm:px-6">
-		<PageHeader title="Perception debug" description="Annotated frames from perception, one per channel." />
+		<PageHeader
+			title={$_('routes.perceptionDebug.title')}
+			description={$_('routes.perceptionDebug.description')}
+		/>
 
 		<Panel>
 			<div class="flex flex-col gap-4">
 				<div class="flex flex-wrap items-center gap-2">
 					<SegmentedControl
-						label="Which inference to view"
+						label={$_('routes.perceptionDebug.modeLabel')}
 						value={mode}
 						options={[
-							{ value: 'cropped', label: 'Cropped (production)' },
-							{ value: 'fullframe', label: 'Full frame (debug)' }
+							{ value: 'cropped', label: $_('routes.perceptionDebug.modeCropped') },
+							{ value: 'fullframe', label: $_('routes.perceptionDebug.modeFullframe') }
 						]}
 						onchange={setMode}
 					/>
-					<Button variant="primary" onclick={refresh}>Refresh</Button>
+					<Button variant="primary" onclick={refresh}>{$_('routes.perceptionDebug.refreshButton')}</Button>
 				</div>
 				{#if mode === 'cropped'}
 					<p class="max-w-4xl text-sm text-ink-muted">
-						Exactly what perception infers and decides on. Green boxes are detections the mask filter kept;
-						they drive the machine. Orange boxes are raw model detections the filter rejected. Cyan is the
-						channel polygon mask, the white rectangle is the crop the model actually saw, and the magenta dot
-						is the rotation center. Runtime zones are overlaid from the active channel zones: blue is drop,
-						red is exit only, and magenta fill is precise. The panel also shows the live slot state those
-						pipelines are consuming.
+						{$_('routes.perceptionDebug.croppedDescription')}
 					</p>
 				{:else}
 					<p class="max-w-4xl text-sm text-ink-muted">
-						The same model run on the whole frame, with no polygon crop, as a second inference per cycle. Use
-						it to tell "the crop is excluding pieces" from "the model isn't detecting them". Green boxes are
-						full-frame detections whose center lands in the channel mask; orange boxes are outside it. The
-						same runtime drop, exit and precise zones are drawn here, so the full-frame comparison still
-						lines up with the real machine logic.
+						{$_('routes.perceptionDebug.fullframeDescription')}
 					</p>
 				{/if}
 			</div>
@@ -109,13 +104,13 @@
 				<MediaTile title={channel.label} expandable>
 					{#if failed[channel.id]}
 						<p class="px-6 text-center text-sm text-ink-muted">
-							No frame is available: the worker is not wired, or no inference cycle has run yet.
+							{$_('routes.perceptionDebug.noFrameAvailable')}
 						</p>
 					{:else}
 						<img
 							class="absolute inset-0 h-full w-full object-contain"
 							src={srcFor(channel.id)}
-							alt={`Annotated perception frame for ${channel.label}`}
+							alt={$_('routes.perceptionDebug.annotatedFrameAlt', { values: { channel: channel.label } })}
 							onerror={() => (failed = { ...failed, [channel.id]: true })}
 						/>
 					{/if}

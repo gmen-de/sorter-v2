@@ -22,6 +22,7 @@
 </script>
 
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import ProgressBar from '$lib/components/ui/ProgressBar.svelte';
@@ -43,10 +44,13 @@
 			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
-				error = typeof body.detail === 'string' ? body.detail : 'That did not work.';
+				error =
+					typeof body.detail === 'string'
+						? body.detail
+						: $_('components.incidentCard.didNotWork');
 			}
 		} catch {
-			error = 'The machine did not answer.';
+			error = $_('components.incidentCard.machineDidNotAnswer');
 		} finally {
 			pending = null;
 		}
@@ -69,11 +73,21 @@
 				tone={recovery.state === 'running' ? 'primary' : 'warning'}
 			/>
 			{#if recovery.state === 'running'}
-				<p class="text-ink-muted">Step {recovery.step} of {recovery.steps}: {recovery.doing}</p>
+				<p class="text-ink-muted">
+					{$_('components.incidentCard.stepOf', {
+						values: { step: recovery.step, steps: recovery.steps }
+					})}: {recovery.doing}
+				</p>
 			{:else if recovery.state === 'stopped'}
-				<p class="text-ink-muted">Stopped at step {recovery.step} of {recovery.steps}.</p>
+				<p class="text-ink-muted">
+					{$_('components.incidentCard.stoppedAtStep', {
+						values: { step: recovery.step, steps: recovery.steps }
+					})}
+				</p>
 			{:else if recovery.state === 'gave up'}
-				<p class="text-ink-muted">Tried all {recovery.steps} steps; it is still stuck.</p>
+				<p class="text-ink-muted">
+					{$_('components.incidentCard.triedAllSteps', { values: { steps: recovery.steps } })}
+				</p>
 			{/if}
 		</div>
 	{/if}

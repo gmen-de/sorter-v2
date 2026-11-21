@@ -5,6 +5,7 @@
 	new color shows the moment it is chosen.
 -->
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import { formatTime, type TrainingPiece, type TrainingSegment } from '$lib/training/api';
 	import RunColors from './RunColors.svelte';
 	import TrainingPieceRow from './TrainingPieceRow.svelte';
@@ -59,14 +60,19 @@
 					<RunColors colors={item.segment.colors} class="font-medium text-ink" />
 					<span class="num text-ink-muted">
 						{item.segment.pieces.toLocaleString()}
-						{item.segment.pieces === 1 ? 'piece' : 'pieces'}
+						{item.segment.pieces === 1
+							? $_('components.training.pieceFeed.piece')
+							: $_('components.training.pieceFeed.pieces')}
 					</span>
 					<span class="num text-ink-muted">
-						from {formatTime(item.segment.started_at)}{#if item.segment.ended_at !== null}
-							to {formatTime(item.segment.ended_at)}{/if}
+						{$_('components.training.pieceFeed.fromTime', {
+							values: { start: formatTime(item.segment.started_at) }
+						})}{#if item.segment.ended_at !== null}{$_('components.training.pieceFeed.toTime', {
+								values: { end: formatTime(item.segment.ended_at) }
+							})}{/if}
 					</span>
 				{:else}
-					<span class="text-ink-muted">Outside a segment</span>
+					<span class="text-ink-muted">{$_('components.training.pieceFeed.outsideSegment')}</span>
 				{/if}
 			</div>
 		{:else}

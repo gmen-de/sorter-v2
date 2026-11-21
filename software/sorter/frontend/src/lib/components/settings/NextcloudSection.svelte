@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { machineHttpBaseUrlFromWsUrl, getBackendHttpBase } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -72,7 +73,7 @@
 			if (!res.ok) throw new Error(await res.text());
 			applyConfig(await res.json());
 		} catch (e: any) {
-			loadError = e.message ?? 'Failed to load the Nextcloud settings';
+			loadError = e.message ?? $_('components.settings.nextcloudSection.errors.loadFailed');
 		}
 	}
 
@@ -115,7 +116,7 @@
 			await loadConfig();
 			await loadStatus();
 		} catch (e: any) {
-			saveError = e.message ?? 'Failed to save the Nextcloud settings';
+			saveError = e.message ?? $_('components.settings.nextcloudSection.errors.saveFailed');
 		} finally {
 			savingConfig = false;
 		}
@@ -134,7 +135,7 @@
 		try {
 			const url = serverUrlDraft.trim();
 			if (!url) {
-				connectError = 'Enter the Nextcloud server URL first.';
+				connectError = $_('components.settings.nextcloudSection.errors.enterServerUrl');
 				connecting = false;
 				return;
 			}
@@ -163,15 +164,15 @@
 						connecting = false;
 						connectError =
 							data.state === 'timed_out'
-								? 'The login was not confirmed in time.'
-								: 'The Nextcloud login failed.';
+								? $_('components.settings.nextcloudSection.errors.loginTimedOut')
+								: $_('components.settings.nextcloudSection.errors.loginFailed');
 					}
 				} catch {
 					// keep polling
 				}
 			}, 2000);
 		} catch (e: any) {
-			connectError = e.message ?? 'Failed to connect to Nextcloud';
+			connectError = e.message ?? $_('components.settings.nextcloudSection.errors.connectFailed');
 			connecting = false;
 		}
 	}
@@ -184,14 +185,14 @@
 			await loadConfig();
 			await loadStatus();
 		} catch (e: any) {
-			connectError = e.message ?? 'Failed to disconnect';
+			connectError = e.message ?? $_('components.settings.nextcloudSection.errors.disconnectFailed');
 		} finally {
 			disconnecting = false;
 		}
 	}
 
 	function formatTimestamp(ts: number | null): string {
-		if (!ts) return 'never';
+		if (!ts) return $_('components.settings.nextcloudSection.neverLabel');
 		return new Date(ts * 1000).toLocaleString();
 	}
 
@@ -208,8 +209,8 @@
 </script>
 
 <Panel
-	title="Nextcloud"
-	description="Uploads recognized pieces (image + part number + color) to your own Nextcloud, sorted so the data can train a custom model later."
+	title={$_('components.settings.nextcloudSection.panelTitle')}
+	description={$_('components.settings.nextcloudSection.panelDescription')}
 	flush
 >
 	<div class="divide-y divide-line">
@@ -222,48 +223,65 @@
 				<div class="flex items-center gap-2 text-sm">
 					<Check size={16} class="text-success-ink" />
 					<span class="text-ink">
-						Connected as <span class="font-medium">{config.login_name}</span> ({config.server_url})
+						{$_('components.settings.nextcloudSection.connectedAs')}
+						<span class="font-medium">{config.login_name}</span> ({config.server_url})
 					</span>
 				</div>
 				{#if config.needs_reconnect}
-					<div class="mt-2"><Alert tone="warning">Nextcloud needs to be reconnected - it rejected the stored credentials.</Alert></div>
+					<div class="mt-2">
+						<Alert tone="warning">{$_('components.settings.nextcloudSection.needsReconnect')}</Alert>
+					</div>
 				{/if}
 				<div class="mt-3">
-					<Button variant="ghost" size="sm" loading={disconnecting} onclick={disconnect}>Disconnect</Button>
+					<Button variant="ghost" size="sm" loading={disconnecting} onclick={disconnect}
+						>{$_('components.settings.nextcloudSection.disconnectButton')}</Button
+					>
 				</div>
 			{:else}
-				<Field label="Nextcloud server URL" for="nc-server-url" help="e.g. https://cloud.example.com">
+				<Field
+					label={$_('components.settings.nextcloudSection.serverUrl.label')}
+					for="nc-server-url"
+					help={$_('components.settings.nextcloudSection.serverUrl.help')}
+				>
 					<Input id="nc-server-url" bind:value={serverUrlDraft} placeholder="https://cloud.example.com" />
 				</Field>
 				{#if connectError}
 					<div class="mt-2"><Alert tone="danger">{connectError}</Alert></div>
 				{/if}
 				<div class="mt-3">
-					<Button variant="primary" loading={connecting} onclick={connect}>Connect to Nextcloud</Button>
+					<Button variant="primary" loading={connecting} onclick={connect}
+						>{$_('components.settings.nextcloudSection.connectButton')}</Button
+					>
 				</div>
 				{#if connecting}
 					<p class="mt-2 text-sm text-ink-muted">
-						Log in to Nextcloud in the new tab and approve access - this page picks it up automatically.
+						{$_('components.settings.nextcloudSection.connectingHint')}
 					</p>
 				{/if}
 			{/if}
 		</div>
 
-		<SettingRow label="Uploading active" help="Send recognized pieces to Nextcloud as they come in.">
-			<Switch bind:checked={enabledDraft} label="Uploading active" />
+		<SettingRow
+			label={$_('components.settings.nextcloudSection.uploadingActive.label')}
+			help={$_('components.settings.nextcloudSection.uploadingActive.help')}
+		>
+			<Switch
+				bind:checked={enabledDraft}
+				label={$_('components.settings.nextcloudSection.uploadingActive.label')}
+			/>
 		</SettingRow>
 
 		<SettingRow
-			label="Target folder"
-			help="Path in the Nextcloud where the data is stored."
+			label={$_('components.settings.nextcloudSection.targetFolder.label')}
+			help={$_('components.settings.nextcloudSection.targetFolder.help')}
 			for="nc-remote-root"
 		>
 			<Input id="nc-remote-root" bind:value={remoteRootDraft} placeholder="/SorterTrainingData" class="w-56" />
 		</SettingRow>
 
 		<SettingRow
-			label="Minimum confidence"
-			help="Pieces below this score count as not confidently identified and go in the _unidentified folder. Leave blank for no threshold."
+			label={$_('components.settings.nextcloudSection.minConfidence.label')}
+			help={$_('components.settings.nextcloudSection.minConfidence.help')}
 			for="nc-min-confidence"
 		>
 			<Input
@@ -273,16 +291,19 @@
 				max="1"
 				step="0.05"
 				bind:value={minConfidenceDraft}
-				placeholder="e.g. 0.8"
+				placeholder={$_('components.settings.nextcloudSection.minConfidence.placeholder')}
 				class="w-28"
 			/>
 		</SettingRow>
 
 		<SettingRow
-			label="Upload unidentified pieces"
-			help="Also upload pieces with no confident match, into their own _unidentified folder - often the most valuable future training data."
+			label={$_('components.settings.nextcloudSection.uploadUnidentified.label')}
+			help={$_('components.settings.nextcloudSection.uploadUnidentified.help')}
 		>
-			<Switch bind:checked={uploadUnidentifiedDraft} label="Upload unidentified pieces" />
+			<Switch
+				bind:checked={uploadUnidentifiedDraft}
+				label={$_('components.settings.nextcloudSection.uploadUnidentified.label')}
+			/>
 		</SettingRow>
 
 		{#if saveError}
@@ -290,21 +311,28 @@
 		{/if}
 		<div class="flex justify-end px-(--pad-panel) py-(--pad-row)">
 			<Button variant="primary" loading={savingConfig} disabled={!isDraftDirty()} onclick={saveConfig}>
-				Save
+				{$_('components.settings.nextcloudSection.saveButton')}
 			</Button>
 		</div>
 
 		{#if status}
 			<div class="px-(--pad-panel) py-(--pad-panel) text-sm text-ink-muted">
-				<div>Pending: <span class="font-mono text-ink">{status.pending}</span></div>
-				<div>Last upload: {formatTimestamp(status.last_upload_at)}</div>
+				<div>
+					{$_('components.settings.nextcloudSection.status.pending')}
+					<span class="font-mono text-ink">{status.pending}</span>
+				</div>
+				<div>
+					{$_('components.settings.nextcloudSection.status.lastUpload')} {formatTimestamp(
+						status.last_upload_at
+					)}
+				</div>
 				{#if status.last_error}
 					<div class="mt-1"><Alert tone="danger">{status.last_error}</Alert></div>
 				{/if}
 			</div>
 		{:else}
 			<div class="flex items-center gap-2 px-(--pad-panel) py-(--pad-panel) text-sm text-ink-muted">
-				<Spinner size={14} /> Loading status
+				<Spinner size={14} /> {$_('components.settings.nextcloudSection.status.loading')}
 			</div>
 		{/if}
 	</div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import ServoInventoryCard from './ServoInventoryCard.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
@@ -71,13 +72,24 @@
 </script>
 
 <Panel
-	title="Servos on the bus"
-	description="{busServos.length} on the bus · the highest ID seen is {highestSeenId || '–'}{suggestedNextId !== null ? ` · the next free ID is ${suggestedNextId}` : ''}"
+	title={$_('components.setup.servo.servoInventoryList.panelTitle')}
+	description={$_('components.setup.servo.servoInventoryList.panelDescription', {
+		values: {
+			count: busServos.length,
+			highestSeenId: highestSeenId || '–',
+			nextIdHint:
+				suggestedNextId !== null
+					? $_('components.setup.servo.servoInventoryList.nextIdHint', {
+							values: { nextId: suggestedNextId }
+						})
+					: ''
+		}
+	})}
 	flush
 >
 	{#if busServos.length === 0}
 		<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">
-			No servos found yet. Connect the first one; the bus scans itself every few seconds.
+			{$_('components.setup.servo.servoInventoryList.emptyHint')}
 		</p>
 	{:else}
 		<div class="divide-y divide-line">
@@ -111,11 +123,17 @@
 	{/if}
 	{#snippet footer()}
 		<div class="mr-auto w-full">
-			<Alert tone="warning" title="Connect one servo at a time">
-				New Waveshare servos all ship with the factory ID 1, and the bus can only talk to one device
-				at that ID. Plug them in one by one: as soon as a new one shows up it is promoted to the next
-				free ID{suggestedNextId !== null ? ` (now ${suggestedNextId})` : ''}, so the next one can connect
-				without a clash.
+			<Alert tone="warning" title={$_('components.setup.servo.servoInventoryList.oneAtATime.title')}>
+				{$_('components.setup.servo.servoInventoryList.oneAtATime.message', {
+					values: {
+						nowHint:
+							suggestedNextId !== null
+								? $_('components.setup.servo.servoInventoryList.oneAtATime.nowHint', {
+										values: { nextId: suggestedNextId }
+									})
+								: ''
+					}
+				})}
 			</Alert>
 		</div>
 	{/snippet}

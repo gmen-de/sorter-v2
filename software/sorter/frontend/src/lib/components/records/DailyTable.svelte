@@ -2,6 +2,7 @@
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Download from '@lucide/svelte/icons/download';
+	import { _ } from 'svelte-i18n';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import type { LifetimeDay } from './RecordsStats.svelte';
@@ -64,30 +65,37 @@
 			disabled={block >= blockCount - 1}
 			onclick={() => (block = Math.min(blockCount - 1, block + 1))}
 		>
-			Older two weeks
+			{$_('components.records.dailyTable.olderTwoWeeks')}
 		</Button>
 		<Button size="sm" disabled={block <= 0} onclick={() => (block = Math.max(0, block - 1))}>
-			Newer two weeks
+			{$_('components.records.dailyTable.newerTwoWeeks')}
 			<ChevronRight size={14} />
 		</Button>
 	</div>
 {/snippet}
 
 {#if daily.length > 0}
-	<Panel title="Daily activity" description={rangeLabel} flush footer={blockCount > 1 ? pager : undefined}>
+	<Panel
+		title={$_('components.records.dailyTable.panelTitle')}
+		description={rangeLabel}
+		flush
+		footer={blockCount > 1 ? pager : undefined}
+	>
 		{#snippet actions()}
-			<Button size="sm" icon={Download} href={exportUrl} download>Export CSV</Button>
+			<Button size="sm" icon={Download} href={exportUrl} download>
+				{$_('components.records.dailyTable.exportCsvButton')}
+			</Button>
 		{/snippet}
 		<div class="overflow-x-auto">
 			<table class="data-table">
 				<thead>
 					<tr>
-						<th>Day</th>
-						<th class="num">Powered</th>
-						<th class="num">Sorted</th>
-						<th class="num">Pieces</th>
-						<th class="num">Classified</th>
-						<th class="num">Pieces a minute</th>
+						<th>{$_('components.records.dailyTable.dayHeader')}</th>
+						<th class="num">{$_('components.records.dailyTable.poweredHeader')}</th>
+						<th class="num">{$_('components.records.dailyTable.sortedHeader')}</th>
+						<th class="num">{$_('components.records.dailyTable.piecesHeader')}</th>
+						<th class="num">{$_('components.records.dailyTable.classifiedHeader')}</th>
+						<th class="num">{$_('components.records.dailyTable.ppmHeader')}</th>
 					</tr>
 				</thead>
 				<tbody>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Check from '@lucide/svelte/icons/check';
 	import FlaskConical from '@lucide/svelte/icons/flask-conical';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -78,7 +79,7 @@
 			}
 			result = (await res.json()) as RetryResult;
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'request failed';
+			error = e instanceof Error ? e.message : $_('components.reclassifyPanel.requestFailed');
 		} finally {
 			running = false;
 		}
@@ -89,13 +90,15 @@
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
 		<h3 class="flex items-center gap-2 text-sm font-semibold text-ink">
 			<FlaskConical size={16} />
-			Scratch reclassify
+			{$_('components.reclassifyPanel.title')}
 		</h3>
-		<Badge tone="warning">Testing only</Badge>
-		<span class="text-sm text-ink-muted">Not recorded, and no effect on sorting.</span>
+		<Badge tone="warning">{$_('components.reclassifyPanel.testingOnly')}</Badge>
+		<span class="text-sm text-ink-muted">{$_('components.reclassifyPanel.notRecorded')}</span>
 		<span class="ml-auto flex items-center gap-3">
 			<span class="num text-sm {overLimit ? 'text-danger-ink' : 'text-ink-muted'}">
-				{selectedCount} of {MAX_IMAGES} selected
+				{$_('components.reclassifyPanel.selectedCount', {
+					values: { count: selectedCount, max: MAX_IMAGES }
+				})}
 			</span>
 			<Button
 				size="sm"
@@ -103,13 +106,13 @@
 				disabled={running || selectedCount === 0 || overLimit}
 				loading={running}
 			>
-				Run Brickognize
+				{$_('components.reclassifyPanel.runBrickognize')}
 			</Button>
 		</span>
 	</div>
 
 	{#if images.length === 0}
-		<p class="mt-3 text-sm text-ink-muted">No images are available to test.</p>
+		<p class="mt-3 text-sm text-ink-muted">{$_('components.reclassifyPanel.noImages')}</p>
 	{:else}
 		<div class="mt-3 flex flex-wrap gap-2">
 			{#each images as img, i (i)}
@@ -135,7 +138,9 @@
 		</div>
 		{#if overLimit}
 			<p class="mt-2 text-sm text-danger-ink">
-				Brickognize accepts at most {MAX_IMAGES} images. Deselect {selectedCount - MAX_IMAGES}.
+				{$_('components.reclassifyPanel.overLimit', {
+					values: { max: MAX_IMAGES, deselect: selectedCount - MAX_IMAGES }
+				})}
 			</p>
 		{/if}
 	{/if}
@@ -145,7 +150,9 @@
 	{#if result}
 		<div class="mt-3 border-t border-line pt-3">
 			<div class="label mb-2">
-				Result · {result.n_images} image{result.n_images === 1 ? '' : 's'} sent
+				{result.n_images === 1
+					? $_('components.reclassifyPanel.resultSingle', { values: { n: result.n_images } })
+					: $_('components.reclassifyPanel.resultPlural', { values: { n: result.n_images } })}
 			</div>
 			{#if result.best_item}
 				<div class="flex items-start gap-3">
@@ -163,7 +170,9 @@
 						<span class="font-mono font-semibold text-ink">{result.best_item.id}</span>
 						<span class="text-ink">{result.best_item.name}</span>
 						<span class="num text-ink-muted">
-							{(result.best_item.score * 100).toFixed(0)}% match{#if result.best_color}
+							{$_('components.reclassifyPanel.pctMatch', {
+								values: { pct: (result.best_item.score * 100).toFixed(0) }
+							})}{#if result.best_color}
 								· {result.best_color.name}{/if}
 						</span>
 					</div>
@@ -179,7 +188,7 @@
 					</ul>
 				{/if}
 			{:else}
-				<p class="text-sm text-ink-muted">No items were returned: the piece was not recognized.</p>
+				<p class="text-sm text-ink-muted">{$_('components.reclassifyPanel.noItemsReturned')}</p>
 			{/if}
 		</div>
 	{/if}

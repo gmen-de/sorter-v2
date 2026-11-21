@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { goto } from '$app/navigation';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -130,20 +131,19 @@
 		void openSetupIfNew(baseUrl);
 	});
 
-	const CAMERA_LABELS: Record<string, string> = {
-		feeder: 'Feeder',
-		c_channel_2: 'C-channel 2',
-		c_channel_3: 'C-channel 3',
-		carousel: 'Classification channel',
-		classification_channel: 'Classification channel'
-	};
-
 	function cameraLabel(role: string): string {
-		return CAMERA_LABELS[role] ?? role;
+		const labels: Record<string, string> = {
+			feeder: $_('routes.dashboard.cameraLabels.feeder'),
+			c_channel_2: $_('routes.dashboard.cameraLabels.cChannel2'),
+			c_channel_3: $_('routes.dashboard.cameraLabels.cChannel3'),
+			carousel: $_('routes.dashboard.cameraLabels.classificationChannel'),
+			classification_channel: $_('routes.dashboard.cameraLabels.classificationChannel')
+		};
+		return labels[role] ?? role;
 	}
 </script>
 
-<svelte:head><title>Sorter - Dashboard</title></svelte:head>
+<svelte:head><title>{$_('routes.dashboard.pageTitle')}</title></svelte:head>
 
 <AppShell fit>
 	{#if machine.machine}
@@ -206,14 +206,14 @@
 							<div class="flex items-start justify-between gap-4">
 								<div class="min-w-0">
 									<div class="flex items-center gap-2">
-										<span class="text-base font-semibold text-ink">Standby</span>
-										<Badge tone="warning" dot>Not homed</Badge>
+										<span class="text-base font-semibold text-ink">{$_('routes.dashboard.standby.title')}</span>
+										<Badge tone="warning" dot>{$_('routes.dashboard.standby.notHomedBadge')}</Badge>
 									</div>
 									<p class="mt-1 text-sm text-ink-muted">
 										{#if noPowerDevelopmentMode}
-											Sim home runs the normal recovery and skips only the physical homing.
+											{$_('routes.dashboard.standby.simHomeHelp')}
 										{:else}
-											Home starts the hardware and moves every axis to its zero.
+											{$_('routes.dashboard.standby.homeHelp')}
 										{/if}
 									</p>
 									{#if startSystemError}
@@ -222,7 +222,7 @@
 								</div>
 								<div class="flex shrink-0 items-center gap-2">
 									{#if noPowerDevelopmentMode}
-										<Button onclick={startSystem} disabled={startingSystem}>Sim home</Button>
+										<Button onclick={startSystem} disabled={startingSystem}>{$_('routes.dashboard.standby.simHomeButton')}</Button>
 									{/if}
 									<Button
 										variant="primary"
@@ -231,7 +231,7 @@
 										disabled={startingSystem}
 										onclick={startSystem}
 									>
-										Home
+										{$_('routes.dashboard.standby.homeButton')}
 									</Button>
 								</div>
 							</div>
@@ -239,8 +239,8 @@
 							<div class="flex items-center gap-3">
 								<Spinner size={16} class="text-primary-ink" />
 								<div class="min-w-0">
-									<div class="text-base font-semibold text-ink">Homing</div>
-									<p class="text-sm text-ink-muted">{homingStep ?? 'Starting the hardware'}</p>
+									<div class="text-base font-semibold text-ink">{$_('routes.dashboard.homing.title')}</div>
+									<p class="text-sm text-ink-muted">{homingStep ?? $_('routes.dashboard.homing.fallbackStep')}</p>
 								</div>
 							</div>
 						{:else}
@@ -248,15 +248,15 @@
 								<div class="min-w-0">
 									<div class="flex items-center gap-2">
 										<span class="text-base font-semibold text-ink">
-											{hardwareFault?.title ?? 'Hardware error'}
+											{hardwareFault?.title ?? $_('routes.dashboard.error.fallbackTitle')}
 										</span>
-										<Badge tone="danger" dot>Stopped</Badge>
+										<Badge tone="danger" dot>{$_('routes.dashboard.error.stoppedBadge')}</Badge>
 									</div>
 									{#if hardwareError}
 										<p class="mt-1 text-sm break-words text-ink-muted">{hardwareError}</p>
 									{/if}
 								</div>
-								<Button onclick={startSystem} disabled={startingSystem}>Retry</Button>
+								<Button onclick={startSystem} disabled={startingSystem}>{$_('routes.dashboard.error.retryButton')}</Button>
 							</div>
 						{/if}
 					</section>
@@ -268,9 +268,9 @@
 
 				<div class="max-lg:order-last lg:contents">
 					{#if training && training.config.enabled}
-						<CollapsibleSection title="Training data" storageKey="training" grow>
+						<CollapsibleSection title={$_('routes.dashboard.trainingData.title')} storageKey="training" grow>
 							{#snippet actions()}
-								<Badge tone="info">Training mode</Badge>
+								<Badge tone="info">{$_('routes.dashboard.trainingData.badge')}</Badge>
 							{/snippet}
 							<TrainingPanel
 								base={currentBackendBaseUrl()}
@@ -279,15 +279,20 @@
 							/>
 						</CollapsibleSection>
 					{:else}
-						<CollapsibleSection title="Recent pieces" storageKey="recent" grow>
+						<CollapsibleSection title={$_('routes.dashboard.recentPieces.title')} storageKey="recent" grow>
 							<RecentObjects />
 						</CollapsibleSection>
 					{/if}
 				</div>
 				<div class="max-lg:order-last lg:contents">
-					<CollapsibleSection title="Runtime" storageKey="runtimeTabs">
+					<CollapsibleSection title={$_('routes.dashboard.runtime.title')} storageKey="runtimeTabs">
 						{#snippet actions()}
-							<SegmentedControl bind:value={runtimeSpan} options={RUNTIME_SPANS} label="Time span" size="sm" />
+							<SegmentedControl
+								bind:value={runtimeSpan}
+								options={RUNTIME_SPANS}
+								label={$_('routes.dashboard.runtime.timeSpanLabel')}
+								size="sm"
+							/>
 						{/snippet}
 						<RuntimeStats span={runtimeSpan} />
 					</CollapsibleSection>
@@ -296,8 +301,8 @@
 		</div>
 	{:else}
 		<div class="p-4 sm:p-6">
-			<EmptyState icon={Plug} title="No machine selected">
-				Connect to a machine in Settings.
+			<EmptyState icon={Plug} title={$_('routes.dashboard.noMachine.title')}>
+				{$_('routes.dashboard.noMachine.description')}
 			</EmptyState>
 		</div>
 	{/if}

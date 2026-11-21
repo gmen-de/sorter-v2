@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { confirmDialog } from '$lib/confirm.svelte';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import AppShell from '$lib/components/AppShell.svelte';
 	import BinDetailsModal from '$lib/components/bins/BinDetailsModal.svelte';
@@ -130,7 +131,7 @@
 			activeLayer = data.active_layer;
 			error = null;
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to load bin layout';
+			error = e instanceof Error ? e.message : $_('routes.bins.loadLayoutFailedFallback');
 		} finally {
 			loading = false;
 		}
@@ -163,10 +164,10 @@
 			}
 			await loadLayout();
 			statusMsg = enabled
-				? `Layer ${layerIndex + 1} is now a "not in inventory" layer.`
-				: `Layer ${layerIndex + 1} is back to normal sorting.`;
+				? $_('routes.bins.layerNiiEnabledMsg', { values: { n: layerIndex + 1 } })
+				: $_('routes.bins.layerNiiDisabledMsg', { values: { n: layerIndex + 1 } });
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to update not-in-inventory mode';
+			error = e instanceof Error ? e.message : $_('routes.bins.updateNiiFailedFallback');
 		} finally {
 			niiBusyLayer = null;
 		}
@@ -194,10 +195,10 @@
 			}
 			await loadLayout();
 			statusMsg = enabled
-				? `Bin ${bin.global_index + 1} on layer ${layerIndex + 1} now takes pieces not in inventory.`
-				: `Bin ${bin.global_index + 1} on layer ${layerIndex + 1} is back to normal sorting.`;
+				? $_('routes.bins.binNiiEnabledMsg', { values: { bin: bin.global_index + 1, layer: layerIndex + 1 } })
+				: $_('routes.bins.binNiiDisabledMsg', { values: { bin: bin.global_index + 1, layer: layerIndex + 1 } });
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to update not-in-inventory mode';
+			error = e instanceof Error ? e.message : $_('routes.bins.updateNiiFailedFallback');
 		} finally {
 			niiBusyLayer = null;
 		}
@@ -222,12 +223,25 @@
 			const data = await res.json();
 			await loadLayout();
 			if (data.assigned === 0) {
-				autoAssignResult = data.message ?? 'Nothing to assign.';
+				autoAssignResult = data.message ?? $_('routes.bins.autoAssignNothingFallback');
 			} else {
-				autoAssignResult = `Assigned ${data.categories_ranked} categories across ${data.bins_used} bin${data.bins_used === 1 ? '' : 's'} from ${data.total_pieces} recent pieces${overlap ? ' (overlapping)' : ''}.`;
+				const binWord =
+					data.bins_used === 1
+						? $_('routes.bins.binWordSingular')
+						: $_('routes.bins.binWordPlural');
+				const overlapSuffix = overlap ? ` ${$_('routes.bins.overlapSuffix')}` : '';
+				autoAssignResult = $_('routes.bins.autoAssignResult', {
+					values: {
+						categories: data.categories_ranked,
+						bins: data.bins_used,
+						binWord,
+						pieces: data.total_pieces,
+						overlapSuffix
+					}
+				});
 			}
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Auto-assign failed';
+			error = e instanceof Error ? e.message : $_('routes.bins.autoAssignFailedFallback');
 		} finally {
 			autoAssignBusy = false;
 		}
@@ -252,10 +266,10 @@
 			const data = await res.json();
 			allowMultiCategory = Boolean(data.allow_multiple_categories_per_bin);
 			statusMsg = allowMultiCategory
-				? 'Bins can now hold multiple categories once all bins are assigned.'
-				: 'Bins will use a single category each.';
+				? $_('routes.bins.multiCategoryEnabledMsg')
+				: $_('routes.bins.multiCategorySingleMsg');
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to update setting';
+			error = e instanceof Error ? e.message : $_('routes.bins.updateSettingFailedFallback');
 		} finally {
 			savingMultiCategory = false;
 		}
@@ -354,11 +368,11 @@
 				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
 			}
 			const data = await res.json();
-			statusMsg = `Moved to ${data.target_angle}°`;
+			statusMsg = $_('routes.bins.movedToAngleMsg', { values: { angle: data.target_angle } });
 			activeLayer = layerIndex;
 			currentAngle = data.target_angle;
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Move failed';
+			error = e instanceof Error ? e.message : $_('routes.bins.moveFailedFallback');
 		} finally {
 			movingTo = null;
 		}
@@ -377,10 +391,10 @@
 				const detail = await res.json().catch(() => null);
 				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
 			}
-			statusMsg = 'Chute homed successfully';
+			statusMsg = $_('routes.bins.chuteHomedMsg');
 			await loadLayout();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Homing failed';
+			error = e instanceof Error ? e.message : $_('routes.bins.homingFailedFallback');
 		} finally {
 			homing = false;
 		}
@@ -411,9 +425,32 @@
 		detailsOpen = true;
 	}
 
-	function actionVerb(endpoint: 'contents/clear' | 'categories/clear'): string {
-		return endpoint === 'contents/clear' ? 'Emptying' : 'Resetting';
-	}
+	const CONFIRM_KEYS: Record<string, { title: string; action: string }> = {
+		'contents/clear:all': {
+			title: 'routes.bins.confirmEmptyAllBinsTitle',
+			action: 'routes.bins.confirmEmptyAllBinsAction'
+		},
+		'contents/clear:layer': {
+			title: 'routes.bins.confirmEmptyLayerTitle',
+			action: 'routes.bins.confirmEmptyLayerAction'
+		},
+		'contents/clear:bin': {
+			title: 'routes.bins.confirmEmptyBinTitle',
+			action: 'routes.bins.confirmEmptyBinAction'
+		},
+		'categories/clear:all': {
+			title: 'routes.bins.confirmResetAllBinsTitle',
+			action: 'routes.bins.confirmResetAllBinsAction'
+		},
+		'categories/clear:layer': {
+			title: 'routes.bins.confirmResetLayerTitle',
+			action: 'routes.bins.confirmResetLayerAction'
+		},
+		'categories/clear:bin': {
+			title: 'routes.bins.confirmResetBinTitle',
+			action: 'routes.bins.confirmResetBinAction'
+		}
+	};
 
 	function hasAnyClearing(): boolean {
 		return clearingStates.length > 0;
@@ -450,15 +487,17 @@
 	function globalClearingTitle(): string {
 		const state = activeGlobalClearing();
 		if (!state) return '';
-		return `${actionVerb(state.endpoint)} all bins…`;
+		return state.endpoint === 'contents/clear'
+			? $_('routes.bins.clearingAllBinsEmptyingTitle')
+			: $_('routes.bins.clearingAllBinsResettingTitle');
 	}
 
 	function globalClearingDescription(): string {
 		const state = activeGlobalClearing();
 		if (!state) return '';
 		return state.endpoint === 'contents/clear'
-			? 'Updating the full machine state while keeping all current bin assignments in place.'
-			: 'Clearing the full machine state and removing all current bin assignments.';
+			? $_('routes.bins.clearingAllBinsKeepDesc')
+			: $_('routes.bins.clearingAllBinsRemoveDesc');
 	}
 
 	function layerClearingLabel(layerIndex: number): string {
@@ -467,7 +506,9 @@
 				(entry) => entry.scope === 'layer' && entry.layerIndex === layerIndex
 			) ?? null;
 		if (!state) return '';
-		return `${actionVerb(state.endpoint)} layer ${layerIndex + 1}…`;
+		return state.endpoint === 'contents/clear'
+			? $_('routes.bins.clearingLayerEmptyingLabel', { values: { n: layerIndex + 1 } })
+			: $_('routes.bins.clearingLayerResettingLabel', { values: { n: layerIndex + 1 } });
 	}
 
 	function binClearingLabel(layerIndex: number, sectionIndex: number, binIndex: number): string {
@@ -480,7 +521,9 @@
 					entry.binIndex === binIndex
 			) ?? null;
 		if (!state) return '';
-		return state.endpoint === 'contents/clear' ? 'Emptying bin…' : 'Resetting bin…';
+		return state.endpoint === 'contents/clear'
+			? $_('routes.bins.emptyingBinLabel')
+			: $_('routes.bins.resettingBinLabel');
 	}
 
 	async function runBinAction(
@@ -492,13 +535,12 @@
 	) {
 		if (movingTo || homing || togglingLayerKey !== null || hasClearingKey(busyKey)) return;
 		if (scope === 'all' ? hasAnyClearing() : isGlobalClearing()) return;
-		const verb = endpoint === 'contents/clear' ? 'Empty' : 'Reset';
-		const what = scope === 'all' ? 'all bins' : scope === 'layer' ? 'this layer' : 'this bin';
+		const keys = CONFIRM_KEYS[`${endpoint}:${scope}`];
 		if (
 			!(await confirmDialog({
-				title: `${verb} ${what}?`,
+				title: $_(keys.title),
 				message: confirmMessage,
-				action: `${verb} ${what}`,
+				action: $_(keys.action),
 				danger: endpoint === 'categories/clear'
 			}))
 		)
@@ -526,11 +568,11 @@
 				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
 			}
 			const data = await res.json();
-			statusMsg = data?.message ?? 'Bin assignments updated.';
+			statusMsg = data?.message ?? $_('routes.bins.binsUpdatedFallback');
 			await loadLayout();
 			await loadBinContents();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to update bins';
+			error = e instanceof Error ? e.message : $_('routes.bins.updateBinsFailedFallback');
 		} finally {
 			clearingStates = clearingStates.filter((state) => state.busyKey !== busyKey);
 		}
@@ -547,12 +589,12 @@
 	) {
 		if (movingTo || homing || togglingLayerKey !== null || hasClearingKey(busyKey)) return;
 		if (scope === 'all' ? hasAnyClearing() : isGlobalClearing()) return;
-		const what = scope === 'all' ? 'all bins' : 'this layer';
+		const keys = CONFIRM_KEYS[`categories/clear:${scope}`];
 		if (
 			!(await confirmDialog({
-				title: `Reset ${what}?`,
+				title: $_(keys.title),
 				message: confirmMessage,
-				action: `Reset ${what}`,
+				action: $_(keys.action),
 				danger: true
 			}))
 		)
@@ -575,7 +617,7 @@
 				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
 			}
 			const data = await res.json();
-			statusMsg = data?.message ?? 'Bins reset.';
+			statusMsg = data?.message ?? $_('routes.bins.binsResetFallback');
 			if (data.layout) {
 				layers = data.layout.layers ?? layers;
 				currentAngle = data.layout.current_angle ?? null;
@@ -583,7 +625,7 @@
 			}
 			applyBinsContents(data.bins);
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to reset bins';
+			error = e instanceof Error ? e.message : $_('routes.bins.resetBinsFailedFallback');
 		} finally {
 			clearingStates = clearingStates.filter((state) => state.busyKey !== busyKey);
 		}
@@ -610,10 +652,10 @@
 				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
 			}
 			const data = await res.json();
-			statusMsg = data?.message ?? `Layer ${layerIndex + 1} updated.`;
+			statusMsg = data?.message ?? $_('routes.bins.layerUpdatedFallback', { values: { n: layerIndex + 1 } });
 			await loadLayout();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to update layer status';
+			error = e instanceof Error ? e.message : $_('routes.bins.updateLayerStatusFailedFallback');
 		} finally {
 			togglingLayerKey = null;
 		}
@@ -660,7 +702,7 @@
 				activeLayer = data.layout.active_layer ?? activeLayer;
 			}
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to update section status';
+			error = e instanceof Error ? e.message : $_('routes.bins.updateSectionStatusFailedFallback');
 		} finally {
 			sectionBusyKey = null;
 		}
@@ -683,9 +725,11 @@
 				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
 			}
 			const data = await res.json();
-			statusMsg = `Pointing chute at section ${sectionIndex + 1} (${data.target_angle}°).`;
+			statusMsg = $_('routes.bins.pointingAtSectionMsg', {
+				values: { n: sectionIndex + 1, angle: data.target_angle }
+			});
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to point at section';
+			error = e instanceof Error ? e.message : $_('routes.bins.pointAtSectionFailedFallback');
 		} finally {
 			pointingSectionKey = null;
 		}
@@ -771,11 +815,11 @@
 	});
 </script>
 
-<svelte:head><title>Sorter - Bins</title></svelte:head>
+<svelte:head><title>{$_('routes.bins.pageTitle')}</title></svelte:head>
 
 <AppShell>
 	<div class="mx-auto flex w-full max-w-[1500px] flex-col gap-(--gap-panels) px-4 py-6 sm:px-6">
-		<PageHeader title="Bins" description="What each bin holds and which categories it takes.">
+		<PageHeader title={$_('routes.bins.title')} description={$_('routes.bins.description')}>
 			{#snippet actions()}
 				<BinsHeaderActions
 					csvUrl={currentContentsCsvUrl()}
@@ -790,14 +834,14 @@
 							'contents/clear',
 							'all',
 							{},
-							'Please make sure all physical bins are empty first. This will mark every bin on the machine as emptied, but keep the current profile-to-bin assignments in place.',
+							$_('routes.bins.emptyAllConfirmMessage'),
 							'empty-all'
 						)}
 					onResetAll={() =>
 						void runBinReset(
 							'all',
 							undefined,
-							'Please make sure all physical bins are empty first. This will remove every learned bin assignment on the machine and mark all bins as empty.',
+							$_('routes.bins.resetAllConfirmMessage'),
 							'reset-all'
 						)}
 				/>
@@ -809,26 +853,26 @@
 		<Panel flush>
 			<div class="divide-y divide-line">
 				<SettingRow
-					label="Allow multiple categories per bin"
-					help="When every bin already has an assignment, keep sorting new categories by combining them into existing bins (least-loaded first) instead of sending them to the discard passthrough."
+					label={$_('routes.bins.allowMultiCategoryLabel')}
+					help={$_('routes.bins.allowMultiCategoryHelp')}
 				>
 					<Switch
 						checked={allowMultiCategory}
-						label="Allow multiple categories per bin"
+						label={$_('routes.bins.allowMultiCategoryLabel')}
 						disabled={savingMultiCategory}
 						onchange={() => void toggleMultiCategory()}
 					/>
 				</SettingRow>
 				<SettingRow
-					label="Auto-assign bins"
-					help="Ranks the active profile's categories by how many recently sorted pieces hit them, then fills bins biggest first: the larger bottom bins get the highest-volume categories. Overwrites current normal-bin assignments; not-in-inventory bins are left alone."
+					label={$_('routes.bins.autoAssignLabel')}
+					help={$_('routes.bins.autoAssignHelp')}
 					below={autoAssignResult ? autoAssignNote : undefined}
 				>
 					<Button loading={autoAssignBusy} onclick={() => void runAutoAssign(false)}>
-						{autoAssignBusy ? 'Assigning…' : 'Auto-assign'}
+						{autoAssignBusy ? $_('routes.bins.assigningLabel') : $_('routes.bins.autoAssignButton')}
 					</Button>
 					<Button loading={autoAssignBusy} onclick={() => void runAutoAssign(true)}>
-						{autoAssignBusy ? 'Assigning…' : 'Auto-assign and overlap'}
+						{autoAssignBusy ? $_('routes.bins.assigningLabel') : $_('routes.bins.autoAssignOverlapButton')}
 					</Button>
 				</SettingRow>
 			</div>
@@ -880,7 +924,7 @@
 				{/each}
 			</div>
 		{:else if layers.length === 0}
-			<EmptyState title="No storage layers are configured" />
+			<EmptyState title={$_('routes.bins.noStorageLayersTitle')} />
 		{:else}
 			{#each layers as layer (layer.layer_index)}
 				{@const layerBusy = isLayerClearing(layer.layer_index)}
@@ -917,14 +961,14 @@
 							'contents/clear',
 							'layer',
 							{ layer_index: layer.layer_index },
-							`Please make sure layer ${layer.layer_index + 1} is physically empty first. This will mark all bins on that layer as emptied, but keep their assignments.`,
+							$_('routes.bins.emptyLayerConfirmMessage', { values: { n: layer.layer_index + 1 } }),
 							`empty-layer-${layer.layer_index}`
 						)}
 					onResetLayer={() =>
 						void runBinReset(
 							'layer',
 							layer.layer_index,
-							`Please make sure layer ${layer.layer_index + 1} is physically empty first. This will remove all learned assignments from that layer and mark its bins as empty.`,
+							$_('routes.bins.resetLayerConfirmMessage', { values: { n: layer.layer_index + 1 } }),
 							`reset-layer-${layer.layer_index}`
 						)}
 					onToggleNii={(enabled) => void setLayerNotInInventory(layer.layer_index, enabled)}
@@ -944,7 +988,7 @@
 							'contents/clear',
 							'bin',
 							{ layer_index: layer.layer_index, section_index: bin.section_index, bin_index: bin.bin_index },
-							`Please make sure bin ${bin.global_index + 1} is physically empty first. This will mark the bin as emptied but keep its assignment.`,
+							$_('routes.bins.emptyBinConfirmMessage', { values: { n: bin.global_index + 1 } }),
 							`empty-bin-${layer.layer_index}-${bin.section_index}-${bin.bin_index}`
 						)}
 					onResetBin={(bin) =>
@@ -952,7 +996,7 @@
 							'categories/clear',
 							'bin',
 							{ layer_index: layer.layer_index, section_index: bin.section_index, bin_index: bin.bin_index },
-							`Please make sure bin ${bin.global_index + 1} is physically empty first. This will remove the learned assignment for just this bin and mark it as empty.`,
+							$_('routes.bins.resetBinConfirmMessage', { values: { n: bin.global_index + 1 } }),
 							`reset-bin-${layer.layer_index}-${bin.section_index}-${bin.bin_index}`
 						)}
 				/>
@@ -972,7 +1016,7 @@
 	title={globalClearingTitle()}
 	size="sm"
 	dismissible={false}
-	status="Refreshing the bin state"
+	status={$_('routes.bins.refreshingBinStateStatus')}
 >
 	<p>{globalClearingDescription()}</p>
 </Modal>

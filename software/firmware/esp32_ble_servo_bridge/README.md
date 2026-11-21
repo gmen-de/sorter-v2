@@ -22,11 +22,27 @@ for the Python client.
   wire (handled by the board's own bus circuitry — these are Waveshare's own
   pin defaults for this board, taken from their stock `ServoDriver.ino`, not
   something invented here).
+- OLED: SSD1306, 0.91", 128×32, I2C on GPIO21 (SDA) / GPIO22 (SCL).
+- RGB LEDs: two NeoPixel/WS2812-style pixels on one data line, GPIO23.
 
-This firmware does **not** use the board's OLED or RGB LED — deliberately
-left out to keep the first version small and easy to reason about without
-being able to test on real hardware while writing it. Add them later if
-useful.
+The OLED/LED pins above are sourced from Waveshare's documentation for this
+board and its sibling ST3215 driver board, not independently confirmed
+against this project's own schematic. If the display stays blank or the
+LEDs don't light on first flash, see `OLED_I2C_ADDR` and the NeoPixel color
+order in `main.cpp`'s peripherals section — those are the likely culprits.
+
+## Onboard display and status LEDs
+
+- **OLED**: shows `DEMO` whenever [demo mode](#demo-mode) is on, otherwise
+  the gate this board most recently confirmed open (`GATE <n>`), or `-` if
+  none is known open. One gate at a time, matching how the sorter actually
+  drives a chute's layer gates.
+- **LED 0 (connection)**: solid blue while a BLE host is connected, slowly
+  blinking blue while waiting for one.
+- **LED 1 (gate status)**: green once a gate command's target position is
+  confirmed reached, yellow while a gate is moving, red if it comes back
+  blocked, offline, or uncalibrated. Reflects only `OPEN`/`CLOSE` commands —
+  not `CALIBRATE`/`LEARN`, which have their own success/failure replies.
 
 ## Gate numbering and auto ID assignment
 
@@ -52,12 +68,13 @@ time again rather than all at once, same as onboarding new ones.
 
 ## BLE protocol
 
-The device advertises as `SORTER-SERVO-BLE_XX:XX` (the last two bytes of its
-BT MAC, e.g. `SORTER-SERVO-BLE_A7:38` — so a setup with more than one bridge
-board can tell them apart in a scan) using the well-known **Nordic UART
-Service** UUIDs, so any generic BLE serial terminal app (e.g. "Serial
-Bluetooth Terminal", nRF Connect) can talk to it for debugging without any
-custom tooling:
+The device advertises as `SERVO-BLE_XX:XX_vA.B.C` (the last two bytes of its
+BT MAC and its firmware version, e.g. `SERVO-BLE_A7:38_v1.0.0` — so a setup
+with more than one bridge board can tell them apart in a scan, and a scan
+shows which boards still need reflashing after a firmware change) using the
+well-known **Nordic UART Service** UUIDs, so any generic BLE serial
+terminal app (e.g. "Serial Bluetooth Terminal", nRF Connect) can talk to it
+for debugging without any custom tooling:
 
 | | UUID |
 |---|---|

@@ -12,6 +12,7 @@
 	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 	import X from '@lucide/svelte/icons/x';
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { getBackendHttpBase } from '$lib/backend';
 	import CameraPicture from '$lib/components/CameraPicture.svelte';
 	import StreamControlsOverlay from '$lib/components/StreamControlsOverlay.svelte';
@@ -52,9 +53,9 @@
 	} = $props();
 
 	const LABEL: Record<ZoneChannelId, string> = {
-		2: 'C-channel 2',
-		3: 'C-channel 3',
-		4: 'Classification channel'
+		2: $_('components.settings.channelSection.label.cChannel2'),
+		3: $_('components.settings.channelSection.label.cChannel3'),
+		4: $_('components.settings.channelSection.label.classificationChannel')
 	};
 	const ROLE: Record<ZoneChannelId, CameraRole> = {
 		2: 'c_channel_2',
@@ -98,7 +99,7 @@
 		try {
 			saved = (await loadZones())[channel] ?? null;
 		} catch (e: any) {
-			note = `The zones could not be read: ${e.message}`;
+			note = $_('components.settings.channelSection.zonesReadError', { values: { error: e.message } });
 		}
 	}
 
@@ -110,10 +111,9 @@
 				watchNote = '';
 				return;
 			}
-			watchNote =
-				`Of the last ${entry.handoffs} pieces handed on from here, half landed on the next channel within ` +
-				`${entry.landing_delay_s.p50.toFixed(1)} s. The feeder's hold after a fall follows this; the zones ` +
-				`change only when someone saves them.`;
+			watchNote = $_('components.settings.channelSection.watchNote', {
+				values: { handoffs: entry.handoffs, seconds: entry.landing_delay_s.p50.toFixed(1) }
+			});
 		} catch {
 			watchNote = '';
 		}
@@ -121,16 +121,16 @@
 
 	async function edit() {
 		if (source === null) {
-			status = 'Choose a camera before setting the zones.';
+			status = $_('components.settings.channelSection.chooseCameraFirst');
 			return;
 		}
 		closeSidebar();
 		try {
 			draft = saved ?? (await defaultZones(channel));
 			editing = true;
-			note = saved ? '' : 'No zones yet: these are a start. Find them in the picture, or drag them into place.';
+			note = saved ? '' : $_('components.settings.channelSection.noZonesYet');
 		} catch (e: any) {
-			note = `The zones could not be opened: ${e.message}`;
+			note = $_('components.settings.channelSection.zonesOpenError', { values: { error: e.message } });
 		}
 	}
 
@@ -142,11 +142,14 @@
 			const found = await findZones(channel);
 			draft = found.zones;
 			editing = true;
-			const pictures = found.report.frames === 1 ? 'one picture' : `${found.report.frames} pictures`;
+			const pictures =
+				found.report.frames === 1
+					? $_('components.settings.channelSection.onePicture')
+					: $_('components.settings.channelSection.picturesCount', { values: { count: found.report.frames } });
 			const notes = found.report.notes.length ? ` (${found.report.notes.join('; ')})` : '';
-			note = `Found the ring in ${pictures}${notes}. Check it against the picture, adjust what is off, and save.`;
+			note = $_('components.settings.channelSection.foundRing', { values: { pictures, notes } });
 		} catch (e: any) {
-			note = `The zones could not be found: ${e.message}`;
+			note = $_('components.settings.channelSection.zonesFindError', { values: { error: e.message } });
 		} finally {
 			finding = false;
 		}
@@ -168,10 +171,10 @@
 			editing = wizard;
 			if (wizard) draft = saved;
 			selected = null;
-			note = 'Saved. The machine works with these zones from its next picture on.';
+			note = $_('components.settings.channelSection.zonesSaved');
 			onsaved?.();
 		} catch (e: any) {
-			note = `The zones could not be saved: ${e.message}`;
+			note = $_('components.settings.channelSection.zonesSaveError', { values: { error: e.message } });
 		} finally {
 			saving = false;
 		}
@@ -247,31 +250,39 @@
 <div class="flex flex-col gap-(--gap-panels)">
 	<div class="flex flex-wrap items-center gap-x-4 gap-y-3">
 		<span class="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-ink-muted">
-			Camera
+			{$_('components.settings.channelSection.camera')}
 			<span class="truncate text-ink">
-				{#if !camerasLoaded}Loading{:else if source === null}None yet{:else if typeof source === 'number'}Camera {source}{:else}{source}{/if}
+				{#if !camerasLoaded}{$_('components.settings.channelSection.cameraLoading')}{:else if source === null}{$_('components.settings.channelSection.cameraNoneYet')}{:else if typeof source === 'number'}{$_('components.settings.channelSection.cameraNumber', { values: { number: source } })}{:else}{source}{/if}
 			</span>
 			{#if camerasLoaded && source === null}
-				<Button variant="ghost" size="sm" icon={Plus} label="Choose a camera" onclick={() => (pickerOpen = true)} />
+				<Button
+					variant="ghost"
+					size="sm"
+					icon={Plus}
+					label={$_('components.settings.channelSection.chooseCamera')}
+					onclick={() => (pickerOpen = true)}
+				/>
 			{/if}
 			{#if status}<span class="ml-2 truncate">{status}</span>{/if}
 		</span>
 		{#if !wizard}
 			<div class="flex flex-wrap items-center gap-2">
-				<Button icon={Camera} disabled={editing} onclick={() => (pickerOpen = true)}>Change camera</Button>
+				<Button icon={Camera} disabled={editing} onclick={() => (pickerOpen = true)}>
+					{$_('components.settings.channelSection.changeCamera')}
+				</Button>
 				<Button
 					icon={SlidersHorizontal}
 					disabled={editing}
 					aria-pressed={sidebar === 'picture'}
 					onclick={() => toggle('picture')}
 				>
-					Picture
+					{$_('components.settings.channelSection.picture')}
 				</Button>
 				<Button icon={Bug} disabled={editing} aria-pressed={sidebar === 'detection'} onclick={() => toggle('detection')}>
-					Detection
+					{$_('components.settings.channelSection.detection')}
 				</Button>
 				<Button icon={Lightbulb} disabled={editing} aria-pressed={sidebar === 'led'} onclick={() => toggle('led')}>
-					LED
+					{$_('components.settings.channelSection.led')}
 				</Button>
 			</div>
 		{/if}
@@ -285,7 +296,7 @@
 					{#if !camerasLoaded}
 						<div class="absolute inset-0 flex items-center justify-center gap-2 text-sm text-ink-muted">
 							<Spinner size={16} />
-							Loading the camera for {label}
+							{$_('components.settings.channelSection.loadingCameraFor', { values: { label } })}
 						</div>
 					{:else if source !== null}
 						<CameraPicture
@@ -314,7 +325,7 @@
 						{/if}
 					{:else}
 						<div class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-ink-muted">
-							No camera is set for {label} yet.
+							{$_('components.settings.channelSection.noCameraSetFor', { values: { label } })}
 						</div>
 					{/if}
 				</div>
@@ -324,19 +335,16 @@
 				<div class="grid grid-cols-1 gap-4 rounded-control bg-well p-4 text-sm text-ink-muted lg:grid-cols-[12rem_minmax(0,1fr)] lg:items-start">
 					<img
 						src="/setup/zone-placement-reference.png"
-						alt="Where the drop and exit zones go"
+						alt={$_('components.settings.channelSection.wizard.imageAlt')}
 						class="h-auto w-full rounded-control object-contain"
 					/>
 					<div class="flex flex-col gap-2">
-						<h4 class="font-medium text-ink">Where the zones go</h4>
+						<h4 class="font-medium text-ink">{$_('components.settings.channelSection.wizard.heading')}</h4>
 						<p>
-							Press Find to fit the zones to the picture, then check them. The blue drop zone goes where
-							parts land from the channel before, the red exit where they leave through the opening in
-							the wall, and the purple sliver just before it.
+							{$_('components.settings.channelSection.wizard.paragraph1')}
 						</p>
 						<p>
-							Drag a zone to move it, an edge to make it wider or narrower, or the ring's circles to
-							size it; the mouse wheel over a zone widens it.
+							{$_('components.settings.channelSection.wizard.paragraph2')}
 						</p>
 					</div>
 				</div>
@@ -379,9 +387,18 @@
 					onClose={closeSidebar}
 				/>
 			{:else if sidebar === 'led'}
-				<Panel title="LED" description="The light in {label}'s hood.">
+				<Panel
+					title={$_('components.settings.channelSection.led')}
+					description={$_('components.settings.channelSection.ledPanelDescription', { values: { label } })}
+				>
 					{#snippet actions()}
-						<Button variant="ghost" size="sm" icon={X} label="Close the LED settings" onclick={closeSidebar} />
+						<Button
+							variant="ghost"
+							size="sm"
+							icon={X}
+							label={$_('components.settings.channelSection.closeLedSettings')}
+							onclick={closeSidebar}
+						/>
 					{/snippet}
 					<ChannelLedSection channelKey={role} />
 				</Panel>

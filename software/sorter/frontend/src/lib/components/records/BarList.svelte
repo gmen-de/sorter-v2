@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
+
 	// A ranked list of horizontal bars on a well: what a chart of counts by
 	// name is. `fill` is a CSS color for data that is a color (a LEGO color);
 	// otherwise the bar is the primary, or `tone` when the level means something.
@@ -17,7 +19,7 @@
 		rows,
 		tone = 'primary',
 		labelWidth = 'sm:w-36',
-		empty = 'No data yet.'
+		empty
 	}: {
 		rows: BarRow[];
 		tone?: 'primary' | 'danger';
@@ -27,11 +29,12 @@
 	} = $props();
 
 	const max = $derived(Math.max(1, ...rows.map((r) => r.count)));
+	const emptyText = $derived(empty ?? $_('components.records.barList.defaultEmpty'));
 </script>
 
 {#if rows.length === 0}
 	<div class="flex h-32 items-center justify-center rounded-control bg-well text-sm text-ink-muted">
-		{empty}
+		{emptyText}
 	</div>
 {:else}
 	<ul class="flex flex-col gap-1.5 rounded-control bg-well p-3">

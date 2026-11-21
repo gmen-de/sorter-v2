@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import CheckCircle2 from '@lucide/svelte/icons/circle-check';
 	import Button from '$lib/components/ui/Button.svelte';
 	import SetupCameraAreaCard from '$lib/components/setup/SetupCameraAreaCard.svelte';
@@ -66,7 +67,7 @@
 </div>
 <div class="flex flex-wrap items-center gap-3">
 	<Button variant="primary" icon={CheckCircle2} loading={savingAssignments} onclick={onSave}>
-		Save the cameras
+		{$_('components.setup.steps.camerasStep.saveCameras')}
 	</Button>
 	{#if cameraError}
 		<p class="text-sm text-danger-ink">{cameraError}</p>

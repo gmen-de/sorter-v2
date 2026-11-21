@@ -2,6 +2,8 @@
 	import CameraPicture from '$lib/components/CameraPicture.svelte';
 	import { indexView } from '$lib/video';
 
+	import { _ } from 'svelte-i18n';
+
 	let {
 		source,
 		label,
@@ -38,11 +40,11 @@
 		<div
 			class="absolute inset-0 flex items-center justify-center bg-well text-sm text-ink-muted"
 		>
-			No preview
+			{$_('components.cameraSourcePreview.noPreview')}
 		</div>
 	{/if}
 {:else if source}
 	<img src={source} alt={label} class={`${layoutClass} ${fitClass}`} />
 {:else}
-	<div class="flex h-full items-center justify-center text-sm text-ink-muted">No preview</div>
+	<div class="flex h-full items-center justify-center text-sm text-ink-muted">{$_('components.cameraSourcePreview.noPreview')}</div>
 {/if}

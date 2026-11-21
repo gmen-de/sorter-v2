@@ -1,0 +1,51 @@
+{
+	"components": {
+		"settings": {
+			"servoGateDiagPanel": {
+				"panelTitle": "Gate test",
+				"panelDescription": "Drive the Waveshare BLE bridge's gates directly to test open/close/calibrate - independent of the sorter's normal layer-gate mapping.",
+				"notWaveshareBle": "Diagnostics are only available for the Waveshare BLE backend. Switch to it in Settings above to use this.",
+				"deviceMissing": "No BLE device address is saved yet. Set one in Settings above first.",
+				"badge": {
+					"connected": "Connected",
+					"notConnected": "Not connected"
+				},
+				"rescan": "Rescan",
+				"gatesPanel": {
+					"title": "Known gates",
+					"description": "{count} gate(s) reachable on the bus.",
+					"emptyHint": "No gates found yet. Press Rescan, or Learn next servo below if none have been onboarded."
+				},
+				"gateLabel": "Gate {gate}",
+				"gateState": {
+					"open": "Open",
+					"closed": "Closed",
+					"blocked": "Blocked",
+					"unknown": "Unknown",
+					"error": "Error",
+					"untested": "Untested"
+				},
+				"buttons": {
+					"open": "Open",
+					"close": "Close",
+					"calibrate": "Calibrate",
+					"learnNext": "Learn next servo",
+					"factoryResetAll": "Factory-reset all"
+				},
+				"footerHint": "Learn next servo onboards the next factory-default servo found at ID 1 and calibrates it. Factory-reset all clears every reachable servo back to ID 1 so onboarding can start over.",
+				"errors": {
+					"statusFailed": "Failed to read bridge status.",
+					"moveGateFailed": "Failed to move gate {gate}.",
+					"calibrateGateFailed": "Failed to calibrate gate {gate}.",
+					"learnFailed": "LEARN failed.",
+					"resetFailed": "Factory reset failed."
+				},
+				"status": {
+					"gateCalibrated": "Gate {gate} calibrated.",
+					"servoLearned": "Servo learned.",
+					"servosReset": "Servos reset."
+				}
+			}
+		}
+	}
+}

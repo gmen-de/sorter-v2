@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { _ } from 'svelte-i18n';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Switch from '$lib/components/ui/Switch.svelte';
 	import SettingRow from '$lib/components/ui/SettingRow.svelte';
@@ -24,7 +25,11 @@
 	);
 
 	const defaultLabel = $derived(
-		field.type === 'bool' ? (field.default ? 'on' : 'off') : String(field.default)
+		field.type === 'bool'
+			? field.default
+				? $_('components.settings.tuningParamRow.onOffLabels.on')
+				: $_('components.settings.tuningParamRow.onOffLabels.off')
+			: String(field.default)
 	);
 
 	function revert() {

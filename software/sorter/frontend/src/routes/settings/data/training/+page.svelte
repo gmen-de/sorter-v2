@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { _ } from 'svelte-i18n';
 	import { goto } from '$app/navigation';
 	import { getBackendHttpBase, machineHttpBaseUrlFromWsUrl } from '$lib/backend';
 	import { getMachineContext } from '$lib/machines/context';
@@ -32,8 +33,10 @@
 	const machine = getMachineContext();
 
 	const POLL_MS = 3000;
-	const MODES: { value: TrainingMode; label: string }[] = [{ value: 'color', label: 'Color' }];
 	const NO_BIN = 'none';
+	const MODES = $derived<{ value: TrainingMode; label: string }[]>([
+		{ value: 'color', label: $_('routes.settings.data.training.page.modeColor') }
+	]);
 
 	const base = $derived(machineHttpBaseUrlFromWsUrl(machine.machine?.url) ?? getBackendHttpBase());
 
@@ -51,7 +54,7 @@
 		if (fixedBin && !bins.some((b) => binKey(b) === binKey(fixedBin))) {
 			options.unshift({ value: binKey(fixedBin), label: binLabel(fixedBin) });
 		}
-		return [{ value: NO_BIN, label: 'None (route by the profile)' }, ...options];
+		return [{ value: NO_BIN, label: $_('routes.settings.data.training.page.noBinLabel') }, ...options];
 	});
 
 	function chooseBin(key: string) {
@@ -83,7 +86,7 @@
 			training = await getTraining(base);
 			loadError = null;
 		} catch (e) {
-			loadError = `Couldn't load training mode: ${message(e)}`;
+			loadError = $_('routes.settings.data.training.page.loadError', { values: { error: message(e) } });
 		}
 	}
 
@@ -116,37 +119,41 @@
 	});
 </script>
 
-<svelte:head><title>Sorter - Training runs</title></svelte:head>
+<svelte:head><title>{$_('routes.settings.data.training.page.pageTitle')}</title></svelte:head>
 
 <PageHeader
-	title="Training runs"
-	description="Runs that label every piece the machine sees with the colors you feed it, for training color recognition. The machine sorts as usual, and the runs go to Hive with the pieces."
+	title={$_('routes.settings.data.training.page.title')}
+	description={$_('routes.settings.data.training.page.description')}
 />
 
-<Panel title="Training mode" flush>
+<Panel title={$_('routes.settings.data.training.page.trainingMode.panelTitle')} flush>
 	{#if !training}
 		<div class="flex items-center gap-2 px-(--pad-panel) pb-4 text-sm text-ink-muted">
 			{#if loadError}
 				<span class="text-danger-ink">{loadError}</span>
 			{:else}
-				<Spinner size={14} /> Loading
+				<Spinner size={14} /> {$_('routes.settings.data.training.page.loading')}
 			{/if}
 		</div>
 	{:else}
 		<div class="divide-y divide-line">
 			<SettingRow
-				label="Training mode"
-				help="While it is on, the dashboard shows the training run in place of Recent pieces. Turning it off ends the run."
+				label={$_('routes.settings.data.training.page.trainingMode.label')}
+				help={$_('routes.settings.data.training.page.trainingMode.help')}
 			>
 				<Switch
 					checked={training.config.enabled}
-					label="Training mode"
+					label={$_('routes.settings.data.training.page.trainingMode.label')}
 					disabled={saving}
 					onchange={(on) => save({ enabled: on })}
 				/>
 			</SettingRow>
 
-			<SettingRow label="Mode" help="What a run labels its pieces with." for="training-mode">
+			<SettingRow
+				label={$_('routes.settings.data.training.page.mode.label')}
+				help={$_('routes.settings.data.training.page.mode.help')}
+				for="training-mode"
+			>
 				<Select
 					id="training-mode"
 					value={training.config.mode}
@@ -158,12 +165,12 @@
 			</SettingRow>
 
 			<SettingRow
-				label="Bin"
-				help="Every piece goes to this bin while training mode is on, and the chute stays there. None: pieces go where the sorting profile sends them."
+				label={$_('routes.settings.data.training.page.bin.label')}
+				help={$_('routes.settings.data.training.page.bin.help')}
 				for="training-bin"
 				changed={fixedBin !== null}
-				defaultText="None"
-				defaultHelp="Route pieces by the sorting profile again."
+				defaultText={$_('routes.settings.data.training.page.bin.defaultText')}
+				defaultHelp={$_('routes.settings.data.training.page.bin.defaultHelp')}
 				onreset={() => save({ bin: null })}
 			>
 				<Select
@@ -177,20 +184,28 @@
 			</SettingRow>
 
 			<SettingRow
-				label="Color"
-				help="The color being fed. Picking another while a run is open starts a new segment of it, at once."
+				label={$_('routes.settings.data.training.page.color.label')}
+				help={$_('routes.settings.data.training.page.color.help')}
 			>
 				<ColorDropdown {base} {training} onsaved={(next) => (training = next)} />
 			</SettingRow>
 
 			<SettingRow
-				label="Run"
+				label={$_('routes.settings.data.training.page.run.label')}
 				help={training.current_run
-					? `Collecting since ${formatTime(training.current_run.started_at)}: ${training.current_run.pieces.toLocaleString()} pieces in ${training.current_run.segments.length} ${training.current_run.segments.length === 1 ? 'segment' : 'segments'}.`
-					: 'A run collects every piece the machine sees until you end it, across pauses.'}
+					? $_('routes.settings.data.training.page.run.collectingHelp', {
+							values: {
+								since: formatTime(training.current_run.started_at),
+								pieces: training.current_run.pieces.toLocaleString(),
+								segments: training.current_run.segments.length
+							}
+						})
+					: $_('routes.settings.data.training.page.run.idleHelp')}
 			>
 				{#snippet tags()}
-					{#if training?.current_run}<Badge tone="success" dot>Collecting</Badge>{/if}
+					{#if training?.current_run}<Badge tone="success" dot
+							>{$_('routes.settings.data.training.page.collectingBadge')}</Badge
+						>{/if}
 				{/snippet}
 				<RunButton {base} {training} onchange={(next) => (training = next)} />
 			</SettingRow>
@@ -203,25 +218,25 @@
 </Panel>
 
 <Panel
-	title="Runs"
-	description="Newest first. Open a run to see its pieces and exclude any that are wrong."
+	title={$_('routes.settings.data.training.page.runs.title')}
+	description={$_('routes.settings.data.training.page.runs.description')}
 	flush
 >
 	{#if training && training.runs.length === 0}
 		<p class="px-(--pad-panel) pb-4 text-sm text-ink-muted">
-			No runs yet. Pick a color and start one above.
+			{$_('routes.settings.data.training.page.runs.empty')}
 		</p>
 	{:else if training}
 		<div class="overflow-x-auto">
 			<table class="data-table">
 				<thead>
 					<tr>
-						<th>Started</th>
-						<th>Duration</th>
-						<th>Colors</th>
-						<th class="num">Pieces</th>
-						<th class="num">Labeled</th>
-						<th class="num">Excluded</th>
+						<th>{$_('routes.settings.data.training.page.runs.columns.started')}</th>
+						<th>{$_('routes.settings.data.training.page.runs.columns.duration')}</th>
+						<th>{$_('routes.settings.data.training.page.runs.columns.colors')}</th>
+						<th class="num">{$_('routes.settings.data.training.page.runs.columns.pieces')}</th>
+						<th class="num">{$_('routes.settings.data.training.page.runs.columns.labeled')}</th>
+						<th class="num">{$_('routes.settings.data.training.page.runs.columns.excluded')}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -236,12 +251,12 @@
 									<a href="/settings/data/training/{run.id}" class="num text-ink">
 										{formatWhen(run.started_at)}
 									</a>
-									{#if run.excluded}<Badge>Excluded</Badge>{/if}
+									{#if run.excluded}<Badge>{$_('routes.settings.data.training.page.excludedBadge')}</Badge>{/if}
 								</span>
 							</td>
 							<td class="whitespace-nowrap">
 								{#if run.ended_at === null}
-									<Badge tone="success" dot>Collecting</Badge>
+									<Badge tone="success" dot>{$_('routes.settings.data.training.page.collectingBadge')}</Badge>
 								{:else}
 									<span class="num">{formatDuration(run.ended_at - run.started_at)}</span>
 								{/if}

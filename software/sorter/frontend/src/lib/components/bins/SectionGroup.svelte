@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Crosshair from '@lucide/svelte/icons/crosshair';
+	import { _ } from 'svelte-i18n';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Switch from '$lib/components/ui/Switch.svelte';
@@ -31,10 +32,12 @@
 	} = $props();
 
 	const binRangeLabel = $derived.by((): string => {
-		if (bins.length === 0) return 'No bins';
+		if (bins.length === 0) return $_('components.bins.sectionGroup.noBins');
 		const first = bins[0].global_index + 1;
 		const last = bins[bins.length - 1].global_index + 1;
-		return bins.length === 1 ? `Bin ${first}` : `Bins ${first}–${last}`;
+		return bins.length === 1
+			? $_('components.bins.sectionGroup.binSingle', { values: { n: first } })
+			: $_('components.bins.sectionGroup.binRange', { values: { first, last } });
 	});
 </script>
 
@@ -42,16 +45,18 @@
 <div class="flex flex-col gap-2">
 	<div class="flex items-center justify-between gap-2">
 		<div class="flex min-w-0 items-center gap-2 text-sm">
-			<span class="shrink-0 font-medium text-ink">Section {sectionIndex + 1}</span>
+			<span class="shrink-0 font-medium text-ink">
+				{$_('components.bins.sectionGroup.sectionLabel', { values: { n: sectionIndex + 1 } })}
+			</span>
 			<span class="truncate text-ink-muted">{binRangeLabel}</span>
-			{#if !enabled}<Badge>Off</Badge>{/if}
+			{#if !enabled}<Badge>{$_('components.bins.sectionGroup.offBadge')}</Badge>{/if}
 		</div>
 		<div class="flex shrink-0 items-center gap-2">
 			<Switch
 				checked={enabled}
 				label={enabled
-					? `Turn off layer ${layerIndex + 1} section ${sectionIndex + 1}`
-					: `Turn on layer ${layerIndex + 1} section ${sectionIndex + 1}`}
+					? $_('components.bins.sectionGroup.turnOffSection', { values: { layer: layerIndex + 1, section: sectionIndex + 1 } })
+					: $_('components.bins.sectionGroup.turnOnSection', { values: { layer: layerIndex + 1, section: sectionIndex + 1 } })}
 				disabled={toggleDisabled}
 				onchange={() => onToggle(!enabled)}
 			/>
@@ -59,7 +64,7 @@
 				size="sm"
 				variant="ghost"
 				icon={Crosshair}
-				label="Point the chute at section {sectionIndex + 1}"
+				label={$_('components.bins.sectionGroup.pointButton', { values: { n: sectionIndex + 1 } })}
 				loading={pointing}
 				disabled={pointDisabled}
 				onclick={onPoint}
