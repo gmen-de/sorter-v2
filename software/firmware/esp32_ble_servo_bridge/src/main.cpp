@@ -26,7 +26,7 @@
 
 // Bumped deliberately on every firmware change worth telling apart in a BLE
 // scan (see bleDeviceName()) - not auto-generated from anything.
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 
 // -- Servo bus -------------------------------------------------------------
 
@@ -351,7 +351,10 @@ String cmdOpenClose(int gate, bool open) {
     setGateStatus(GATE_STATUS_BLOCKED);
     return String(gate) + " ERR UNCALIBRATED";
   }
-  uint16_t target = open ? minV : maxV;
+  // OPEN maps to the servo's calibrated max, CLOSED to its min - matching
+  // the PCA9685 flap convention (open = let the piece fall past, closed =
+  // catch it here), not the raw calibration-scan direction.
+  uint16_t target = open ? maxV : minV;
 
   setTorque(id, true);
   moveTo(id, target, MOVE_TIME_MS);
@@ -391,8 +394,8 @@ String cmdStatus(int gate) {
   int pos, load;
   if (!readPositionAndLoad(id, pos, load)) return String(gate) + " ERR OFFLINE";
 
-  int distOpen = abs(pos - (int)minV);
-  int distClosed = abs(pos - (int)maxV);
+  int distOpen = abs(pos - (int)maxV);
+  int distClosed = abs(pos - (int)minV);
   if (min(distOpen, distClosed) > POSITION_TOLERANCE) return String(gate) + " UNKNOWN";
   return String(gate) + (distOpen <= distClosed ? " OPEN" : " CLOSED");
 }
