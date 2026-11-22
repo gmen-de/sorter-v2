@@ -1044,6 +1044,16 @@
 									<Badge tone={bleBadgeTone(gateStateByGate[gate])}>
 										{bleBadgeLabel(gateStateByGate[gate])}
 									</Badge>
+									<Checkbox
+										checked={layer.invert}
+										disabled={loading || saving}
+										onchange={(e) =>
+											setLayer(layer.layerIndex, {
+												invert: (e.currentTarget as HTMLInputElement).checked
+											})}
+									>
+										{$_('components.servo.servoLayerCalibrator.invertLabel')}
+									</Checkbox>
 									<div class="ml-auto flex items-center gap-2">
 										<Button
 											size="sm"
