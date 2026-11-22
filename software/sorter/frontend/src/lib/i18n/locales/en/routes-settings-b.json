@@ -197,6 +197,15 @@
 					"off": "Off",
 					"full": "Full",
 					"on": "On"
+				},
+				"homeCorrection": {
+					"panelTitle": "Home correction",
+					"panelDescription": "Offset (microsteps) applied on top of the firmware's own home position - encoder_native mode only.",
+					"label": "Correction (microsteps)",
+					"saveButton": "Save",
+					"saved": "Home correction saved.",
+					"saveFailed": "Failed to save the home correction.",
+					"invalid": "Home correction must be a whole number of microsteps."
 				}
 			},
 			"performance": {
