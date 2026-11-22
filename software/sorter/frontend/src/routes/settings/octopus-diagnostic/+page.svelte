@@ -81,6 +81,7 @@
 	let errorMsg = $state<string | null>(null);
 	let statusMsg = $state('');
 	let jogging = $state(false);
+	let homingBusy = $state(false);
 	let loadedMachineKey = $state('');
 	let pollHandle: ReturnType<typeof setInterval> | null = null;
 	let liveInFlight = false;
@@ -210,6 +211,29 @@
 		}
 	}
 
+	async function homeChute() {
+		if (homingBusy) return;
+		homingBusy = true;
+		errorMsg = null;
+		statusMsg = '';
+		try {
+			const res = await fetch(`${backendBase()}/api/hardware-config/chute/calibrate/find-endstop`, {
+				method: 'POST'
+			});
+			if (!res.ok) {
+				const detail = await res.json().catch(() => null);
+				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
+			}
+			const data = await res.json();
+			statusMsg = data?.message ?? 'Chute homed.';
+			void loadLive();
+		} catch (e: any) {
+			errorMsg = e.message ?? 'Failed to home the chute.';
+		} finally {
+			homingBusy = false;
+		}
+	}
+
 	async function jogTo(sel: { section: number; bin: number }) {
 		if (jogging) return;
 		jogging = true;
@@ -297,6 +321,17 @@
 
 {#if tab === 'chute'}
 	<Panel title="Live readout" description="Raw sensor state and driver registers, polled while this tab is open.">
+		{#snippet actions()}
+			<Button
+				variant="primary"
+				size="sm"
+				loading={homingBusy}
+				disabled={homingBusy || !!live?.homing_active}
+				onclick={() => void homeChute()}
+			>
+				Home chute
+			</Button>
+		{/snippet}
 		{#if !live?.live_available}
 			<div class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">
 				Hardware not initialized — start the machine to see live chute data.
