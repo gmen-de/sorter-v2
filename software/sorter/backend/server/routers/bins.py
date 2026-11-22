@@ -691,7 +691,9 @@ def set_bins_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.post("/api/bins/move-to")
 def move_to_bin(payload: MoveToBinPayload) -> Dict[str, Any]:
-    """Move chute to a specific bin and open the correct layer servo."""
+    """Move chute to a specific bin and close the target layer's servo
+    (every other layer opens to pass through), matching the positioning
+    state machine's own door convention."""
     if shared_state.controller_ref is None or not hasattr(shared_state.controller_ref, "irl"):
         raise HTTPException(status_code=503, detail="Hardware controller not initialized.")
 
@@ -715,22 +717,26 @@ def move_to_bin(payload: MoveToBinPayload) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Bin is unreachable (angle out of range).")
 
     if not payload.skip_servo:
-        # Close all servos first, then open the target layer
+        # Open every other layer (passthrough), matching the positioning
+        # state machine's own convention: open = let a piece fall past,
+        # closed = catch it here. Only the target layer stays/becomes closed.
         for i, servo in enumerate(servos):
+            if i == payload.layer_index:
+                continue
             try:
-                if hasattr(servo, "isOpen") and servo.isOpen():
-                    servo.close()
+                if hasattr(servo, "isOpen") and not servo.isOpen():
+                    servo.open()
             except Exception:
                 pass
 
     estimated_ms = _chute_move(chute.moveToBin, address)
 
     if not payload.skip_servo:
-        # Open the target layer servo
+        # Close the target layer servo so it catches here
         target_servo = servos[payload.layer_index]
         try:
-            if hasattr(target_servo, "open"):
-                target_servo.open()
+            if hasattr(target_servo, "close"):
+                target_servo.close()
         except Exception:
             pass
 
