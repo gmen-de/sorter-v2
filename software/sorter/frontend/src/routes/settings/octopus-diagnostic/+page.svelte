@@ -4,6 +4,7 @@
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Field from '$lib/components/ui/Field.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import Panel from '$lib/components/ui/Panel.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
@@ -71,6 +72,11 @@
 	let sectionWidthDeg = $state(51.75);
 	let firstSectionOffsetDeg = $state(8.25);
 	let maxAngleDeg = $state(350);
+	// Only meaningful in "encoder_native" mode - see DEFAULT_HOME_CORRECTION_USTEPS
+	// in hardware_settings/chute.py.
+	let homeCorrectionUsteps = $state<number | null>(null);
+	let homeCorrectionInput = $state('');
+	let homeCorrectionSaving = $state(false);
 
 	let errorMsg = $state<string | null>(null);
 	let statusMsg = $state('');
@@ -113,8 +119,39 @@
 			if (Number.isFinite(c?.section_width_deg)) sectionWidthDeg = c.section_width_deg;
 			if (Number.isFinite(c?.first_section_offset_deg)) firstSectionOffsetDeg = c.first_section_offset_deg;
 			if (Number.isFinite(c?.max_angle_deg)) maxAngleDeg = c.max_angle_deg;
+			if (Number.isFinite(c?.home_correction_usteps)) {
+				homeCorrectionUsteps = c.home_correction_usteps;
+				homeCorrectionInput = String(c.home_correction_usteps);
+			}
 		} catch (e: any) {
 			errorMsg = e.message ?? 'Failed to load the chute geometry';
+		}
+	}
+
+	async function saveHomeCorrection() {
+		const value = Number(homeCorrectionInput);
+		if (!Number.isInteger(value)) {
+			errorMsg = 'Home correction must be a whole number of microsteps.';
+			return;
+		}
+		homeCorrectionSaving = true;
+		errorMsg = null;
+		try {
+			const res = await fetch(`${backendBase()}/api/hardware-config/chute`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ home_correction_usteps: value })
+			});
+			if (!res.ok) {
+				const detail = await res.json().catch(() => null);
+				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
+			}
+			homeCorrectionUsteps = value;
+			statusMsg = 'Home correction saved.';
+		} catch (e: any) {
+			errorMsg = e.message ?? 'Failed to save the home correction.';
+		} finally {
+			homeCorrectionSaving = false;
 		}
 	}
 
@@ -312,6 +349,35 @@
 			{#if statusMsg}<p class="text-sm text-ink-muted">{statusMsg}</p>{/if}
 		</div>
 	</Panel>
+
+	{#if live?.chute_position_sensor === 'encoder_native'}
+		<Panel
+			title="Home correction"
+			description="Offset (microsteps) applied on top of the firmware's own home position - encoder_native mode only."
+		>
+			<div class="flex flex-wrap items-end gap-3 px-(--pad-panel) pb-(--pad-panel)">
+				<Field label="Correction (microsteps)" for="diag-home-correction">
+					<Input
+						id="diag-home-correction"
+						type="number"
+						step={1}
+						value={homeCorrectionInput}
+						disabled={homeCorrectionSaving}
+						oninput={(e) => (homeCorrectionInput = (e.currentTarget as HTMLInputElement).value)}
+						class="w-28"
+					/>
+				</Field>
+				<Button
+					variant="primary"
+					loading={homeCorrectionSaving}
+					disabled={homeCorrectionInput.trim() === String(homeCorrectionUsteps ?? '')}
+					onclick={() => void saveHomeCorrection()}
+				>
+					Save
+				</Button>
+			</div>
+		</Panel>
+	{/if}
 {:else if tab === 'steppers'}
 	<div class="flex flex-col gap-(--gap-panels)">
 		<StepperPanel stepperKey="c_channel_1" keyboardShortcuts />
