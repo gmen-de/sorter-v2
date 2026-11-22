@@ -16,7 +16,7 @@
 				"runButton": "Benchmark starten",
 				"preparing": "Wird vorbereitet (nicht gemessen) …",
 				"randomTitle": "Zufallstest",
-				"randomDescription": "Fährt nacheinander zufällige Bins in zufälligen Ebenen an, misst jede Fahrt und zeigt die Streuung.",
+				"randomDescription": "Fährt nacheinander zufällige Bins in zufälligen Ebenen an - inklusive Rutschen-Fahrt, Klappenwechsel und Wartezeit zum Settle wie bei einem echten Abwurf - misst jeden vollen Zyklus und zeigt die Streuung.",
 				"randomRunsLabel": "Durchläufe",
 				"randomStartButton": "Start",
 				"randomStopButton": "Stopp",

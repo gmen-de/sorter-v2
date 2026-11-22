@@ -16,7 +16,7 @@
 				"runButton": "Run benchmark",
 				"preparing": "Preparing (not timed)…",
 				"randomTitle": "Random test",
-				"randomDescription": "Drives to random bins in random layers, one after another, timing each move and reporting the spread.",
+				"randomDescription": "Drives to random bins in random layers, one after another - moving the chute, switching gates, and waiting out the settle time, same as a real drop - timing each full cycle and reporting the spread.",
 				"randomRunsLabel": "Runs",
 				"randomStartButton": "Start",
 				"randomStopButton": "Stop",

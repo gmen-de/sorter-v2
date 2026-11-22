@@ -29,6 +29,10 @@
 	let layersLoading = $state(true);
 	let layoutError = $state<string | null>(null);
 	let layerLayouts = $state<LayerLayout[]>([]);
+	// Layer index -> settle_total_ms (chuteSettleMsForLayer + the operator's
+	// per-layer adjustment from Storage layers) - same source of truth the
+	// backend's Sending state actually waits on after a real drop.
+	let settleMsByLayer = $state<Record<number, number>>({});
 
 	async function loadLayout() {
 		layersLoading = true;
@@ -50,6 +54,23 @@
 			layoutError = e?.message ?? $_('components.settings.benchmarkPanel.errors.loadLayout');
 		} finally {
 			layersLoading = false;
+		}
+	}
+
+	async function loadSettleTimes() {
+		try {
+			const res = await fetch(`${backendBase()}/api/hardware-config`);
+			if (!res.ok) return;
+			const data = await res.json();
+			const layers = data?.storage_layers?.layers;
+			if (!Array.isArray(layers)) return;
+			const next: Record<number, number> = {};
+			layers.forEach((l: any, i: number) => {
+				if (typeof l?.settle_total_ms === 'number') next[i] = l.settle_total_ms;
+			});
+			settleMsByLayer = next;
+		} catch {
+			// Settle wait just won't be added to the random test's timings.
 		}
 	}
 
@@ -226,6 +247,12 @@
 				// sorting does, so each run's time reflects chute + gate
 				// switching together, not just the chute alone.
 				await moveToBinAndWait(target.layer, target.section, target.bin, false);
+				// Then the settle wait a real drop would need (fall + slide
+				// clear) before the next piece could follow - same value
+				// Sending actually waits on, so the run's total time matches
+				// a real production cycle, not just the move itself.
+				const settleMs = settleMsByLayer[target.layer] ?? 0;
+				if (settleMs > 0) await sleep(settleMs);
 				randomTimesMs = [...randomTimesMs, performance.now() - t0];
 				randomProgress = i + 1;
 			}
@@ -262,7 +289,10 @@
 		}));
 	}
 
-	onMount(() => void loadLayout());
+	onMount(() => {
+		void loadLayout();
+		void loadSettleTimes();
+	});
 </script>
 
 <Panel
