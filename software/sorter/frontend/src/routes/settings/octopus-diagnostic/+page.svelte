@@ -82,6 +82,7 @@
 	let errorMsg = $state<string | null>(null);
 	let statusMsg = $state('');
 	let jogging = $state(false);
+	let homingBusy = $state(false);
 	let loadedMachineKey = $state('');
 	let pollHandle: ReturnType<typeof setInterval> | null = null;
 	let liveInFlight = false;
@@ -211,6 +212,29 @@
 		}
 	}
 
+	async function homeChute() {
+		if (homingBusy) return;
+		homingBusy = true;
+		errorMsg = null;
+		statusMsg = '';
+		try {
+			const res = await fetch(`${backendBase()}/api/hardware-config/chute/calibrate/find-endstop`, {
+				method: 'POST'
+			});
+			if (!res.ok) {
+				const detail = await res.json().catch(() => null);
+				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
+			}
+			const data = await res.json();
+			statusMsg = data?.message ?? $_('routes.settings.octopusDiagnostic.live.homeSuccess');
+			void loadLive();
+		} catch (e: any) {
+			errorMsg = e.message ?? $_('routes.settings.octopusDiagnostic.live.homeFailed');
+		} finally {
+			homingBusy = false;
+		}
+	}
+
 	async function jogTo(sel: { section: number; bin: number }) {
 		if (jogging) return;
 		jogging = true;
@@ -305,6 +329,17 @@
 		title={$_('routes.settings.octopusDiagnostic.live.panelTitle')}
 		description={$_('routes.settings.octopusDiagnostic.live.panelDescription')}
 	>
+		{#snippet actions()}
+			<Button
+				variant="primary"
+				size="sm"
+				loading={homingBusy}
+				disabled={homingBusy || !!live?.homing_active}
+				onclick={() => void homeChute()}
+			>
+				{$_('routes.settings.octopusDiagnostic.live.homeButton')}
+			</Button>
+		{/snippet}
 		{#if !live?.live_available}
 			<div class="px-(--pad-panel) pb-(--pad-panel) text-sm text-ink-muted">
 				{$_('routes.settings.octopusDiagnostic.live.notAvailable')}

@@ -157,7 +157,10 @@
 					"stallLatch": "Stall latch: {value}",
 					"yes": "Yes",
 					"no": "No",
-					"clean": "clean"
+					"clean": "clean",
+					"homeButton": "Home chute",
+					"homeSuccess": "Chute homed.",
+					"homeFailed": "Failed to home the chute."
 				},
 				"binWheel": {
 					"panelTitle": "Bin wheel",
