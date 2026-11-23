@@ -38,6 +38,7 @@
 		waiting_for_downstream: 'warning',
 		piece_held_recovery: 'danger',
 		waiting_for_piece: 'neutral',
+		waiting_for_chute: 'warning',
 		waiting: 'info',
 		ejecting: 'success',
 		staging: 'info'
@@ -56,6 +57,7 @@
 		waiting_for_downstream: 'Waiting — downstream busy',
 		piece_held_recovery: 'Piece held — recovering',
 		waiting_for_piece: 'Waiting for a piece',
+		waiting_for_chute: 'Waiting — chute not aimed yet',
 		waiting: 'Observing / classifying',
 		ejecting: 'Ejecting',
 		staging: 'Staging (clearing drop zone)'
