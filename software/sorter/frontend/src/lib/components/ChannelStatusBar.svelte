@@ -97,14 +97,14 @@
 
 {#if entry}
 	{@const since = sinceLabel()}
-	<div class="flex items-center gap-2 rounded-control bg-well px-3 py-1.5 text-sm">
+	<div class="flex items-center gap-2 h-(--size-control-sm) shrink-0 rounded-control bg-well px-3 text-sm">
 		<Badge tone={entry.tone} dot>{statusLabel(entry.raw)}</Badge>
 		{#if since}
 			<span class="text-ink-muted">{since}</span>
 		{/if}
 	</div>
 {:else}
-	<div class="flex items-center gap-2 rounded-control bg-well px-3 py-1.5 text-sm text-ink-faint">
+	<div class="flex items-center gap-2 h-(--size-control-sm) shrink-0 rounded-control bg-well px-3 text-sm text-ink-faint">
 		No status yet
 	</div>
 {/if}

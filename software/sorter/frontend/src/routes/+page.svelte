@@ -159,14 +159,16 @@
 		     its width (9 / 16 for a 16:9 feed), and the group is as wide as the
 		     height allows, so every picture fills its tile and none has a bar. The
 		     column beside takes the rest of the width. See the design system's
-		     docs/layout.md, the dashboard layout. -->
+		     docs/layout.md, the dashboard layout. Each row of cameras also has
+		     its status bars under the pictures: --status is one bar and the gap
+		     above it, and the height left for pictures is less two of those. -->
 		<div
 			class="flex min-h-0 flex-1 flex-col gap-(--gap-panels) p-4 sm:p-6 lg:flex-row lg:justify-center lg:[container-type:size]"
-			style="--feed: 0.5625"
+			style="--feed: 0.5625; --status: calc(var(--size-control-sm) + 0.5rem)"
 		>
 			<div
 				class="grid grid-cols-1 gap-(--gap-panels) md:grid-cols-2 lg:w-(--cameras) lg:shrink-0 lg:self-start"
-				style="--cameras: min(100cqw - 19rem - var(--gap-panels), (100cqh - 2 * var(--size-control-lg) - (1 - var(--feed) / 2) * var(--gap-panels)) / (1.5 * var(--feed)))"
+				style="--cameras: min(100cqw - 19rem - var(--gap-panels), (100cqh - 2 * var(--size-control-lg) - 2 * var(--status) - (1 - var(--feed) / 2) * var(--gap-panels)) / (1.5 * var(--feed)))"
 			>
 				<div class="flex flex-col gap-2">
 					<CameraFeed
