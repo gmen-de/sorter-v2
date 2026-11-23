@@ -11,6 +11,7 @@
 	import { settings } from '$lib/stores/settings';
 	import { loadThemeColor } from '$lib/stores/themeColor.svelte';
 	import { applyMode } from '$lib/theme';
+	import { getBackendHttpBase } from '$lib/backend';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
@@ -31,8 +32,7 @@
 	$effect(() => applyMode($settings.theme));
 
 	function reportClientError(payload: Record<string, unknown>) {
-		const base = `${window.location.protocol}//${window.location.hostname}:8000`;
-		fetch(`${base}/api/system/client-error`, {
+		fetch(`${getBackendHttpBase()}/api/system/client-error`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(payload)

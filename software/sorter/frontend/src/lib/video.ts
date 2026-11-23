@@ -100,7 +100,8 @@ class VideoSocket {
 	private resendTimer: ReturnType<typeof setTimeout> | null = null;
 
 	constructor(baseUrl: string) {
-		const url = new URL('/ws/video', baseUrl);
+		// Appended, not resolved: a base behind a proxy has a path (/backend).
+		const url = new URL(`${baseUrl.replace(/\/$/, '')}/ws/video`);
 		url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
 		this.url = url.toString();
 		// A hidden page watches nothing. Unsubscribing is only a message.
