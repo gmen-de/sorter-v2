@@ -209,17 +209,16 @@ class Chute:
         )
 
     def checkPosition(self) -> "PositionCheck":
-        """Say how far the chute had drifted since it was last homed/checked.
-        In endstop mode this finds the switch again and puts the chute back on
-        its true position (blocks for about two seconds, so a caller on the
-        main loop runs it on a thread); in encoder mode it is a non-blocking
-        comparison against the magnet-ring encoder's own running count — no
-        motion needed. See position_check.py."""
-        from .position_check import checkPosition, checkPositionEncoder, recordCheck
+        """Say how far the chute had drifted since it was last homed/checked,
+        and correct it with a real re-home: in endstop mode by finding the
+        switch again, in encoder mode by re-running the magnet-ring index-gap
+        seek (both block for a couple seconds, so a caller on the main loop
+        runs this on a thread). See position_check.py."""
+        from .position_check import checkPosition, rehomeEncoder, recordCheck
 
         self.checking = True
         try:
-            check = checkPositionEncoder(self) if self.chute_encoder is not None else checkPosition(self)
+            check = rehomeEncoder(self) if self.chute_encoder is not None else checkPosition(self)
         finally:
             self.checking = False
             self.pieces_since_check = 0
