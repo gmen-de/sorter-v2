@@ -91,6 +91,11 @@ class PulsePerceptionFeeding(BaseState):
         self._moved_until: dict[int, float] = {}
         self._shake_owed: dict[int, float] = {}
         self._exit_tries: dict[int, tuple[int | None, int]] = {}
+        # Human-readable "what is this channel doing right now" status,
+        # published to runtime_stats exactly like the classification/
+        # distribution state machines, so the dashboard can show it live and
+        # explain a slow run instead of just a low ppm number.
+        self._channel_status: dict[int, str] = {}
 
     def _cfg(self) -> PulsePerceptionConfig:
         now = time.monotonic()
@@ -247,6 +252,7 @@ class PulsePerceptionFeeding(BaseState):
             )
             if isinstance(turn, HeldAtLanding):
                 if self._reportHeld(turn, cfg):
+                    self._publishChannelStatus(turn.channel, None, None, held=True)
                     return
                 continue
             if turn is not None and self._canFreeTurn(turn, c3, cfg):
@@ -273,15 +279,29 @@ class PulsePerceptionFeeding(BaseState):
             if gate3.observe(c3, now_mono):
                 self._on_ch3_dispense()
                 self._noteFall(3, gate3)
+            classification_ready = self._classification_ready(cfg)
+            gate3_open = gate3.exitAllowed(now_mono)
             action = feederChannelAction(
                 c3,
-                downstream_clear=self._classification_ready(cfg) and gate3.exitAllowed(now_mono),
+                downstream_clear=classification_ready and gate3_open,
                 greedy=cfg.ch3_greedy_enabled,
             )
             action, hidden_cap = self._withHiddenPieces(3, c3, action, now_mono, cfg)
+            self._publishChannelStatus(
+                3,
+                c3,
+                action,
+                waiting_reason=(
+                    "waiting_for_classification"
+                    if not classification_ready
+                    else "waiting_for_handoff_gate" if not gate3_open else None
+                ),
+            )
             self._apply_action(
                 "ch3", 3, action, self.irl.c_channel_3_rotor_stepper, c3, cfg, hidden_cap
             )
+        else:
+            self._publishChannelStatus(3, None, None, disabled=True)
 
         if cfg.enable_ch2:
             # C2's downstream is C3. "Clear" = C3's drop zone is not occupied,
@@ -290,17 +310,31 @@ class PulsePerceptionFeeding(BaseState):
             gate2 = self._gate(2, cfg)
             if gate2.observe(c2, now_mono):
                 self._noteFall(2, gate2)
+            c3_drop_clear = not c3.in_drop
+            gate2_open = gate2.exitAllowed(now_mono)
+            c3_has_room = self._hasRoom(3, c3, cfg.ch3_max_pieces)
             action = feederChannelAction(
                 c2,
-                downstream_clear=(not c3.in_drop)
-                and gate2.exitAllowed(now_mono)
-                and self._hasRoom(3, c3, cfg.ch3_max_pieces),
+                downstream_clear=c3_drop_clear and gate2_open and c3_has_room,
                 greedy=cfg.ch2_greedy_enabled,
             )
             action, hidden_cap = self._withHiddenPieces(2, c2, action, now_mono, cfg)
+            self._publishChannelStatus(
+                2,
+                c2,
+                action,
+                waiting_reason=(
+                    "waiting_for_c3_drop_clear"
+                    if not c3_drop_clear
+                    else "waiting_for_handoff_gate" if not gate2_open
+                    else "waiting_for_c3_room" if not c3_has_room else None
+                ),
+            )
             self._apply_action(
                 "ch2", 2, action, self.irl.c_channel_2_rotor_stepper, c2, cfg, hidden_cap
             )
+        else:
+            self._publishChannelStatus(2, None, None, disabled=True)
 
         if cfg.enable_ch1:
             # C1 has no exit zone of its own; it just advances unless C2's drop
@@ -319,6 +353,45 @@ class PulsePerceptionFeeding(BaseState):
                     cfg.ch1_pulse_pause_ms,
                     cfg,
                 )
+
+    def _publishChannelStatus(
+        self,
+        channel: int,
+        state,
+        action,
+        *,
+        waiting_reason: str | None = None,
+        disabled: bool = False,
+        held: bool = False,
+    ) -> None:
+        """What this channel is doing right now, published the same way the
+        classification/distribution state machines publish theirs
+        (runtime_stats.observeStateTransition), so the dashboard's per-channel
+        status bar (and the share/transition stats behind it) come for free.
+        ``waiting_reason`` names what a FREEZE'd channel is blocked on — the
+        actual "why is it slow" signal; everything else is a coarser bucket.
+        """
+        from perception.cascade import Action
+
+        if disabled:
+            status = "disabled"
+        elif held:
+            status = "piece_held_recovery"
+        elif int(getattr(state, "n_pieces", 0) or 0) == 0:
+            status = "empty"
+        elif action == Action.FREEZE:
+            status = waiting_reason or "waiting_for_downstream"
+        elif action == Action.PRECISE:
+            status = "exiting"
+        elif action == Action.ADVANCE:
+            status = "advancing"
+        else:
+            status = "idle"
+        prev = self._channel_status.get(channel)
+        if prev == status:
+            return
+        self._channel_status[channel] = status
+        self.gc.runtime_stats.observeStateTransition(f"feeder_ch{channel}", prev, status)
 
     def _frameSize(self, channel: int) -> tuple[int, int] | None:
         perception_service = getattr(self.gc, "perception_service", None)
