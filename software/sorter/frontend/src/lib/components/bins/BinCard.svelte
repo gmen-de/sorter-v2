@@ -152,6 +152,11 @@
 						<Badge tone="info">Not in inventory</Badge>
 					</span>
 				{/if}
+				{#if bin.is_exit}
+					<span title="Unrouted pieces (no matching bin, oversized, held during a double-feed) are routed here">
+						<Badge tone="primary">Exit</Badge>
+					</span>
+				{/if}
 			</div>
 		</div>
 		<div class="-mr-1 flex shrink-0 items-center">

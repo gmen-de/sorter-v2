@@ -48,6 +48,15 @@ def _allowMultiCategoryBins() -> bool:
         return False
 
 
+def _configuredExitBin() -> Optional[dict]:
+    try:
+        from bin_layout_store import get_exit_bin
+
+        return get_exit_bin()
+    except Exception:
+        return None
+
+
 def _persistBinCategories(layout: DistributionLayout) -> None:
     # Runs on the control loop, so the write runs on the database writer
     # thread. The in-memory layout already carries the assignment, and every
@@ -143,24 +152,15 @@ class Positioning(BaseState):
 
             if piece.too_big:
                 # Oversize for any real bin — send it down the center of the
-                # chute to the misc bottom bin (open every usable door so it
-                # falls straight through). Never claims a bin, never raises a
-                # no-bin incident.
-                self.logger.info(
-                    f"Positioning: piece {piece.uuid} is too big "
-                    f"({piece.max_dimension_mm}mm) — passthrough to misc bottom bin"
+                # chute to the misc bottom bin, or the configured exit bin if
+                # one is set. Never claims a real category bin, never raises
+                # a no-bin incident.
+                return self._passthrough(
+                    piece,
+                    MISC_CATEGORY,
+                    reason=f"piece {piece.uuid} is too big ({piece.max_dimension_mm}mm)",
+                    occupancy_state="positioning.passthrough_too_big",
                 )
-                self._openAllDoorsForPassthrough()
-                piece.stage = PieceStage.distributing
-                piece.distributing_at = time.time()
-                piece.distribution_target_selected_at = piece.distributing_at
-                piece.category_id = MISC_CATEGORY
-                piece.destination_bin = None
-                piece.updated_at = time.time()
-                self._piece = piece
-                self.event_queue.put(knownObjectToEvent(piece))
-                self._setOccupancyState("positioning.passthrough_too_big")
-                return DistributionState.READY
 
             if piece.part_id is not None:
                 category_id = self.sorting_profile.getCategoryIdForPart(piece.part_id, piece.color_id)
@@ -204,20 +204,15 @@ class Positioning(BaseState):
                         piece,
                         "bucket_hold",
                         "Went to misc instead of its bin: a double-feed piece the camera lost was "
-                        "still loose on the channel, so every door stayed open until it had had "
-                        "a couple of turns to fall.",
+                        "still loose on the channel, so this piece was diverted (not sorted) until "
+                        "it had had a couple of turns to fall clear.",
                     )
-                self._openAllDoorsForPassthrough()
-                piece.stage = PieceStage.distributing
-                piece.distributing_at = time.time()
-                piece.distribution_target_selected_at = piece.distributing_at
-                piece.category_id = category_id
-                piece.destination_bin = None
-                piece.updated_at = time.time()
-                self._piece = piece
-                self.event_queue.put(knownObjectToEvent(piece))
-                self._setOccupancyState("positioning.passthrough_loose_piece")
-                return DistributionState.READY
+                return self._passthrough(
+                    piece,
+                    category_id,
+                    reason=f"piece {piece.uuid} unrouted and loose on the classification channel",
+                    occupancy_state="positioning.passthrough_loose_piece",
+                )
 
             address = self._trainingBinAddress()
             if address is None:
@@ -242,82 +237,34 @@ class Positioning(BaseState):
                 ):
                     self._setOccupancyState("positioning.no_bin_incident")
                     return DistributionState.IDLE
-                # Pass-through: no bin available for this category. Open
-                # every usable layer door so the piece falls straight
-                # through to the bottom tray. Finalize the piece record
-                # via SENDING so stats/events stay consistent.
-                self.logger.warning(
-                    f"Positioning: no bin for category {category_id} — passthrough to bottom"
-                )
+                # Pass-through: no bin available for this category. Falls
+                # through to the bottom tray (or the configured exit bin).
                 self._raiseBinsFullAlert(category_id)
-                self._openAllDoorsForPassthrough()
-                piece.stage = PieceStage.distributing
-                piece.distributing_at = time.time()
-                piece.distribution_target_selected_at = piece.distributing_at
-                piece.category_id = category_id
-                piece.destination_bin = None
-                piece.updated_at = time.time()
-                self._piece = piece
-                self.event_queue.put(knownObjectToEvent(piece))
-                self._setOccupancyState("positioning.passthrough_no_bin")
-                return DistributionState.READY
+                return self._passthrough(
+                    piece,
+                    category_id,
+                    reason=f"no bin for category {category_id}",
+                    occupancy_state="positioning.passthrough_no_bin",
+                )
 
             if self._exceedsLayerMaxDimension(piece, address.layer_index):
                 # The piece fits a real bin by category, but is physically too
                 # large for that bin's layer. Reroute it to the misc bottom bin
-                # (center-of-chute passthrough) and mark why.
+                # (or the configured exit bin) and mark why.
                 layer_max = self._layerMaxDimensionMm(address.layer_index)
-                self.logger.info(
-                    f"Positioning: piece {piece.uuid} ({piece.max_dimension_mm}mm) exceeds "
-                    f"layer {address.layer_index} limit ({layer_max}mm) — passthrough to misc bottom bin"
-                )
-                self._openAllDoorsForPassthrough()
-                piece.stage = PieceStage.distributing
-                piece.distributing_at = time.time()
-                piece.distribution_target_selected_at = piece.distributing_at
-                piece.category_id = MISC_CATEGORY
-                piece.destination_bin = None
                 piece.too_big_for_layer = True
                 piece.intended_layer_index = address.layer_index
-                piece.updated_at = time.time()
-                self._piece = piece
-                self.event_queue.put(knownObjectToEvent(piece))
-                self._setOccupancyState("positioning.passthrough_too_big_for_layer")
-                return DistributionState.READY
+                return self._passthrough(
+                    piece,
+                    MISC_CATEGORY,
+                    reason=(
+                        f"piece {piece.uuid} ({piece.max_dimension_mm}mm) exceeds "
+                        f"layer {address.layer_index} limit ({layer_max}mm)"
+                    ),
+                    occupancy_state="positioning.passthrough_too_big_for_layer",
+                )
 
-            self.logger.info(
-                f"Positioning: moving to bin at layer={address.layer_index}, section={address.section_index}, bin={address.bin_index}"
-            )
-            # Door selection runs on a background thread (_startDoorSelectAsync)
-            # instead of blocking here, so a backend whose gate commands block
-            # until physically confirmed (the Waveshare BLE servos) doesn't
-            # serialize with the chute move the way it would if called inline
-            # — see the "selecting_door" phase below for the safety argument.
-            # Piece-stamping (stage, category, destination_bin) stays deferred
-            # until door selection actually succeeds, exactly as before.
-            self._pending_piece = piece
-            self._pending_category_id = category_id
-            self._target_address = address
-            self._startDoorSelectAsync(address.layer_index)
-            if self.chute.positionCheckDue():
-                # Rare path (~1/position_check_every pieces): the check itself
-                # drives the chute, so there is nothing useful to overlap the
-                # door-select with here. Wait for the door first, same order
-                # as before, just off the main thread.
-                self._phase = "selecting_door_before_check"
-                return None
-            # Start the chute move right now, in parallel with the door-select
-            # thread already running — this is the actual speed win. Stamp the
-            # motion-started telemetry directly on the pending piece: at this
-            # point self._piece is still the previous piece's (or None), so
-            # _startChuteMove()'s own internal stamp (gated on self._piece)
-            # would otherwise silently miss it.
-            if piece.distribution_motion_started_at is None:
-                piece.distribution_motion_started_at = time.time()
-            self._startChuteMove()  # sets self._phase to "moving" or "start_chute"
-            self._phase_after_door_select = self._phase
-            self._phase = "selecting_door"
-            self._moving_started_at = time.monotonic()
+            self._beginBinMove(piece, category_id, address)
             return None
 
         if self._phase == "selecting_door":
@@ -794,6 +741,108 @@ class Positioning(BaseState):
             self.gc.runtime_stats.clearServoBusOffline()
         except Exception:
             pass
+
+    def _exitBinAddress(self) -> Optional[BinAddress]:
+        """The operator-configured EXIT bin (bin_layout_store.get_exit_bin()),
+        or None if none is configured or the configured one is no longer
+        usable (layer/section deleted or disabled, servo offline, chute
+        angle unreachable). Callers fall back to the open-bottom passthrough
+        in that case, same as before this existed."""
+        raw = _configuredExitBin()
+        if raw is None:
+            return None
+        layer_index = raw["layer_index"]
+        section_index = raw["section_index"]
+        bin_index = raw["bin_index"]
+        if layer_index >= len(self.layout.layers):
+            return None
+        layer = self.layout.layers[layer_index]
+        if not getattr(layer, "enabled", True) or not self._isLayerUsable(layer_index):
+            return None
+        if section_index >= len(layer.sections):
+            return None
+        section = layer.sections[section_index]
+        if not getattr(section, "enabled", True) or bin_index >= len(section.bins):
+            return None
+        address = BinAddress(layer_index, section_index, bin_index)
+        if not self.chute.isBinReachable(address):
+            return None
+        return address
+
+    def _beginBinMove(self, piece, category_id: str, address: BinAddress) -> None:
+        """Start routing ``piece`` toward ``address`` -- the shared tail end
+        of both normal category routing and ``_passthrough``'s exit-bin
+        branch. Piece-stamping (stage, category, destination_bin) stays
+        deferred until door selection actually succeeds
+        (``_commitDoorSelectSuccess``).
+
+        Door selection runs on a background thread (_startDoorSelectAsync)
+        instead of blocking here, so a backend whose gate commands block
+        until physically confirmed (the Waveshare BLE servos) doesn't
+        serialize with the chute move the way it would if called inline —
+        see the "selecting_door" phase for the safety argument.
+        """
+        self.logger.info(
+            f"Positioning: moving to bin at layer={address.layer_index}, section={address.section_index}, bin={address.bin_index}"
+        )
+        self._pending_piece = piece
+        self._pending_category_id = category_id
+        self._target_address = address
+        self._startDoorSelectAsync(address.layer_index)
+        if self.chute.positionCheckDue():
+            # Rare path (~1/position_check_every pieces): the check itself
+            # drives the chute, so there is nothing useful to overlap the
+            # door-select with here. Wait for the door first, same order as
+            # before, just off the main thread.
+            self._phase = "selecting_door_before_check"
+            return
+        # Start the chute move right now, in parallel with the door-select
+        # thread already running — this is the actual speed win. Stamp the
+        # motion-started telemetry directly on the pending piece: at this
+        # point self._piece is still the previous piece's (or None), so
+        # _startChuteMove()'s own internal stamp (gated on self._piece) would
+        # otherwise silently miss it.
+        if piece.distribution_motion_started_at is None:
+            piece.distribution_motion_started_at = time.time()
+        self._startChuteMove()  # sets self._phase to "moving" or "start_chute"
+        self._phase_after_door_select = self._phase
+        self._phase = "selecting_door"
+        self._moving_started_at = time.monotonic()
+
+    def _passthrough(
+        self,
+        piece,
+        category_id: str,
+        *,
+        reason: str,
+        occupancy_state: str,
+    ) -> Optional[DistributionState]:
+        """Route a piece that has no real destination (no bin for its
+        category, oversize, a double-feed bucket-hold, ...). If the operator
+        has configured an EXIT bin, route there like any other bin — some
+        machines (e.g. with a slip ring through the center of the chute,
+        powering its free rotation) have no open bottom tray left for the
+        historical center-of-chute passthrough to fall through. Otherwise
+        fall back to that passthrough: open every usable door so the piece
+        falls straight to the bottom tray.
+        """
+        exit_address = self._exitBinAddress()
+        if exit_address is not None:
+            self.logger.info(f"Positioning: {reason} — routing to the configured exit bin")
+            self._beginBinMove(piece, category_id, exit_address)
+            return None
+        self.logger.info(f"Positioning: {reason} — passthrough to misc bottom bin")
+        self._openAllDoorsForPassthrough()
+        piece.stage = PieceStage.distributing
+        piece.distributing_at = time.time()
+        piece.distribution_target_selected_at = piece.distributing_at
+        piece.category_id = category_id
+        piece.destination_bin = None
+        piece.updated_at = time.time()
+        self._piece = piece
+        self.event_queue.put(knownObjectToEvent(piece))
+        self._setOccupancyState(occupancy_state)
+        return DistributionState.READY
 
     def _openAllDoorsForPassthrough(self) -> None:
         """Open every usable layer door so a piece with no assigned bin

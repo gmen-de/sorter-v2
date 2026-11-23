@@ -7,6 +7,7 @@ export type BinInfo = {
 	category_ids: string[];
 	not_in_inventory?: boolean;
 	chute_correction_usteps?: number;
+	is_exit?: boolean;
 };
 
 export type LayerInfo = {
@@ -18,6 +19,8 @@ export type LayerInfo = {
 	max_pieces_per_bin: number | null;
 	bins: BinInfo[];
 };
+
+export type ExitBin = { layer_index: number; section_index: number; bin_index: number };
 
 // Grouped rows carry `key` on the in-memory (runtime_stats) path and
 // `item_key` on the persisted (sqlite) path — same value, different field name.

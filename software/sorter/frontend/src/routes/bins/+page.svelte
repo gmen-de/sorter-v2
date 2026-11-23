@@ -11,7 +11,7 @@
 	import LayerPanel from '$lib/components/bins/LayerPanel.svelte';
 	import { categoryLabel } from '$lib/components/bins/pieces';
 	import SnapshotsModal from '$lib/components/bins/SnapshotsModal.svelte';
-	import type { BinContents, BinInfo, LayerInfo, SetMeta, SetProgressSummary } from '$lib/components/bins/types';
+	import type { BinContents, BinInfo, ExitBin, LayerInfo, SetMeta, SetProgressSummary } from '$lib/components/bins/types';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -70,6 +70,8 @@
 	let detailsBin = $state<{ bin: BinInfo; layerIndex: number; contents: BinContents | null } | null>(null);
 	let snapshotsOpen = $state(false);
 	let niiBusyLayer = $state<number | null>(null);
+	let exitBin = $state<ExitBin | null>(null);
+	let savingExitBin = $state(false);
 	let setProgressByCategoryId = $state<Record<string, SetProgressSummary>>({});
 	let searchQuery = $state('');
 
@@ -128,6 +130,7 @@
 			layers = data.layers ?? [];
 			currentAngle = data.current_angle;
 			activeLayer = data.active_layer;
+			exitBin = data.exit_bin ?? null;
 			error = null;
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : 'Failed to load bin layout';
@@ -200,6 +203,55 @@
 			error = e instanceof Error ? e.message : 'Failed to update not-in-inventory mode';
 		} finally {
 			niiBusyLayer = null;
+		}
+	}
+
+	async function setExitBin(layerIndex: number, sectionIndex: number, binIndex: number) {
+		if (savingExitBin) return;
+		savingExitBin = true;
+		statusMsg = '';
+		error = null;
+		try {
+			const res = await fetch(`${baseUrl()}/api/bins/exit/set`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ layer_index: layerIndex, section_index: sectionIndex, bin_index: binIndex })
+			});
+			if (!res.ok) {
+				const detail = await res.json().catch(() => null);
+				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
+			}
+			const data = await res.json();
+			exitBin = data.exit_bin ?? null;
+			statusMsg = `Exit bin set to layer ${layerIndex + 1}, section ${sectionIndex + 1}, bin ${binIndex + 1}.`;
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Failed to update the exit bin';
+		} finally {
+			savingExitBin = false;
+		}
+	}
+
+	async function clearExitBin() {
+		if (savingExitBin) return;
+		savingExitBin = true;
+		statusMsg = '';
+		error = null;
+		try {
+			const res = await fetch(`${baseUrl()}/api/bins/exit/set`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ layer_index: null })
+			});
+			if (!res.ok) {
+				const detail = await res.json().catch(() => null);
+				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
+			}
+			exitBin = null;
+			statusMsg = 'Exit bin cleared — unrouted pieces fall through the open bottom again.';
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Failed to update the exit bin';
+		} finally {
+			savingExitBin = false;
 		}
 	}
 
@@ -958,7 +1010,13 @@
 				/>
 			{/each}
 
-			<DiscardBinCard />
+			<DiscardBinCard
+				{layers}
+				{exitBin}
+				saving={savingExitBin}
+				onSetExitBin={(layerIndex, sectionIndex, binIndex) => void setExitBin(layerIndex, sectionIndex, binIndex)}
+				onClearExitBin={() => void clearExitBin()}
+			/>
 		{/if}
 	</div>
 </AppShell>
