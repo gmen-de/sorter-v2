@@ -496,6 +496,15 @@ class PulsePerceptionFeeding(BaseState):
                 del self._shake_owed[channel]
             return
         if action == Action.ADVANCE:
+            # The advance is sized from where the lead piece is in the newest
+            # picture. One taken while the channel was still turning shows the
+            # pieces blurred and short of where they stop: the lead is then
+            # often missed, the move is sized for a piece further back, and the
+            # real lead is carried over the lip onto a busy next channel. After
+            # an exit move the pause is too short for a new picture, so wait
+            # for one.
+            if float(getattr(state, "ts", 0.0) or 0.0) < self._moved_until.get(channel, 0.0):
+                return
             # Free advance pulse, but never push the most-forward piece off the
             # edge into the exit zone: cap the move to its forward clearance to
             # the exit edge. Once a piece reaches the exit, the PRECISE/FREEZE
