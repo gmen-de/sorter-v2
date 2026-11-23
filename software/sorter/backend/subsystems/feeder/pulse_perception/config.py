@@ -82,6 +82,11 @@ class PulsePerceptionConfig:
     # once enough falls have been seen to land (landing_hold.py); until then, the hold
     # above.
     hold_follows_landings: bool = True
+    # A fall on C3 counts once the classification channel has the piece. Until
+    # it has, C3's exit only makes its small pulse and carries nothing to the
+    # lip fast: a lead the camera lost on the lip is then not pushed off
+    # together with the piece behind it (landing_confirm.py).
+    ch3_fall_waits_for_landing: bool = True
     enable_ch1: bool = True
     enable_ch2: bool = True
     enable_ch3: bool = True
@@ -145,6 +150,7 @@ FIELD_META: list[dict] = [
     {"section": "Hand-off", "key": "dispense_vanish_confirm_ms", "label": "Fallen after gone for (ms)", "type": "int", "default": _DEFAULTS.dispense_vanish_confirm_ms, "description": "The piece being pushed off the exit counts as fallen once the camera has not seen it for this long. Longer ignores detector blinks; shorter reacts sooner."},
     {"section": "Hand-off", "key": "dispense_hold_ms", "label": "Hold after a piece falls (ms)", "type": "int", "default": _DEFAULTS.dispense_hold_ms, "description": "After the piece being pushed off falls, the exit pushes nothing for this long, so the next channel sees it before another piece can follow."},
     {"section": "Hand-off", "key": "hold_follows_landings", "label": "Hold follows how long pieces take to land", "type": "bool", "default": _DEFAULTS.hold_follows_landings, "description": "Once 20 pieces have been seen to fall and land, each exit holds for the time 9 in 10 of them took to land on the next channel, plus 0.3 s (0.5 to 2.5 s): a long drop or a ramp holds longer, a short one no longer than it needs. Until then, and when off, the hold above."},
+    {"section": "Hand-off", "key": "ch3_fall_waits_for_landing", "label": "C3: a fall counts once the piece has landed", "type": "bool", "default": _DEFAULTS.ch3_fall_waits_for_landing, "description": "C3 takes its lead piece for fallen when its camera stops seeing it, which is also what a piece still on the lip can look like (its box merged with the next piece's, or a new id). With this on, until the classification channel has taken a piece, C3's exit only makes its small pulse and does not carry the next piece to the lip fast, so the two do not fall together. Off: the camera's word is taken at once."},
     {"section": "Channels", "key": "enable_ch1", "label": "Enable C1 (bulk)", "type": "bool", "default": _DEFAULTS.enable_ch1, "description": "Run the C1 (bulk) channel. Off = this channel never moves."},
     {"section": "Channels", "key": "enable_ch2", "label": "Enable C2", "type": "bool", "default": _DEFAULTS.enable_ch2, "description": "Run the C2 channel. Off = this channel never moves."},
     {"section": "Channels", "key": "enable_ch3", "label": "Enable C3", "type": "bool", "default": _DEFAULTS.enable_ch3, "description": "Run the C3 channel. Off = this channel never moves."},

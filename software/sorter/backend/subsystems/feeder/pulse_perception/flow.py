@@ -19,6 +19,7 @@ from .blind_arc import BlindArc, forward
 from .dispense_gate import DispenseGate
 from .exit_step import ExitStep, exitStep
 from .held import FreeTurn, HeldAtLanding, HeldPieces
+from .landing_confirm import LandingConfirm
 
 # A deliberately simple pulsing state machine on the new perception stack.
 #
@@ -76,6 +77,8 @@ class PulsePerceptionFeeding(BaseState):
         self._config_loaded_at: float = 0.0
         # One piece per hand-off: C2 into C3, C3 into the classification channel.
         self._gates: dict[int, DispenseGate] = {2: DispenseGate(), 3: DispenseGate()}
+        # A fall off C3 the classification channel has not taken yet.
+        self._landing: dict[int, LandingConfirm] = {3: LandingConfirm()}
         # Output degrees each channel has been moved forward, and the pieces
         # it carries through the part of its ring its camera cannot see.
         self._odometer: dict[int, float] = {1: 0.0, 2: 0.0, 3: 0.0}
@@ -276,9 +279,12 @@ class PulsePerceptionFeeding(BaseState):
             # hand-off: once a piece falls, C3 pushes nothing more off for a
             # while, so C4 sees it before the next one can follow.
             gate3 = self._gate(3, cfg)
+            c4_has_piece = not self._classification_ready(cfg)
+            self._landing[3].observe(c4_has_piece)
             if gate3.observe(c3, now_mono):
                 self._on_ch3_dispense()
                 self._noteFall(3, gate3)
+                self._landing[3].fell(now_mono, c4_has_piece)
             classification_ready = self._classification_ready(cfg)
             gate3_open = gate3.exitAllowed(now_mono)
             action = feederChannelAction(
@@ -640,12 +646,22 @@ class PulsePerceptionFeeding(BaseState):
             action = Action.ADVANCE
         return action, cap
 
+    def _fallOpen(self, channel: int, cfg: PulsePerceptionConfig) -> bool:
+        """The exit took its lead for fallen and the next channel has not taken
+        a piece since (landing_confirm.py): the lead may still be on the lip."""
+        landing = self._landing.get(channel)
+        if landing is None or not landing.open:
+            return False
+        # Without the gate the classification channel never reads as having a
+        # piece, so there is nothing to wait for.
+        return bool(getattr(cfg, f"ch{channel}_fall_waits_for_landing", False)) and cfg.gate_ch3_on_classification_ready
+
     def _exitMoveDeg(self, channel: int, state, cfg: PulsePerceptionConfig) -> float:
         """One exit move: as far as it takes to drop the lead piece, up to
         exit_move_max_deg, but never so far that a piece behind it reaches the
         exit. With a piece close behind, that is the small exit pulse."""
         small = cfg.exit_pulse_output_deg
-        if cfg.exit_move_max_deg <= small:
+        if cfg.exit_move_max_deg <= small or self._fallOpen(channel, cfg):
             return small
         pieces = getattr(state, "pieces", ())
         if len(pieces) < 2:
@@ -662,5 +678,7 @@ class PulsePerceptionFeeding(BaseState):
     def cleanup(self) -> None:
         for blind in self._blind.values():
             blind.clear()
+        for landing in self._landing.values():
+            landing.open_since = None
         self._held.reset()
         super().cleanup()

@@ -37,6 +37,7 @@ def _piece(angle: float, track_id: int) -> PieceObservation:
 
 def _feeder(channel_def) -> PulsePerceptionFeeding:
     f = PulsePerceptionFeeding.__new__(PulsePerceptionFeeding)
+    f._landing = {}
     f.gc = SimpleNamespace(perception_service=SimpleNamespace(channels=lambda: {3: channel_def}))
     return f
 
