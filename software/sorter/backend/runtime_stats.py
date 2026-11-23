@@ -15,6 +15,14 @@ MAX_KNOWN_OBJECT_LOOKUP_ENTRIES = 1000
 # C4's active ppm) is every other state.
 C4_WAITING_FOR_PIECE = "waiting_for_piece"
 
+# The classification channel's state while a classified, placed head piece
+# waits for distribution to finish aiming the chute for it (shared.
+# distribution_ready) before it can eject. Counts as active time (unlike
+# C4_WAITING_FOR_PIECE) — the channel has a piece and is working, just
+# blocked on a downstream dependency, which is exactly the signal an
+# operator diagnosing low ppm wants surfaced separately from "idle".
+C4_WAITING_FOR_CHUTE = "waiting_for_chute"
+
 
 def _timedOutProblem(entry: dict[str, Any], now: float, silent_s: float) -> dict[str, Any]:
     """The note a reaped piece carries (KnownObject.problems): how long it went

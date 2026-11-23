@@ -39,6 +39,7 @@
 		waiting_for_downstream: 'warning',
 		piece_held_recovery: 'danger',
 		waiting_for_piece: 'neutral',
+		waiting_for_chute: 'warning',
 		waiting: 'info',
 		ejecting: 'success',
 		staging: 'info'

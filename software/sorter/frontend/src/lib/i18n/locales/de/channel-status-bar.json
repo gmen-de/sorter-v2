@@ -17,6 +17,7 @@
 				"waiting_for_downstream": "Wartet — nachgelagerter Kanal belegt",
 				"piece_held_recovery": "Bauteil verklemmt — wird befreit",
 				"waiting_for_piece": "Wartet auf ein Bauteil",
+				"waiting_for_chute": "Wartet — Chute noch nicht ausgerichtet",
 				"waiting": "Beobachtet / klassifiziert",
 				"ejecting": "Wirft aus",
 				"staging": "Räumt Drop-Zone frei"

@@ -13,7 +13,7 @@ from defs.known_object import (
     notePieceProblem,
 )
 from piece_cycles import CycleRecorder
-from runtime_stats import C4_WAITING_FOR_PIECE
+from runtime_stats import C4_WAITING_FOR_CHUTE, C4_WAITING_FOR_PIECE
 from subsystems.classification_channel.five_sector_platter import C4FiveSectorPlatter
 
 from .. import crop_quality
@@ -465,11 +465,21 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         self.logger.info(f"{LOG_TAG} bucket hold released ({reason}) — normal routing resumes")
 
     def phaseName(self) -> str:
-        # WAITING with the drop zone clear is the channel waiting on the feeder
-        # for its next piece, which the runtime stats leave out of C4's active
-        # time; named apart, a stall there also says what it waited on.
-        if self._phase == _Phase.WAITING and self.shared.classification_ready:
-            return C4_WAITING_FOR_PIECE
+        if self._phase == _Phase.WAITING:
+            # A classified head already handed to distribution (placePieceForDistribution,
+            # see _aimChuteForHead) but not yet reported aimed: the channel has
+            # a piece and is working, it just can't eject until the chute
+            # catches up. Named apart from plain "waiting" so a slow run shows
+            # the chute, not classification, as the thing it waited on.
+            pending = self._pendingPlacedPiece()
+            if pending is not None and not self.shared.distribution_ready:
+                return C4_WAITING_FOR_CHUTE
+            # WAITING with the drop zone clear is the channel waiting on the
+            # feeder for its next piece, which the runtime stats leave out of
+            # C4's active time; named apart, a stall there also says what it
+            # waited on.
+            if self.shared.classification_ready:
+                return C4_WAITING_FOR_PIECE
         return self._phase.value
 
     def attemptStallAutoClear(self, *, max_output_deg: float) -> ChannelClearResult:
