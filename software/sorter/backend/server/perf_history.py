@@ -56,6 +56,18 @@ def extractRow(snapshot: dict[str, Any], captured_at: float) -> dict[str, Any]:
     throughput = throughput if isinstance(throughput, dict) else {}
     snap_counts = snapshot.get("counts")
     snap_counts = snap_counts if isinstance(snap_counts, dict) else {}
+    state_machines = snapshot.get("state_machines")
+    state_machines = state_machines if isinstance(state_machines, dict) else {}
+    # One state per machine per row (e.g. feeder_ch2/feeder_ch3/classification/
+    # distribution's current_state) - sampled once a second like everything
+    # else here, so "what was C3 waiting on over the last N minutes" is a
+    # tally over window() rows instead of needing the live snapshot's own
+    # (restart-reset) state_time_s/state_share_pct totals.
+    channel_states: dict[str, str] = {
+        machine: m["current_state"]
+        for machine, m in state_machines.items()
+        if isinstance(m, dict) and isinstance(m.get("current_state"), str)
+    }
 
     cameras: dict[str, dict[str, Optional[float]]] = {}
     for key in perf_ms:
@@ -105,6 +117,7 @@ def extractRow(snapshot: dict[str, Any], captured_at: float) -> dict[str, Any]:
         "running_time_s": _num(throughput.get("running_time_s")),
         "pieces_seen": snap_counts.get("pieces_seen"),
         "distributed": snap_counts.get("distributed"),
+        "channel_states": channel_states,
     }
 
 
