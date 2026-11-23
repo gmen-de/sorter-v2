@@ -117,12 +117,11 @@ def checkPosition(chute: "Chute") -> PositionCheck:
     )
 
 
-def checkPositionEncoder(chute: "Chute") -> PositionCheck:
-    """Compare the magnet-ring encoder's own running count against the
-    stepper's open-loop position, both measured from the same zero that
-    Chute._homeEncoder() set — no motion needed, unlike checkPosition()
-    above (a real improvement: this check can run as often as the operator
-    likes without ever pausing the chute).
+def _encoderDrift(chute: "Chute") -> tuple[float, int, float] | None:
+    """(drift_deg, drift_steps, degrees_per_count) between the magnet-ring
+    encoder's own running count and the stepper's open-loop position, both
+    measured from the same zero that Chute._homeEncoder() set — or None if
+    there is no zero reference yet to compare against.
 
     Both the encoder's count direction and encoder_counts_per_revolution
     (180, see DEFAULT_ENCODER_COUNTS_PER_REVOLUTION) are bench-confirmed as
@@ -136,14 +135,8 @@ def checkPositionEncoder(chute: "Chute") -> PositionCheck:
     """
     from .chute import GEAR_RATIO
 
-    started = time.monotonic()
-
-    def failed(error: str) -> PositionCheck:
-        chute.markUnhomed(f"position check: {error}")
-        return PositionCheck(time.time(), False, duration_s=time.monotonic() - started, error=error)
-
     if chute.chute_encoder is None or chute._encoder_zero_count is None:
-        return failed("no encoder zero reference recorded; home the chute first")
+        return None
 
     degrees_per_count = 360.0 / chute.encoder_counts_per_revolution
     encoder_deg_since_zero = (chute.chute_encoder.get_count() - chute._encoder_zero_count) * degrees_per_count
@@ -156,7 +149,52 @@ def checkPositionEncoder(chute: "Chute") -> PositionCheck:
     stepper_deg_since_zero = chute.stepper.position_degrees / GEAR_RATIO
     drift_deg = stepper_deg_since_zero - encoder_deg_since_zero
     drift_steps = chute.stepper.microsteps_for_degrees(drift_deg * GEAR_RATIO)
+    return drift_deg, drift_steps, degrees_per_count
+
+
+def checkPositionEncoder(chute: "Chute") -> PositionCheck:
+    """Compare the magnet-ring encoder's own running count against the
+    stepper's open-loop position — a read, no motion. Used standalone (e.g.
+    the StallGuard "run now" button); the periodic check itself uses
+    rehomeEncoder() below instead, which corrects what this only reports."""
+    started = time.monotonic()
+    drift = _encoderDrift(chute)
+    if drift is None:
+        chute.markUnhomed("position check: no encoder zero reference recorded; home the chute first")
+        return PositionCheck(
+            time.time(), False, duration_s=round(time.monotonic() - started, 2),
+            error="no encoder zero reference recorded; home the chute first",
+        )
+    drift_deg, drift_steps, degrees_per_count = drift
     duration = round(time.monotonic() - started, 2)
+    return PositionCheck(
+        time.time(), True, drift_steps, round(drift_deg, 3),
+        precision_deg=round(degrees_per_count, 3), duration_s=duration,
+    )
+
+
+def rehomeEncoder(chute: "Chute") -> PositionCheck:
+    """The periodic check's encoder-mode path: unlike checkPositionEncoder()
+    above, this actually corrects drift instead of just reporting it, by
+    re-running the real magnet-ring homing sequence (Chute._homeEncoder() —
+    the same firmware-driven index-gap seek used at boot). The endstop check
+    above already re-homes for the same reason; encoder mode has its own
+    equally real physical reference (the index gap), so there is no reason
+    for it to stop at a read-only comparison. The pre-correction drift is
+    read first, purely so the StallGuard history still shows what would have
+    been missed without this re-home."""
+    started = time.monotonic()
+    drift = _encoderDrift(chute)
+    if not chute._homeEncoder():
+        chute.markUnhomed("position check: re-home failed")
+        return PositionCheck(
+            time.time(), False, duration_s=round(time.monotonic() - started, 2),
+            error="re-home failed",
+        )
+    duration = round(time.monotonic() - started, 2)
+    if drift is None:
+        return PositionCheck(time.time(), True, duration_s=duration)
+    drift_deg, drift_steps, degrees_per_count = drift
     return PositionCheck(
         time.time(), True, drift_steps, round(drift_deg, 3),
         precision_deg=round(degrees_per_count, 3), duration_s=duration,
