@@ -22,6 +22,7 @@
 	import TrainingPanel from '$lib/components/training/TrainingPanel.svelte';
 	import { getTraining, type TrainingState } from '$lib/training/api';
 	import RuntimeStats, { RUNTIME_SPANS, type RuntimeSpan } from '$lib/components/RuntimeStats.svelte';
+	import ChannelStatusBar from '$lib/components/ChannelStatusBar.svelte';
 	import SegmentedControl from '$lib/components/ui/SegmentedControl.svelte';
 	import House from '@lucide/svelte/icons/house';
 	import Plug from '@lucide/svelte/icons/plug';
@@ -52,6 +53,12 @@
 	const runtimeStats = $derived((machine.machine?.runtimeStats ?? {}) as Record<string, unknown>);
 	const incidentCard = $derived(
 		(runtimeStats.incident_card ?? null) as IncidentCardData | null
+	);
+	const channelStateMachines = $derived(
+		(runtimeStats.state_machines ?? null) as Record<
+			string,
+			{ current_state?: string; entered_at?: number }
+		> | null
 	);
 
 	async function startSystem() {
@@ -161,36 +168,45 @@
 				class="grid grid-cols-1 gap-(--gap-panels) md:grid-cols-2 lg:w-(--cameras) lg:shrink-0 lg:self-start"
 				style="--cameras: min(100cqw - 19rem - var(--gap-panels), (100cqh - 2 * var(--size-control-lg) - (1 - var(--feed) / 2) * var(--gap-panels)) / (1.5 * var(--feed)))"
 			>
-				<CameraFeed
-					camera="c_channel_2"
-					label={cameraLabel('c_channel_2')}
-					controls={['annotations', 'fullscreen']}
-					class="@container"
-				>
-					{#snippet actions()}
-						<CameraChannelControls stepperKey="c_channel_2" />
-					{/snippet}
-				</CameraFeed>
-				<CameraFeed
-					camera="c_channel_3"
-					label={cameraLabel('c_channel_3')}
-					controls={['annotations', 'fullscreen']}
-					class="@container"
-				>
-					{#snippet actions()}
-						<CameraChannelControls stepperKey="c_channel_3" />
-					{/snippet}
-				</CameraFeed>
-				<CameraFeed
-					camera="classification_channel"
-					label={cameraLabel('classification_channel')}
-					controls={['annotations', 'fullscreen']}
-					class="@container md:col-span-2"
-				>
-					{#snippet actions()}
-						<CameraChannelControls stepperKey="c_channel_4" />
-					{/snippet}
-				</CameraFeed>
+				<div class="flex flex-col gap-2">
+					<CameraFeed
+						camera="c_channel_2"
+						label={cameraLabel('c_channel_2')}
+						controls={['annotations', 'fullscreen']}
+						class="@container"
+					>
+						{#snippet actions()}
+							<CameraChannelControls stepperKey="c_channel_2" />
+						{/snippet}
+					</CameraFeed>
+					<ChannelStatusBar stateMachines={channelStateMachines} machineKey="feeder_ch2" />
+				</div>
+				<div class="flex flex-col gap-2">
+					<CameraFeed
+						camera="c_channel_3"
+						label={cameraLabel('c_channel_3')}
+						controls={['annotations', 'fullscreen']}
+						class="@container"
+					>
+						{#snippet actions()}
+							<CameraChannelControls stepperKey="c_channel_3" />
+						{/snippet}
+					</CameraFeed>
+					<ChannelStatusBar stateMachines={channelStateMachines} machineKey="feeder_ch3" />
+				</div>
+				<div class="flex flex-col gap-2 md:col-span-2">
+					<CameraFeed
+						camera="classification_channel"
+						label={cameraLabel('classification_channel')}
+						controls={['annotations', 'fullscreen']}
+						class="@container"
+					>
+						{#snippet actions()}
+							<CameraChannelControls stepperKey="c_channel_4" />
+						{/snippet}
+					</CameraFeed>
+					<ChannelStatusBar stateMachines={channelStateMachines} machineKey="classification" />
+				</div>
 			</div>
 
 			<!-- Beside the cameras from lg up, from 19rem to 40rem wide. On a phone this

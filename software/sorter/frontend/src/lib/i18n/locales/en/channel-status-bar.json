@@ -1,0 +1,26 @@
+{
+	"components": {
+		"channelStatusBar": {
+			"noData": "No status yet",
+			"forSeconds": "for {s}s",
+			"forMinutes": "for {m}m {s}s",
+			"status": {
+				"empty": "Empty",
+				"idle": "Idle",
+				"disabled": "Disabled",
+				"advancing": "Advancing piece",
+				"exiting": "Exiting",
+				"waiting_for_classification": "Waiting — classification busy",
+				"waiting_for_handoff_gate": "Waiting — hand-off cooldown",
+				"waiting_for_c3_drop_clear": "Waiting — C3 drop zone busy",
+				"waiting_for_c3_room": "Waiting — C3 full",
+				"waiting_for_downstream": "Waiting — downstream busy",
+				"piece_held_recovery": "Piece held — recovering",
+				"waiting_for_piece": "Waiting for a piece",
+				"waiting": "Observing / classifying",
+				"ejecting": "Ejecting",
+				"staging": "Staging (clearing drop zone)"
+			}
+		}
+	}
+}
