@@ -165,6 +165,11 @@
 						<Badge tone="info">{$_('components.bins.binCard.notInInventory.badge')}</Badge>
 					</span>
 				{/if}
+				{#if bin.is_exit}
+					<span title={$_('components.bins.discardBinCard.gridBadgeTitle')}>
+						<Badge tone="primary">{$_('components.bins.discardBinCard.gridBadge')}</Badge>
+					</span>
+				{/if}
 			</div>
 		</div>
 		<div class="-mr-1 flex shrink-0 items-center">

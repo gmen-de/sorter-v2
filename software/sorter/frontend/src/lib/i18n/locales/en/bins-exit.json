@@ -1,0 +1,30 @@
+{
+	"routes": {
+		"bins": {
+			"exitBinSetMsg": "Exit bin set to layer {layer}, section {section}, bin {bin}.",
+			"exitBinClearedMsg": "Exit bin cleared — unrouted pieces fall through the open bottom again.",
+			"exitBinSetFailedFallback": "Failed to update the exit bin."
+		}
+	},
+	"components": {
+		"bins": {
+			"discardBinCard": {
+				"panelTitle": "Discard / exit bin",
+				"virtualBadge": "Virtual — falls through",
+				"exitBinBadge": "Layer {layer} · Section {section} · Bin {bin}",
+				"description": "Pieces with no matching bin (unrecognized, oversized, or held back during a double-feed) fall straight through every layer's open doors to the tray below the chute.",
+				"descriptionWithExit": "Pieces with no matching bin (unrecognized, oversized, or held back during a double-feed) are routed to the bin below instead of falling through the bottom.",
+				"layerLabel": "Layer",
+				"sectionLabel": "Section",
+				"binLabel": "Bin",
+				"layerOption": "Layer {n}",
+				"sectionOption": "Section {n}",
+				"binOption": "Bin {n}",
+				"clearButton": "Clear (fall through bottom)",
+				"useAsExitButton": "Use as exit bin",
+				"gridBadge": "Exit",
+				"gridBadgeTitle": "Unrouted pieces (no matching bin, oversized, held during a double-feed) are routed here"
+			}
+		}
+	}
+}

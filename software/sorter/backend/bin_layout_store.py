@@ -22,6 +22,7 @@ _STATE_KEY_BIN_CATEGORIES = "bin_categories"
 _STATE_KEY_NOT_IN_INVENTORY_BINS = "not_in_inventory_bins"
 _STATE_KEY_SERVO_CHANNEL_CALIBRATION = "servo_channel_calibration"
 _STATE_KEY_CHUTE_BIN_CORRECTIONS = "chute_bin_corrections"
+_STATE_KEY_EXIT_BIN = "exit_bin"
 
 _BIN_LAYOUT_COLUMNS = (
     "id, name, profile_id, profile_source, layout_json, created_at, updated_at, is_active"
@@ -214,6 +215,41 @@ def set_chute_bin_correction(layer_index: int, section_index: int, bin_index: in
     else:
         corrections[key] = int(correction_usteps)
     _write(_STATE_KEY_CHUTE_BIN_CORRECTIONS, corrections)
+
+
+def get_exit_bin() -> dict[str, int] | None:
+    """The operator-configured EXIT bin: where a piece with no real
+    destination (no matching category, oversize, a double-feed bucket-hold,
+    ...) is routed. Some machines (e.g. ones with a slip ring installed
+    through the center of the chute to power its free rotation) have no open
+    bottom tray for the historical center-of-chute passthrough to fall
+    through, so this redirects that passthrough to a real bin instead. None
+    (the default) keeps the open-bottom passthrough."""
+    value = _read(_STATE_KEY_EXIT_BIN)
+    if not isinstance(value, dict):
+        return None
+    if not all(isinstance(value.get(k), int) for k in ("layer_index", "section_index", "bin_index")):
+        return None
+    return {
+        "layer_index": value["layer_index"],
+        "section_index": value["section_index"],
+        "bin_index": value["bin_index"],
+    }
+
+
+def set_exit_bin(layer_index: int | None, section_index: int | None = None, bin_index: int | None = None) -> None:
+    # layer_index None clears the override back to the open-bottom passthrough.
+    if layer_index is None:
+        _write(_STATE_KEY_EXIT_BIN, None)
+        return
+    _write(
+        _STATE_KEY_EXIT_BIN,
+        {
+            "layer_index": int(layer_index),
+            "section_index": int(section_index or 0),
+            "bin_index": int(bin_index or 0),
+        },
+    )
 
 
 def _bin_layout_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:

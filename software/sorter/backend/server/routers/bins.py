@@ -29,9 +29,11 @@ from bin_contents import (
 from bin_layout_store import (
     get_bin_categories,
     get_chute_bin_corrections,
+    get_exit_bin,
     get_not_in_inventory_bins,
     set_bin_categories,
     set_chute_bin_correction,
+    set_exit_bin,
     set_not_in_inventory_bins,
 )
 from irl.bin_layout import (
@@ -670,11 +672,25 @@ def get_bins_layout() -> Dict[str, Any]:
             except (IndexError, TypeError):
                 bin_out["not_in_inventory"] = False
 
+    # Overlay the operator-configured EXIT bin, if any (see
+    # positioning.py's _exitBinAddress() for what it's for).
+    exit_bin = get_exit_bin()
+    for layer_out in layers_out:
+        li = layer_out["layer_index"]
+        for bin_out in layer_out["bins"]:
+            bin_out["is_exit"] = bool(
+                exit_bin
+                and exit_bin["layer_index"] == li
+                and exit_bin["section_index"] == bin_out["section_index"]
+                and exit_bin["bin_index"] == bin_out["bin_index"]
+            )
+
     return {
         "ok": True,
         "layers": layers_out,
         "current_angle": current_angle,
         "active_layer": active_layer,
+        "exit_bin": exit_bin,
     }
 
 
@@ -757,6 +773,14 @@ class ChuteBinCorrectionPayload(BaseModel):
     correction_usteps: Optional[int] = None  # None clears it back to 0
 
 
+class ExitBinPayload(BaseModel):
+    # layer_index None clears the override, going back to the open-bottom
+    # passthrough (see positioning.py's _exitBinAddress()).
+    layer_index: Optional[int] = None
+    section_index: int = 0
+    bin_index: int = 0
+
+
 @router.post("/api/bins/chute-correction")
 def set_chute_bin_correction_route(payload: ChuteBinCorrectionPayload) -> Dict[str, Any]:
     """Per-bin chute fine-tune correction, in microsteps - encoder_native mode
@@ -772,6 +796,24 @@ def set_chute_bin_correction_route(payload: ChuteBinCorrectionPayload) -> Dict[s
         "bin_index": payload.bin_index,
         "correction_usteps": payload.correction_usteps or 0,
     }
+
+
+@router.post("/api/bins/exit/set")
+def set_exit_bin_route(payload: ExitBinPayload) -> Dict[str, Any]:
+    """Set (or, with layer_index omitted, clear) the operator-configured EXIT
+    bin. Machines whose chute bottom is blocked (e.g. by a slip ring
+    installed through its center to power free rotation) have no open
+    bottom tray left for an unrouted piece (no matching bin, oversize, a
+    double-feed bucket-hold, ...) to fall through; this gives positioning.py
+    a real bin to route those to instead. See positioning.py's
+    _exitBinAddress()/_passthrough()."""
+    set_exit_bin(payload.layer_index, payload.section_index, payload.bin_index)
+    return {"ok": True, "exit_bin": get_exit_bin()}
+
+
+@router.get("/api/bins/exit")
+def get_exit_bin_route() -> Dict[str, Any]:
+    return {"ok": True, "exit_bin": get_exit_bin()}
 
 
 @router.post("/api/bins/move-to-section")

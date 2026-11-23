@@ -1,0 +1,30 @@
+{
+	"routes": {
+		"bins": {
+			"exitBinSetMsg": "Exit-Bin gesetzt auf Ebene {layer}, Sektion {section}, Bin {bin}.",
+			"exitBinClearedMsg": "Exit-Bin entfernt — nicht zugeordnete Teile fallen wieder durch den offenen Boden.",
+			"exitBinSetFailedFallback": "Exit-Bin konnte nicht aktualisiert werden."
+		}
+	},
+	"components": {
+		"bins": {
+			"discardBinCard": {
+				"panelTitle": "Verwurf-/Exit-Bin",
+				"virtualBadge": "Virtuell — fällt durch",
+				"exitBinBadge": "Ebene {layer} · Sektion {section} · Bin {bin}",
+				"description": "Teile ohne passenden Bin (nicht erkannt, zu groß, oder während eines Doppel-Feeds zurückgehalten) fallen geradewegs durch die offenen Klappen aller Ebenen in die Schale unter der Rutsche.",
+				"descriptionWithExit": "Teile ohne passenden Bin (nicht erkannt, zu groß, oder während eines Doppel-Feeds zurückgehalten) werden stattdessen in den unten festgelegten Bin geleitet, statt durch den Boden zu fallen.",
+				"layerLabel": "Ebene",
+				"sectionLabel": "Sektion",
+				"binLabel": "Bin",
+				"layerOption": "Ebene {n}",
+				"sectionOption": "Sektion {n}",
+				"binOption": "Bin {n}",
+				"clearButton": "Entfernen (durch Boden fallen lassen)",
+				"useAsExitButton": "Als Exit-Bin verwenden",
+				"gridBadge": "Exit",
+				"gridBadgeTitle": "Nicht zugeordnete Teile (kein passender Bin, zu groß, während eines Doppel-Feeds zurückgehalten) werden hierher geleitet"
+			}
+		}
+	}
+}
