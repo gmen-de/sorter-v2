@@ -49,6 +49,19 @@ const char* const STEPPER_NAMES[] = {
 // 2-wire bus with up to 4 addressed drivers) — so every channel uses TMC
 // UART address 0 (the default for MS1=MS2=low) and gets its own
 // TMC_UART_Bus instance on its own pin. See TMC_UART.h/.cpp.
+// Driver temperature: one NTC thermistor per stepper channel (100k, B3950,
+// the usual 3D-printer probe on an XH2.54 plug), stuck to that driver's
+// heatsink and plugged into the board's thermistor inputs. Each input is a
+// 4.7k pull-up to 3.3V into an ADC3 pin (Marlin's TEMP_0..3/TEMP_BED pins).
+// Each input follows its driver's motor socket, in socket order: Motor3 TB,
+// Motor4 TH0, Motor5 TH1, Motor6 TH2, Motor7 TH3. By stepper channel: ch0
+// chute (Motor5) TH1, ch1 c_channel_1 (Motor6) TH2, ch2 c_channel_3 (Motor7)
+// TH3, ch3 carousel (Motor3) TB, ch4 c_channel_2 (Motor4) TH0.
+const uint32_t STEPPER_THERMISTOR_PINS[] = {PF5, PF6, PF7, PF3, PF4};
+const float THERMISTOR_PULLUP_OHMS = 4700.0f;
+const float THERMISTOR_R25_OHMS = 100000.0f;
+const float THERMISTOR_BETA = 3950.0f;
+
 const uint32_t TMC_UART_PINS[] = {PE4, PE1, PD3, PC7, PF2};
 const uint8_t TMC_UART_ADDRESSES[] = {0, 0, 0, 0, 0};
 const long TMC_UART_BAUDRATE = 100000; // software bit-banged; see TMC_UART.h

@@ -545,6 +545,8 @@ void initialize_hardware() {
     // raw pico-sdk GPIO/PWM blocks — no "is this pad currently PWM-routed"
     // bookkeeping is needed here.
     analogWriteResolution(16);
+    analogReadResolution(12);
+    for (int i = 0; i < STEPPER_COUNT; i++) pinMode(STEPPER_THERMISTOR_PINS[i], INPUT_ANALOG);
     for (int i = 0; i < DIGITAL_OUTPUT_COUNT; i++) {
         pinMode(digital_output_pins[i], OUTPUT);
         digitalWrite(digital_output_pins[i], LOW);
@@ -850,13 +852,40 @@ void CMDH_stepper_drv_write_register(const BusMessage* msg, BusMessage* resp) {
     resp->payload_length = 0;
 }
 
+// Driver temperature from that channel's thermistor, as int16 tenths of a
+// degree C. NO_SENSOR when the input reads open (nothing plugged in) and
+// SHORTED when it reads (near) 0 ohms - neither is a temperature.
+const int16_t THERMISTOR_NO_SENSOR = INT16_MIN;
+const int16_t THERMISTOR_SHORTED = INT16_MAX;
+
+static int16_t read_thermistor_decidegrees(uint32_t pin) {
+    const int samples = 8;
+    uint32_t sum = 0;
+    for (int i = 0; i < samples; i++) sum += analogRead(pin);
+    const float adc_max = 4095.0f; // analogReadResolution(12) in setup()
+    float adc = (float)sum / samples;
+    if (adc >= adc_max - 8.0f) return THERMISTOR_NO_SENSOR;
+    if (adc <= 8.0f) return THERMISTOR_SHORTED;
+    float ohms = THERMISTOR_PULLUP_OHMS * adc / (adc_max - adc);
+    float kelvin = 1.0f / (1.0f / 298.15f + logf(ohms / THERMISTOR_R25_OHMS) / THERMISTOR_BETA);
+    float celsius = kelvin - 273.15f;
+    if (celsius < -100.0f || celsius > 300.0f) return THERMISTOR_SHORTED;
+    return (int16_t)lroundf(celsius * 10.0f);
+}
+
+void CMDH_stepper_drv_read_temperature(const BusMessage* msg, BusMessage* resp) {
+    int16_t value = read_thermistor_decidegrees(STEPPER_THERMISTOR_PINS[msg->channel]);
+    memcpy(resp->payload, &value, sizeof(value));
+    resp->payload_length = sizeof(value);
+}
+
 const struct CommandTable stepperDrvCmdTable = {
     .prefix = "STEPPER_DRV",
     .commands = {{
         {"SET_ENABLED", "?", "", 1, VAL_stepper_channel, CMDH_stepper_drv_set_enabled},
         {"SET_MICROSTEPS", "H", "", 2, VAL_stepper_channel, CMDH_stepper_drv_set_microsteps},
         {"SET_CURRENT", "BBB", "", 3, VAL_stepper_channel, CMDH_stepper_drv_set_current},
-        {NULL, NULL, NULL, 0, NULL, NULL},
+        {"READ_TEMPERATURE", "", "h", 0, VAL_stepper_channel, CMDH_stepper_drv_read_temperature},
         {NULL, NULL, NULL, 0, NULL, NULL},
         {NULL, NULL, NULL, 0, NULL, NULL},
         {NULL, NULL, NULL, 0, NULL, NULL},

@@ -69,6 +69,23 @@ consumer yet** — implementing the Python side that uses this to recalibrate
 the chute's absolute position after power loss is a follow-up task once
 this firmware itself has been bench-verified against the real magnet ring.
 
+**New: `STEPPER_DRV.READ_TEMPERATURE`** (table 2, slot 3, opcode `0x23`,
+Octopus only; other boards NACK it): the driver's heatsink temperature from
+the NTC (100k, B3950) in that stepper channel's thermistor input, as `int16`
+tenths of a degree C. `-32768` means nothing is plugged in, `32767` a shorted
+input. The backend's `driver_temp_control.py` polls it for the Octopus
+diagnostic page, the driver fan, and the over-temperature pause.
+
+Each thermistor input follows its driver's motor socket, in socket order:
+
+| Motor socket | Stepper channel | Thermistor input | Pin |
+|---|---|---|---|
+| Motor3 | ch3 carousel | TB | PF3 |
+| Motor4 | ch4 c_channel_2_rotor | TH0 | PF4 |
+| Motor5 | ch0 chute_stepper | TH1 | PF5 |
+| Motor6 | ch1 c_channel_1_rotor | TH2 | PF6 |
+| Motor7 | ch2 c_channel_3_rotor | TH3 | PF7 |
+
 ## Pin mapping
 
 5 stepper channels on Motor3-Motor7 sockets (pin names from Marlin's/

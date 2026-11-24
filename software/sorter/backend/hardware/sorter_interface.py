@@ -43,6 +43,7 @@ class InterfaceCommandCode(BaseCommandCode):
     STEPPER_DRV_SET_ENABLED = 0x20
     STEPPER_DRV_SET_MICROSTEPS = 0x21
     STEPPER_DRV_SET_CURRENT = 0x22
+    STEPPER_DRV_READ_TEMPERATURE = 0x23  # Octopus only; response: int16 tenths of a degree C (see THERMISTOR_* below)
     STEPPER_DRV_READ_REGISTER = 0x28
     STEPPER_DRV_WRITE_REGISTER = 0x29
     # Digital I/O commands
@@ -75,6 +76,12 @@ class InterfaceCommandCode(BaseCommandCode):
     CHUTE_ENCODER_CLEAR_HOMED = 0x5C  # no payload; firmware-authoritative "not homed" - see ChuteEncoder.clear_homed()
     CHUTE_ENCODER_START_RANDOM_STRESS = 0x5D  # payload: int32 min_usteps, int32 max_usteps, int32 min_delta_usteps
     CHUTE_ENCODER_STOP_RANDOM_STRESS = 0x5E  # no payload
+
+
+# STEPPER_DRV_READ_TEMPERATURE's two non-temperature answers: nothing plugged
+# into that thermistor input, or the input reads (near) 0 ohms.
+THERMISTOR_NO_SENSOR = -32768
+THERMISTOR_SHORTED = 32767
 
 
 class DigitalInputPin:
@@ -730,6 +737,18 @@ class StepperMotor:
         val = struct.unpack("<I", res.payload)[0] # 4 bytes, little-endian unsigned integer
         self._gc.logger.debug(f"Stepper '{self._name}' ch{self._channel}: read_driver_register addr=0x{address:02X} -> 0x{val:08X}")
         return val
+
+    def read_driver_temperature(self) -> tuple[str, float | None]:
+        """This driver's heatsink temperature from its thermistor (Octopus
+        only): ("ok", degrees C), ("no_sensor", None) or ("shorted", None).
+        Raises like any command on a board whose firmware lacks it."""
+        res = self._dev.send_command(InterfaceCommandCode.STEPPER_DRV_READ_TEMPERATURE, self._channel, b"")
+        raw = struct.unpack("<h", res.payload[:2])[0]
+        if raw == THERMISTOR_NO_SENSOR:
+            return "no_sensor", None
+        if raw == THERMISTOR_SHORTED:
+            return "shorted", None
+        return "ok", raw / 10.0
 
     def write_driver_register(self, address: int, value: int):
         self._gc.logger.info(f"Stepper '{self._name}' ch{self._channel}: write_driver_register addr=0x{address:02X} value=0x{value:08X}")

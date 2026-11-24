@@ -101,7 +101,9 @@
 		)?.kind ?? null
 	);
 	const resumeBlockedByFault = $derived(
-		activeIncidentKind === 'stepper_stall' || activeIncidentKind === 'chute_needs_homing'
+		activeIncidentKind === 'stepper_stall' ||
+			activeIncidentKind === 'chute_needs_homing' ||
+			activeIncidentKind === 'driver_overtemp'
 	);
 	const hardwareState = $derived(
 		manager.selectedMachine?.systemStatus?.hardware_state ?? 'standby'
@@ -349,7 +351,9 @@
 					? resumeBlockedByFault
 						? activeIncidentKind === 'chute_needs_homing'
 							? 'Re-home the chute before resuming'
-							: 'Clear the motor stall before resuming'
+							: activeIncidentKind === 'driver_overtemp'
+								? 'Stepper drivers too hot to resume'
+								: 'Clear the motor stall before resuming'
 						: 'Resume'
 					: 'Pause'}
 				disabled={resuming && resumeBlockedByFault}

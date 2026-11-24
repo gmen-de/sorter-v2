@@ -9,7 +9,9 @@ default (full speed) is invisible here until this process writes a duty
 at least once.
 
 FAN5 (index 5) is reserved for cpu_fan_control's automatic CPU cooling loop
-(see that module) - its duty is not settable here.
+(see that module), and the fan driver_temp_control cools the stepper drivers
+with (machine.toml [driver_temperature].fan_index) is that loop's - neither
+duty is settable here.
 """
 from __future__ import annotations
 
@@ -47,6 +49,15 @@ def fanOutputs(irl: Any | None = None) -> Any | None:
     return outputs[FAN_FIRST_CHANNEL : FAN_FIRST_CHANNEL + FAN_COUNT]
 
 
+def _driverFanIndex() -> int | None:
+    import driver_temp_control
+
+    if driver_temp_control.getActive() is None:
+        return None
+    index = int(driver_temp_control.getSettings()["fan_index"])
+    return index if index >= 0 else None
+
+
 def _cpuInfo() -> dict[str, Any]:
     import cpu_fan_control as fan_control
 
@@ -69,13 +80,17 @@ def get_fans() -> dict[str, Any]:
     outputs = fanOutputs()
     if outputs is None:
         return {"available": False, "fans": [], "cpu": _cpuInfo()}
+    driver_fan = _driverFanIndex()
     return {
         "available": True,
         "fans": [
             {
                 "index": i,
                 "duty_percent": round(outputs[i].duty * 100 / DIGITAL_OUTPUT_DUTY_MAX),
-                "auto": i == fan_control.AUTO_FAN_INDEX,
+                "auto": i == fan_control.AUTO_FAN_INDEX or i == driver_fan,
+                "auto_source": (
+                    "cpu" if i == fan_control.AUTO_FAN_INDEX else "drivers" if i == driver_fan else None
+                ),
             }
             for i in range(FAN_COUNT)
         ],
@@ -93,6 +108,11 @@ def set_fan(payload: SetFanPayload) -> dict[str, Any]:
         raise HTTPException(
             status_code=400,
             detail=f"FAN{fan_control.AUTO_FAN_INDEX} is controlled automatically by CPU temperature.",
+        )
+    if payload.index == _driverFanIndex():
+        raise HTTPException(
+            status_code=400,
+            detail=f"FAN{payload.index} is controlled automatically by the stepper driver temperatures.",
         )
     if not 0 <= payload.duty_percent <= 100:
         raise HTTPException(status_code=400, detail="duty_percent must be 0-100")

@@ -881,6 +881,11 @@ def main() -> None:
     import cpu_fan_control
 
     cpu_fan_control.start(gc)
+    # Stepper driver thermistors (Octopus): history, the driver fan, and the
+    # over-temperature hold. Idles until an Octopus board is up.
+    import driver_temp_control
+
+    driver_temp_control.start(gc)
 
     last_frame_record = time.time()
     last_lifetime_flush = time.time()
