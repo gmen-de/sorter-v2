@@ -90,7 +90,8 @@ now-unused endstop-shared pins: **PG6** (Motor0), **PG9** (Motor1).
 
 LED PWM outputs, repurposed from hotend heater MOSFETs **HE0 → PA2**,
 **HE1 → PA3** and **HE2 → PB10** (three independent lighting zones; HE3/PB11
-is unused/available for a future zone).
+is unused/available for a future zone). PA2/PA3 run on TIM5, not their
+default TIM2: PA2 and PB10 would otherwise share TIM2_CH3 and HE2 stay dark.
 
 No spare digital input is currently declared — Motor2 (unused) is the only
 socket left over, and its endstop pin hasn't been identified.

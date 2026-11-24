@@ -76,7 +76,14 @@ const uint32_t digital_input_pins[] = {};
 // through the same generic DIGITAL_IO.WRITE/WRITE_PWM commands as the LED
 // channels, just appended to the same array - no new command table slot.
 const uint8_t DIGITAL_OUTPUT_COUNT = 9;
-const uint32_t digital_output_pins[] = {PA2, PA3, PB10, PA8, PE5, PD12, PD13, PD14, PD15};
+// PA2 and PA3 are driven through their _ALT1 timer, TIM5 (CH3/CH4): their
+// default, TIM2_CH3/CH4, is the very channel PB10 (HE2) and PB11 (HE3) are on,
+// and STM32duino's pwm_start() routes a pin to its timer only while the
+// channel isn't in PWM mode yet - so whichever of PA2/PB10 came second only
+// moved the first one's duty and never lit up (HE2 stayed dark). The fans are
+// on TIM1/TIM4/TIM9, the step timers TIM6/TIM7, so TIM5 is free. The ALT bits
+// are masked off (PNUM_MASK) wherever a pin number is reported or compared.
+const uint32_t digital_output_pins[] = {PA2_ALT1, PA3_ALT1, PB10, PA8, PE5, PD12, PD13, PD14, PD15};
 const int FAN0_OUTPUT_CHANNEL = -1; // kept disabled - was already -1 before the fan channels existed; manual control only via DIGITAL_IO
 const uint8_t LED_OUTPUT_COUNT = 3;
 const uint8_t FAN_OUTPUT_COUNT = 6;

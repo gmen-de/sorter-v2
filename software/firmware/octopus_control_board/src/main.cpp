@@ -439,7 +439,7 @@ int dump_observability(char* buf, size_t buf_size) {
     int led_len = snprintf(led_gpios_buf, sizeof(led_gpios_buf), "[");
     for (int i = 0; i < LED_OUTPUT_COUNT && led_len > 0; i++) {
         led_len += snprintf(led_gpios_buf + led_len, sizeof(led_gpios_buf) - led_len, "%s%u", i == 0 ? "" : ",",
-                             (unsigned)digital_output_pins[i]);
+                             (unsigned)(digital_output_pins[i] & PNUM_MASK));
     }
     snprintf(led_gpios_buf + led_len, sizeof(led_gpios_buf) - led_len, "]");
 
@@ -743,7 +743,7 @@ static bool gpio_in_use(int pin) {
         if (pin == (int)digital_input_pins[i]) return true;
     }
     for (int i = 0; i < DIGITAL_OUTPUT_COUNT; i++) {
-        if (pin == (int)digital_output_pins[i]) return true;
+        if (pin == (int)(digital_output_pins[i] & PNUM_MASK)) return true;
     }
     return pin == (int)CHUTE_ENCODER_PIN_A || pin == (int)CHUTE_ENCODER_PIN_B;
 }
@@ -1142,8 +1142,8 @@ const MasterCommandTable command_tables = {
 // core to dedicate to real-time motion on this chip).
 // ---------------------------------------------------------------------------
 
-// Must be basic timers with no pin outputs: the LED outputs PA2/PA3/PB10 are
-// TIM2 PWM pins, and STM32duino's analogWrite() re-programs that pin's timer
+// Must be basic timers with no pin outputs: the LED outputs PA2/PA3 (TIM5) and
+// PB10 (TIM2) are PWM pins, and STM32duino's analogWrite() re-programs that pin's timer
 // to the PWM frequency (1kHz) while pinMode() on a PWM'd pin deletes the
 // timer object outright - the step ISR then ran 10x slow or not at all.
 HardwareTimer* stepgen_timer = new HardwareTimer(TIM6);
