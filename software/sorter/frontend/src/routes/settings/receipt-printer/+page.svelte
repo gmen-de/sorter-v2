@@ -31,6 +31,8 @@
 		feed_lines: number;
 		header: string;
 		footer: string;
+		bin_inventory_on_empty: boolean;
+		bin_inventory_prefix: string;
 	};
 	type Port = {
 		path: string;
@@ -44,6 +46,7 @@
 	};
 	type PrinterInfo = {
 		settings: Settings;
+		bin_inventory_next_number: number;
 		ports: Port[];
 		options: {
 			baudrates: number[];
@@ -69,6 +72,7 @@
 
 	let info = $state<PrinterInfo | null>(null);
 	let draft = $state<Settings | null>(null);
+	let nextNumberDraft = $state<number | string>(1);
 	let loadError = $state<string | null>(null);
 	let saving = $state(false);
 	let saveError = $state<string | null>(null);
@@ -94,7 +98,10 @@
 			const res = await fetch(`${httpBase()}/api/receipt-printer`);
 			if (!res.ok) throw new Error(await res.text());
 			info = await res.json();
-			if (info) draft = { ...info.settings };
+			if (info) {
+				draft = { ...info.settings };
+				nextNumberDraft = info.bin_inventory_next_number;
+			}
 		} catch (e: any) {
 			loadError = e.message ?? 'Failed to load the printer settings';
 		}
@@ -114,8 +121,16 @@
 	}
 
 	const dirty = $derived(
-		!!draft && !!info && JSON.stringify(draft) !== JSON.stringify(info.settings)
+		!!draft &&
+			!!info &&
+			(JSON.stringify(draft) !== JSON.stringify(info.settings) ||
+				Number(nextNumberDraft) !== info.bin_inventory_next_number)
 	);
+
+	function inventoryNumber(prefix: string, n: number): string {
+		const digits = String(Math.max(1, Math.trunc(n) || 1)).padStart(4, '0');
+		return `${prefix}${digits}`;
+	}
 
 	async function save() {
 		if (!draft) return;
@@ -129,7 +144,8 @@
 				body: JSON.stringify({
 					...draft,
 					columns: Number(draft.columns),
-					feed_lines: Number(draft.feed_lines)
+					feed_lines: Number(draft.feed_lines),
+					bin_inventory_next_number: Number(nextNumberDraft)
 				})
 			});
 			if (!res.ok) {
@@ -137,8 +153,12 @@
 				throw new Error(detail?.detail ?? `HTTP ${res.status}`);
 			}
 			const body = await res.json();
-			if (info) info.settings = body.settings;
+			if (info) {
+				info.settings = body.settings;
+				info.bin_inventory_next_number = body.bin_inventory_next_number;
+			}
 			draft = { ...body.settings };
+			nextNumberDraft = body.bin_inventory_next_number;
 			saved = 'Saved.';
 			status = null;
 			void loadStatus();
@@ -312,7 +332,7 @@
 			<div class="divide-y divide-line">
 				<SettingRow
 					label="Printer on"
-					help="Lets the machine print on its own. Test prints and free text work while it's off."
+					help="Lets the machine print on its own, such as the bin inventory below. Test prints and free text work while it's off."
 				>
 					<Switch bind:checked={draft.enabled} label="Printer on" />
 				</SettingRow>
@@ -387,6 +407,39 @@
 			</div>
 		</Panel>
 
+		<Panel
+			title="Bin inventory"
+			description="When a bin is emptied, a receipt with its contents: a running number, the bin and the date, then each part with its colors. If it doesn't print, the bin stays full."
+		>
+			<div class="divide-y divide-line">
+				<SettingRow
+					label="Print bin inventory when emptying"
+					help={draft.enabled ? undefined : 'Needs "Printer on" above.'}
+				>
+					<Switch bind:checked={draft.bin_inventory_on_empty} label="Print bin inventory when emptying" />
+				</SettingRow>
+				<SettingRow
+					label="Number prefix"
+					help="Up to 3 characters before the running number. Leave blank for the number alone."
+					for="rp-prefix"
+				>
+					<Input id="rp-prefix" maxlength={3} bind:value={draft.bin_inventory_prefix} class="w-28 font-mono" />
+				</SettingRow>
+				<SettingRow
+					label="Next number"
+					help="Counts up by one with every inventory that prints."
+					for="rp-next"
+				>
+					<div class="flex items-center gap-3">
+						<span class="font-mono text-sm text-ink-muted">
+							{inventoryNumber(draft.bin_inventory_prefix, Number(nextNumberDraft))}
+						</span>
+						<Input id="rp-next" type="number" min="1" max="999999" step="1" bind:value={nextNumberDraft} class="w-28" />
+					</div>
+				</SettingRow>
+			</div>
+		</Panel>
+
 		<Panel title="Paper and layout">
 			<div class="divide-y divide-line">
 				<SettingRow
@@ -437,7 +490,11 @@
 				<Button
 					variant="secondary"
 					disabled={!dirty}
-					onclick={() => info && (draft = { ...info.settings })}
+					onclick={() => {
+						if (!info) return;
+						draft = { ...info.settings };
+						nextNumberDraft = info.bin_inventory_next_number;
+					}}
 				>
 					Discard
 				</Button>

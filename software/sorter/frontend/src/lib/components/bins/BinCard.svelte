@@ -83,10 +83,12 @@
 				disabled?: boolean;
 				danger?: boolean;
 		  };
-	// Emptying or resetting a bin is rare, so it lives in a menu; the reset,
-	// which drops the bin's assignment, comes last.
+	// Emptying a bin is the everyday action, so it has its own button; moving
+	// the chute there is rare, so it lives in the menu. The reset, which drops
+	// the bin's assignment, comes last.
 	const menuItems = $derived.by((): MenuEntry[] => {
 		const items: MenuEntry[] = [
+			{ label: 'Move the chute here', icon: Crosshair, onselect: onMoveTo, disabled: moveDisabled || isMoving },
 			{ label: 'Assign categories', icon: Tag, onselect: onOpenDetails },
 			{
 				label: bin.not_in_inventory ? 'Back to normal sorting' : 'Use for not in inventory',
@@ -95,9 +97,6 @@
 				disabled: niiDisabled
 			}
 		];
-		if (contents && contents.piece_count > 0) {
-			items.push({ label: 'Empty this bin', icon: FolderOutput, onselect: onEmpty, disabled: clearDisabled });
-		}
 		if (bin.category_ids.length > 0) {
 			items.push('separator', {
 				label: 'Reset this bin and clear its assignment',
@@ -160,14 +159,18 @@
 			</div>
 		</div>
 		<div class="-mr-1 flex shrink-0 items-center">
+			{#if isMoving}
+				<span class="flex size-(--size-control-sm) items-center justify-center" title="Moving the chute to bin {bin.global_index + 1}">
+					<Spinner size={14} class="text-primary-ink" />
+				</span>
+			{/if}
 			<Button
 				size="sm"
 				variant="ghost"
-				icon={Crosshair}
-				label="Move the chute to bin {bin.global_index + 1}"
-				loading={isMoving}
-				disabled={moveDisabled}
-				onclick={onMoveTo}
+				icon={FolderOutput}
+				label="Empty bin {bin.global_index + 1}"
+				disabled={clearDisabled || !contents || contents.piece_count === 0}
+				onclick={onEmpty}
 			/>
 			<Menu label="Bin {bin.global_index + 1} actions" items={menuItems}>
 				{#snippet trigger(props)}

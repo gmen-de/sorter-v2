@@ -531,6 +531,7 @@ def clear_bin_contents(
     if bin_index is None or bin_index < 0 or bin_index >= len(categories[layer_index][section_index]):
         raise HTTPException(status_code=400, detail="Invalid bin index.")
 
+    inventory_number = _print_bin_inventory(layer_index, section_index, bin_index)
     cleared = clear_current_session_bins(
         scope=scope,
         layer_index=layer_index,
@@ -551,8 +552,38 @@ def clear_bin_contents(
         "section_index": section_index,
         "bin_index": bin_index,
         "cleared_bins": int(cleared.get("cleared_bins", 0)),
-        "message": f"Emptied bin {bin_index + 1} on layer {layer_index + 1} without changing its assignment.",
+        "inventory_number": inventory_number,
+        "message": f"Emptied bin {bin_index + 1} on layer {layer_index + 1} without changing its assignment."
+        + (f" Printed its inventory as {inventory_number}." if inventory_number else ""),
     }
+
+
+def _print_bin_inventory(layer_index: int, section_index: int, bin_index: int) -> str | None:
+    """The bin's inventory on the receipt printer, before it's emptied, when
+    that's turned on. A failed print stops the emptying, so no bin's contents
+    are lost unprinted."""
+    import receipt_printer
+
+    settings = receipt_printer.getSettings()
+    if not (settings["enabled"] and settings["bin_inventory_on_empty"]):
+        return None
+    items: list[dict[str, Any]] = []
+    for entry in get_bin_contents().get("bins") or []:
+        if (entry.get("layer_index"), entry.get("section_index"), entry.get("bin_index")) == (
+            layer_index,
+            section_index,
+            bin_index,
+        ):
+            items = list(entry.get("items") or [])
+            break
+    try:
+        return receipt_printer.printBinInventory(layer_index, section_index, bin_index, items, settings)
+    except receipt_printer.PrinterError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"The bin wasn't emptied, because its inventory didn't print: {exc} "
+            "To empty it without printing, turn off the inventory print in Settings > Receipt printer.",
+        ) from exc
 
 
 @router.get("/api/bins/layout")

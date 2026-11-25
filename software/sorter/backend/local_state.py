@@ -33,6 +33,7 @@ _STATE_KEY_LEDS = "leds"
 _STATE_KEY_BASICALLY_SERVICES = "basically_services"
 _STATE_KEY_FEEDER_AUTOTUNE_BACKGROUND = "feeder_autotune_background"
 _STATE_KEY_NEXTCLOUD = "nextcloud"
+_STATE_KEY_BIN_INVENTORY_NEXT = "receipt_printer_bin_inventory_next"
 
 
 def create_tables(conn: sqlite3.Connection) -> None:
@@ -499,3 +500,14 @@ def setFeederAutotuneBackground(record: dict[str, Any] | None) -> None:
         _STATE_KEY_FEEDER_AUTOTUNE_BACKGROUND,
         dict(record) if isinstance(record, dict) else None,
     )
+
+
+def get_bin_inventory_next_number() -> int:
+    # The running number on the next bin inventory print (receipt_printer.py);
+    # here rather than in machine.toml because it changes with every print.
+    value = _read_state(_STATE_KEY_BIN_INVENTORY_NEXT)
+    return value if isinstance(value, int) and value > 0 else 1
+
+
+def set_bin_inventory_next_number(number: int) -> None:
+    _write_state(_STATE_KEY_BIN_INVENTORY_NEXT, max(1, int(number)))

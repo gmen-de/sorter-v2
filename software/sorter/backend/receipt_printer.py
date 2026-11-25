@@ -60,7 +60,15 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "feed_lines": 4,
     "header": "",
     "footer": "",
+    "bin_inventory_on_empty": False,
+    "bin_inventory_prefix": "ZIP",
 }
+
+# Font B is 9x17 dots against font A's 12x24, so a line holds a third more.
+# Line spacing for the compact font B lines, in the TM-T88IV's vertical motion
+# unit of 1/360 inch (half a dot): 42 is 21 dots for a 17-dot font, against the
+# default 60 made for font A. Below about 36 the lines touch.
+FONT_B_LINE_SPACING = 42
 
 WRITE_TIMEOUT_S = 10.0
 STATUS_TIMEOUT_S = 0.5
@@ -106,6 +114,9 @@ def validateSettings(settings: dict[str, Any]) -> str | None:
         return "Characters per line must be between 16 and 80."
     if not 0 <= settings["feed_lines"] <= 20:
         return "Feed before cut must be between 0 and 20 lines."
+    prefix = settings["bin_inventory_prefix"]
+    if len(prefix) > 3 or not prefix.isprintable():
+        return "The inventory number prefix is at most 3 characters."
     if settings["enabled"] and not settings["port"]:
         return "Choose a port before turning the printer on."
     return None
@@ -120,7 +131,7 @@ def setSettings(updates: dict[str, Any]) -> dict[str, Any]:
     for key, value in updates.items():
         if key in DEFAULT_SETTINGS and value is not None:
             kind = type(DEFAULT_SETTINGS[key])
-            merged[key] = value.strip() if kind is str and key == "port" else kind(value)
+            merged[key] = value.strip() if key in ("port", "bin_inventory_prefix") else kind(value)
     error = validateSettings(merged)
     if error:
         raise ValueError(error)
@@ -194,9 +205,21 @@ class Receipt:
 
     def __init__(self, settings: dict[str, Any]):
         self.settings = settings
-        self.columns = int(settings["columns"])
+        self.columns_a = int(settings["columns"])
+        self.columns = self.columns_a
         self.data = bytearray(ESC + b"@")
         self.data += ESC + b"t" + bytes([CODEPAGES[settings["codepage"]][0]])
+
+    def font(self, which: str) -> "Receipt":
+        """Font A, the normal one, at the printer's own line spacing; or the
+        small font B on tight lines, a third more characters per line."""
+        if which == "b":
+            self.data += ESC + b"M" + bytes([1]) + ESC + b"3" + bytes([FONT_B_LINE_SPACING])
+            self.columns = self.columns_a * 4 // 3
+        else:
+            self.data += ESC + b"M" + bytes([0]) + ESC + b"2"
+            self.columns = self.columns_a
+        return self
 
     def align(self, where: str) -> "Receipt":
         self.data += ESC + b"a" + bytes([{"left": 0, "center": 1, "right": 2}[where]])
@@ -234,6 +257,7 @@ class Receipt:
         return self
 
     def finish(self) -> bytes:
+        self.font("a")
         if self.settings["footer"].strip():
             self.blank().align("center").text(self.settings["footer"]).align("left")
         feed = int(self.settings["feed_lines"])
@@ -398,3 +422,93 @@ def printReceipt(build, settings: dict[str, Any] | None = None) -> bool:
     build(receipt)
     _send(settings, receipt.finish())
     return True
+
+
+# --- Bin inventory -----------------------------------------------------------
+
+
+def binLabel(layer_index: int, section_index: int, bin_index: int) -> str:
+    return f"L{layer_index + 1} - S{section_index + 1} - B{bin_index + 1}"
+
+
+def inventoryNumber(prefix: str, number: int) -> str:
+    return f"{prefix}{number:04d}"
+
+
+def groupBinItems(items: list[dict[str, Any]]) -> list[tuple[str, int, list[tuple[str, int]]]]:
+    """(part, total, [(color, count)]) for each part type in a bin, most pieces
+    first, the colors within a part likewise."""
+    parts: dict[str, dict[str, int]] = {}
+    for item in items:
+        part = str(item.get("part_id") or "?")
+        color = str(item.get("color_name") or "Unknown color")
+        colors = parts.setdefault(part, {})
+        colors[color] = colors.get(color, 0) + int(item.get("count") or 0)
+    grouped = [
+        (part, sum(colors.values()), sorted(colors.items(), key=lambda kv: (-kv[1], kv[0])))
+        for part, colors in parts.items()
+    ]
+    return sorted(grouped, key=lambda g: (-g[1], g[0]))
+
+
+def buildBinInventory(
+    settings: dict[str, Any],
+    *,
+    number: str,
+    label: str,
+    items: list[dict[str, Any]],
+    part_names: dict[str, str],
+    date: datetime.date,
+) -> bytes:
+    """The number big, bold and centred; the bin and the date; then each part
+    type in normal type with a rule under it, and its colors in small type."""
+    r = Receipt(settings).header()
+    big = 3
+    r.align("center").bold(True).size(big, big).text(number, columns=r.columns // big)
+    r.size().bold(False).align("left").blank()
+    r.bold(True).row(label, date.strftime("%d.%m.%Y")).bold(False)
+    for part, total, colors in groupBinItems(items):
+        r.font("a").blank()
+        r.bold(True).text(f"{total}x {part} {part_names.get(part, '')}".rstrip()).bold(False)
+        r.rule()
+        r.font("b")
+        for color, count in colors:
+            r.text(f"{count}x {color}")
+    return r.finish()
+
+
+_inventory_lock = threading.Lock()
+
+
+def printBinInventory(
+    layer_index: int,
+    section_index: int,
+    bin_index: int,
+    items: list[dict[str, Any]],
+    settings: dict[str, Any] | None = None,
+) -> str | None:
+    """Prints a bin's inventory before it gets emptied, when the printer and
+    the inventory print are both on and the bin holds anything. Returns the
+    number it printed, or None when it printed nothing. Raises PrinterError
+    when the printer didn't take it; the number is only used up on success."""
+    import local_state
+    import piece_records
+
+    settings = settings or getSettings()
+    if not (settings["enabled"] and settings["bin_inventory_on_empty"]) or not items:
+        return None
+    names = piece_records.partNames([str(i.get("part_id") or "") for i in items])
+    with _inventory_lock:
+        sequence = local_state.get_bin_inventory_next_number()
+        number = inventoryNumber(settings["bin_inventory_prefix"], sequence)
+        data = buildBinInventory(
+            settings,
+            number=number,
+            label=binLabel(layer_index, section_index, bin_index),
+            items=items,
+            part_names=names,
+            date=datetime.date.today(),
+        )
+        _send(settings, data)
+        local_state.set_bin_inventory_next_number(sequence + 1)
+    return number
