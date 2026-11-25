@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+import local_state
 import receipt_printer
 
 router = APIRouter()
@@ -28,6 +29,10 @@ class PrinterSettingsPayload(BaseModel):
     feed_lines: int | None = None
     header: str | None = None
     footer: str | None = None
+    bin_inventory_on_empty: bool | None = None
+    bin_inventory_prefix: str | None = None
+    # Not in machine.toml: the running number lives in local_state.
+    bin_inventory_next_number: int | None = None
 
 
 class PrintTextPayload(BaseModel):
@@ -42,6 +47,7 @@ def get_printer() -> dict[str, Any]:
         ports = []
     return {
         "settings": receipt_printer.getSettings(),
+        "bin_inventory_next_number": local_state.get_bin_inventory_next_number(),
         "ports": ports,
         "options": {
             "baudrates": list(receipt_printer.BAUDRATES),
@@ -57,10 +63,17 @@ def get_printer() -> dict[str, Any]:
 
 @router.post("/api/receipt-printer/settings")
 def save_settings(payload: PrinterSettingsPayload) -> dict[str, Any]:
+    updates = payload.model_dump(exclude_none=True)
+    next_number = updates.pop("bin_inventory_next_number", None)
+    if next_number is not None and not 1 <= next_number <= 999999:
+        raise HTTPException(400, "The next inventory number must be between 1 and 999999.")
     try:
-        return {"settings": receipt_printer.setSettings(payload.model_dump(exclude_none=True))}
+        settings = receipt_printer.setSettings(updates)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    if next_number is not None:
+        local_state.set_bin_inventory_next_number(next_number)
+    return {"settings": settings, "bin_inventory_next_number": local_state.get_bin_inventory_next_number()}
 
 
 @router.get("/api/receipt-printer/status")

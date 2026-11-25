@@ -29,7 +29,7 @@ def test_receipt_wraps_and_aligns_rows(settings):
 
 def test_cut_none_and_full(settings):
     settings.update(cut="none", feed_lines=0)
-    assert rp.Receipt(settings).finish().endswith(b"\x1bt\x13")
+    assert rp.Receipt(settings).finish().endswith(b"\x1bM\x00\x1b2")  # back to font A, no feed, no cut
     settings["cut"] = "full"
     assert rp.Receipt(settings).finish().endswith(b"\x1dV\x00")
 
@@ -72,3 +72,90 @@ def test_print_receipt_only_when_enabled(monkeypatch, settings):
     settings["enabled"] = True
     assert rp.printReceipt(lambda r: r.text("x"), settings) is True
     assert len(sent) == 1
+
+
+ITEMS = [
+    {"part_id": "3070", "color_name": "Trans-Red", "count": 3},
+    {"part_id": "3069", "color_name": "White", "count": 4},
+    {"part_id": "3070", "color_name": "Trans-Green", "count": 1},
+    {"part_id": "3070", "color_name": "Trans-Dark Blue", "count": 1},
+]
+
+
+def test_group_bin_items_most_pieces_first():
+    assert rp.groupBinItems(ITEMS) == [
+        ("3070", 5, [("Trans-Red", 3), ("Trans-Dark Blue", 1), ("Trans-Green", 1)]),
+        ("3069", 4, [("White", 4)]),
+    ]
+
+
+def test_bin_inventory_layout(settings):
+    import datetime
+
+    settings["columns"] = 42
+    data = rp.buildBinInventory(
+        settings,
+        number="ZIP0007",
+        label=rp.binLabel(0, 0, 0),
+        items=ITEMS,
+        part_names={"3070": "Tile 1 x 1"},
+        date=datetime.date(2026, 11, 26),
+    )
+    big = b"\x1bE\x01\x1d!\x22ZIP0007\n"  # bold, 3x3
+    row = b"\x1bE\x01L1 - S1 - B1" + b" " * 20 + b"26.11.2026\n\x1bE\x00"  # bold
+    part = b"\x1bM\x00\x1b2\n\x1bE\x015x 3070 Tile 1 x 1\n\x1bE\x00" + b"-" * 42 + b"\n\x1bM\x01\x1b3" + bytes([rp.FONT_B_LINE_SPACING])
+    colors = b"3x Trans-Red\n1x Trans-Dark Blue\n1x Trans-Green\n"
+    assert big in data and row in data and part in data and colors in data
+    assert data.index(b"5x 3070") < data.index(b"4x 3069\n")
+    assert rp.inventoryNumber("", 12) == "0012"
+
+
+def test_print_bin_inventory_counts_only_on_success(monkeypatch, settings):
+    import local_state
+    import piece_records
+
+    counter = {"n": 7}
+    monkeypatch.setattr(local_state, "get_bin_inventory_next_number", lambda: counter["n"])
+    monkeypatch.setattr(local_state, "set_bin_inventory_next_number", lambda n: counter.update(n=n))
+    monkeypatch.setattr(piece_records, "partNames", lambda ids: {})
+    settings.update(enabled=True, bin_inventory_on_empty=True)
+
+    def fail(s, data):
+        raise rp.PrinterError("off")
+
+    monkeypatch.setattr(rp, "_send", fail)
+    with pytest.raises(rp.PrinterError):
+        rp.printBinInventory(0, 0, 0, ITEMS, settings)
+    assert counter["n"] == 7
+
+    monkeypatch.setattr(rp, "_send", lambda s, data: None)
+    assert rp.printBinInventory(0, 0, 0, ITEMS, settings) == "ZIP0007"
+    assert counter["n"] == 8
+    assert rp.printBinInventory(0, 0, 0, [], settings) is None
+    settings["bin_inventory_on_empty"] = False
+    assert rp.printBinInventory(0, 0, 0, ITEMS, settings) is None
+
+
+def test_empty_bin_stays_full_when_inventory_fails(monkeypatch):
+    from fastapi import HTTPException
+
+    from server.routers import bins
+
+    cleared = []
+    monkeypatch.setattr(bins, "_current_bin_categories", lambda: [[[[]]]])
+    monkeypatch.setattr(bins, "clear_current_session_bins", lambda **kw: cleared.append(kw) or {"cleared_bins": 1})
+    monkeypatch.setattr(bins, "_clear_runtime_bin_contents", lambda **kw: cleared.append(kw))
+    monkeypatch.setattr(bins, "get_bin_contents", lambda: {"bins": [dict(layer_index=0, section_index=0, bin_index=0, items=ITEMS)]})
+    monkeypatch.setattr(rp, "getSettings", lambda: dict(rp.DEFAULT_SETTINGS, enabled=True, bin_inventory_on_empty=True, port="x"))
+
+    def fail(*a, **kw):
+        raise rp.PrinterError("Printer off.")
+
+    monkeypatch.setattr(rp, "printBinInventory", fail)
+    with pytest.raises(HTTPException) as err:
+        bins.clear_bin_contents(scope="bin", layer_index=0, section_index=0, bin_index=0)
+    assert err.value.status_code == 502 and not cleared
+
+    monkeypatch.setattr(rp, "printBinInventory", lambda *a, **kw: "ZIP0001")
+    result = bins.clear_bin_contents(scope="bin", layer_index=0, section_index=0, bin_index=0)
+    assert result["inventory_number"] == "ZIP0001" and "ZIP0001" in result["message"] and cleared
