@@ -15,6 +15,7 @@ import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 import Wifi from '@lucide/svelte/icons/wifi';
 import CloudUpload from '@lucide/svelte/icons/cloud-upload';
+import Printer from '@lucide/svelte/icons/printer';
 import Wrench from '@lucide/svelte/icons/wrench';
 import Zap from '@lucide/svelte/icons/zap';
 import {
@@ -164,6 +165,12 @@ export const servoControlNavItem: SettingsNavItem = {
 	icon: Joystick
 };
 
+export const receiptPrinterNavItem: SettingsNavItem = {
+	href: '/settings/receipt-printer',
+	label: 'Receipt printer',
+	icon: Printer
+};
+
 export const jitterTestNavItem: SettingsNavItem = {
 	href: '/settings/jitter-test',
 	label: 'Jitter test',
@@ -290,6 +297,7 @@ export const settingsNavItems: SettingsNavEntry[] = [
 	storageLayersNavItem,
 	controlBoardNavItem,
 	servoControlNavItem,
+	receiptPrinterNavItem,
 	{ type: 'heading', label: 'Helpers' },
 	incidentsNavItem,
 	cycleTimeNavItem,
