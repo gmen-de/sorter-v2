@@ -154,6 +154,7 @@ from server.routers.sharing import router as sharing_router
 from server.routers.leds import router as leds_router
 from server.routers.fans import router as fans_router
 from server.routers.driver_temperatures import router as driver_temperatures_router
+from server.routers.receipt_printer import router as receipt_printer_router
 from server.routers.zones import router as zones_router
 from server.routers.nextcloud import router as nextcloud_router
 
@@ -197,6 +198,7 @@ app.include_router(zones_router)
 app.include_router(leds_router)
 app.include_router(fans_router)
 app.include_router(driver_temperatures_router)
+app.include_router(receipt_printer_router)
 app.include_router(nextcloud_router)
 
 # ---------------------------------------------------------------------------
