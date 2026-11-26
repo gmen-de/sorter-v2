@@ -155,6 +155,7 @@ from server.routers.leds import router as leds_router
 from server.routers.fans import router as fans_router
 from server.routers.driver_temperatures import router as driver_temperatures_router
 from server.routers.receipt_printer import router as receipt_printer_router
+from server.routers.studsphere import router as studsphere_router
 from server.routers.zones import router as zones_router
 from server.routers.nextcloud import router as nextcloud_router
 
@@ -199,6 +200,7 @@ app.include_router(leds_router)
 app.include_router(fans_router)
 app.include_router(driver_temperatures_router)
 app.include_router(receipt_printer_router)
+app.include_router(studsphere_router)
 app.include_router(nextcloud_router)
 
 # ---------------------------------------------------------------------------
@@ -250,6 +252,9 @@ async def onStartup() -> None:
     from server.nextcloud_sync import getNextcloudSyncer
 
     getNextcloudSyncer().start()
+    from studsphere_sync import getStudSphereSyncer
+
+    getStudSphereSyncer().start()
 
 
 @app.on_event("shutdown")
@@ -261,6 +266,9 @@ async def onShutdown() -> None:
     from server.nextcloud_sync import getNextcloudSyncer
 
     getNextcloudSyncer().stop()
+    from studsphere_sync import getStudSphereSyncer
+
+    getStudSphereSyncer().stop()
 
 
 # ---------------------------------------------------------------------------

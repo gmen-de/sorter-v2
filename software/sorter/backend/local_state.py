@@ -511,3 +511,33 @@ def get_bin_inventory_next_number() -> int:
 
 def set_bin_inventory_next_number(number: int) -> None:
     _write_state(_STATE_KEY_BIN_INVENTORY_NEXT, max(1, int(number)))
+
+
+_STATE_KEY_STUDSPHERE = "studsphere"
+
+
+def get_studsphere_config() -> dict[str, Any]:
+    # The StudSphere connection (studsphere_sync.py): address, the sorter's
+    # API key (encrypted at rest, like the Nextcloud app password), and the
+    # outbox stream it last set up with.
+    value = _read_state(_STATE_KEY_STUDSPHERE)
+    if not isinstance(value, dict):
+        return {}
+
+    from secrets_crypto import decrypt_str
+
+    config = dict(value)
+    key = config.get("api_key")
+    if isinstance(key, str) and key:
+        config["api_key"] = decrypt_str(key)
+    return config
+
+
+def set_studsphere_config(config: dict[str, Any]) -> None:
+    from secrets_crypto import encrypt_str
+
+    normalized = dict(config)
+    key = normalized.get("api_key")
+    if isinstance(key, str) and key:
+        normalized["api_key"] = encrypt_str(key)
+    _write_state(_STATE_KEY_STUDSPHERE, normalized)

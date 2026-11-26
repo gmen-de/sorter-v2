@@ -16,6 +16,7 @@ import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 import Wifi from '@lucide/svelte/icons/wifi';
 import CloudUpload from '@lucide/svelte/icons/cloud-upload';
 import Printer from '@lucide/svelte/icons/printer';
+import Warehouse from '@lucide/svelte/icons/warehouse';
 import Wrench from '@lucide/svelte/icons/wrench';
 import Zap from '@lucide/svelte/icons/zap';
 import {
@@ -106,6 +107,12 @@ export const nextcloudNavItem: SettingsNavItem = {
 	href: '/settings/nextcloud',
 	label: 'Nextcloud',
 	icon: CloudUpload
+};
+
+export const studsphereNavItem: SettingsNavItem = {
+	href: '/settings/studsphere',
+	label: 'StudSphere',
+	icon: Warehouse
 };
 
 export const classificationProvidersNavItem: SettingsNavItem = {
@@ -288,6 +295,7 @@ export const settingsNavItems: SettingsNavEntry[] = [
 	hiveNavItem,
 	dataNavItem,
 	nextcloudNavItem,
+	studsphereNavItem,
 	hiveModelsNavItem,
 	classificationProvidersNavItem,
 	versionsNavItem,

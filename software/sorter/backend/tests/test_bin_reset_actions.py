@@ -36,6 +36,7 @@ class BinResetActionTests(unittest.TestCase):
             section_index=0,
             bin_index=0,
             bin_categories=categories,
+            zip_name=None,
         )
         runtime_stats.clearBinContents.assert_called_once_with(
             scope="bin",
@@ -107,6 +108,7 @@ class BinResetActionTests(unittest.TestCase):
             section_index=0,
             bin_index=1,
             bin_categories=[[[[], []]]],
+            zip_name=None,
         )
         runtime_stats.clearBinContents.assert_called_once_with(
             scope="bin",

@@ -538,6 +538,7 @@ def clear_bin_contents(
         section_index=section_index,
         bin_index=bin_index,
         bin_categories=categories,
+        zip_name=inventory_number,
     )
     _clear_runtime_bin_contents(
         scope=scope,

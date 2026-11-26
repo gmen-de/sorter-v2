@@ -479,6 +479,9 @@ def record_piece_distribution(piece: dict[str, Any]) -> None:
         )
         conn.commit()
         _refresh_bin_piece_counts(conn)
+        # Still inside the write lock, so StudSphere sees adds and clears in
+        # the order they happened here.
+        _notify_studsphere_piece(piece, layer_index, section_index, bin_index)
 
 
 def get_distributed_part_keys_since(since_ts: float) -> list[tuple[str | None, str | None]]:
@@ -569,7 +572,10 @@ def clear_current_session_bins(
     section_index: int | None = None,
     bin_index: int | None = None,
     bin_categories: Any | None = None,
+    zip_name: str | None = None,
 ) -> dict[str, Any]:
+    """zip_name: the inventory receipt that printed for a single emptied bin,
+    so StudSphere moves its parts into that bag (see studsphere_sync.py)."""
     with _bin_state_write_lock, _connection() as conn:
         active_session_id = _get_meta(conn, _META_KEY_ACTIVE_SORTING_SESSION_ID)
         if not active_session_id:
@@ -612,6 +618,7 @@ def clear_current_session_bins(
             ).fetchall()
 
         cleared_bins = 0
+        emptied: list[tuple[int, int, int]] = []
         now = time.time()
         snapshot_id: str | None = None
         for row in rows:
@@ -621,6 +628,7 @@ def clear_current_session_bins(
             current_epoch = int(row["bin_epoch"])
             if int(row["piece_count"] or 0) > 0:
                 cleared_bins += 1
+                emptied.append((li, si, bi))
                 if snapshot_id is None:
                     snapshot_id = _get_or_create_open_bin_snapshot_conn(conn, now)
                 _flush_bin_layer_to_snapshot_conn(
@@ -678,7 +686,26 @@ def clear_current_session_bins(
         )
         conn.commit()
         _refresh_bin_piece_counts(conn)
+        _notify_studsphere_cleared(emptied, zip_name if scope == "bin" else None)
         return {"ok": True, "cleared_bins": cleared_bins, "snapshot_id": closed_snapshot_id}
+
+
+def _notify_studsphere_piece(piece: dict[str, Any], layer_index: int, section_index: int, bin_index: int) -> None:
+    try:
+        import studsphere_sync
+
+        studsphere_sync.onPieceDistributed(piece, layer_index, section_index, bin_index)
+    except Exception as exc:
+        db.report_failure("studsphere_piece", exc)
+
+
+def _notify_studsphere_cleared(bins: list[tuple[int, int, int]], zip_name: str | None) -> None:
+    try:
+        import studsphere_sync
+
+        studsphere_sync.onBinsCleared(bins, zip_name)
+    except Exception as exc:
+        db.report_failure("studsphere_cleared", exc)
 
 
 def get_current_bin_piece_counts() -> dict[tuple[int, int, int], int]:
