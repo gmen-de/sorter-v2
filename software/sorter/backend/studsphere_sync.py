@@ -23,7 +23,8 @@ The enqueue calls run inside bin_contents' write lock, in the same order as
 the bin changes themselves, so an add can never overtake the clear of its bin.
 StudSphere knows parts by its own ids; it maps the classifier's BrickLink
 part and color ids itself and reports the ones it doesn't know, which the
-settings page lists.
+settings page lists. A piece it didn't know is not booked then; a resync books
+it once StudSphere does know it.
 """
 
 from __future__ import annotations
@@ -46,8 +47,9 @@ log = logging.getLogger(__name__)
 BATCH_SIZE = 200
 IDLE_POLL_S = 2.0
 MAX_BACKOFF_S = 60.0
-REQUEST_TIMEOUT_S = 20.0
+REQUEST_TIMEOUT_S = 45.0  # StudSphere may ask Rebrickable for part numbers it doesn't know
 UNMAPPED_KEPT = 50
+HINTED_KEPT = 50
 CONDITIONS = ("used", "new")
 
 
@@ -116,6 +118,44 @@ def pendingCount() -> int:
         return int(conn.execute("SELECT COUNT(*) FROM studsphere_outbox").fetchone()[0])
 
 
+# --- Other numbers for a part ------------------------------------------------
+
+
+def alternates(part: str, color: str | None) -> list[str]:
+    """The other numbers Hive's catalog has for a BrickLink part, from the
+    cache the classification already filled: the number of the part it takes
+    its dimensions from (a Rebrickable-style number, often where BrickLink's and
+    Rebrickable's differ) and the LDraw id. StudSphere tries them only when
+    its own ways of matching find nothing, and says so when one was used,
+    because they're a hint and not a mapping."""
+    try:
+        from hive_metadata_cache import get_cached_part_metadata
+
+        payload = None
+        for color_key in (color, None):  # this color's entry, else any color's
+            payload, _price, _at = get_cached_part_metadata(part, color_key)
+            if payload:
+                break
+    except Exception:
+        return []
+    dimensions = payload.get("dimensions") if isinstance(payload, dict) else None
+    if not isinstance(dimensions, dict):
+        return []
+    found: list[str] = []
+    for key in ("physical_parent_part_num", "ldraw_id"):
+        value = dimensions.get(key)
+        if isinstance(value, str) and value.strip() and value != part and value not in found:
+            found.append(value.strip())
+    return found
+
+
+def _withAlt(op: dict[str, Any], part: str, color: str | None) -> dict[str, Any]:
+    alt = alternates(part, color)
+    if alt:
+        op["alt"] = alt
+    return op
+
+
 # --- Hooks from bin_contents (called inside its write lock) -------------------
 
 
@@ -129,13 +169,17 @@ def onPieceDistributed(piece: dict[str, Any], layer_index: int, section_index: i
     try:
         _enqueue(
             [
-                {
-                    "type": "add",
-                    "bin": binName(layer_index, section_index, bin_index),
-                    "part": str(part),
-                    "color": str(color),
-                    "qty": 1,
-                }
+                _withAlt(
+                    {
+                        "type": "add",
+                        "bin": binName(layer_index, section_index, bin_index),
+                        "part": str(part),
+                        "color": str(color),
+                        "qty": 1,
+                    },
+                    str(part),
+                    str(color),
+                )
             ]
         )
     except Exception as exc:
@@ -185,7 +229,13 @@ def _snapshotSetOps() -> list[dict[str, Any]]:
         items = items_by_bin.setdefault(name, [])
         for item in entry.get("items") or []:
             if item.get("part_id") and item.get("color_id") not in (None, ""):
-                items.append({"part": str(item["part_id"]), "color": str(item["color_id"]), "qty": int(item.get("count") or 0)})
+                items.append(
+                    _withAlt(
+                        {"part": str(item["part_id"]), "color": str(item["color_id"]), "qty": int(item.get("count") or 0)},
+                        str(item["part_id"]),
+                        str(item["color_id"]),
+                    )
+                )
     return [{"type": "set", "bin": name, "items": items} for name, items in items_by_bin.items()]
 
 
@@ -211,6 +261,7 @@ class StudSphereSyncer:
         self._last_sync_at: float | None = None
         self._location: str | None = None
         self._unmapped: dict[str, dict[str, str]] = {}
+        self._hinted: dict[str, str] = {}
 
     # Lifecycle
 
@@ -251,6 +302,7 @@ class StudSphereSyncer:
                 _enqueue(_snapshotSetOps())
             with self._lock:
                 self._unmapped.clear()
+                self._hinted.clear()
                 self._last_error = None
             self.start()
 
@@ -270,6 +322,7 @@ class StudSphereSyncer:
                 "last_sync_at": self._last_sync_at,
                 "last_error": self._last_error,
                 "unmapped": list(self._unmapped.values()),
+                "hinted": [{"part": part, "as": other} for part, other in self._hinted.items()],
             }
 
     # Talking to StudSphere
@@ -338,9 +391,19 @@ class StudSphereSyncer:
             for pair in data.get("unmapped") or []:
                 key = f"{pair.get('part')}|{pair.get('color')}"
                 self._unmapped.pop(key, None)
-                self._unmapped[key] = {"part": str(pair.get("part")), "color": str(pair.get("color"))}
+                self._unmapped[key] = {
+                    "part": str(pair.get("part")),
+                    "color": str(pair.get("color")),
+                    # What StudSphere doesn't know: "part", "color" or "both".
+                    "missing": str(pair.get("missing") or "both"),
+                }
             while len(self._unmapped) > UNMAPPED_KEPT:
                 self._unmapped.pop(next(iter(self._unmapped)))
+            for pair in data.get("hinted") or []:
+                self._hinted.pop(str(pair.get("part")), None)
+                self._hinted[str(pair.get("part"))] = str(pair.get("as"))
+            while len(self._hinted) > HINTED_KEPT:
+                self._hinted.pop(next(iter(self._hinted)))
         return len(ops) == BATCH_SIZE
 
     def _loop(self) -> None:

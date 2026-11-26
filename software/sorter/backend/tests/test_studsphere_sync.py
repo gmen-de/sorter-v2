@@ -12,6 +12,8 @@ import studsphere_sync as ss
 from bin_contents import clear_current_session_bins, record_piece_distribution, start_new_sorting_session
 
 KNOWN = {("3070", "17"), ("3070", "1"), ("3069", "1")}
+# StudSphere's own number for BrickLink parts it only finds through an "alt" hint.
+KNOWN_BY_ALT = {"3069bpr0041": "3069p30"}
 
 
 class FakeStudSphere:
@@ -44,15 +46,20 @@ class FakeStudSphere:
             if json["stream_id"] != self.stream_id:
                 return Resp(409, {"ok": False, "error": "Stream changed: set up again."})
             unmapped = []
+            hinted = []
             for op in json["ops"]:
                 if op["seq"] <= self.last_seq:
                     continue
                 bin_stock = self.bins.setdefault(op["bin"], Counter())
                 if op["type"] == "add":
+                    via = next((a for a in op.get("alt", []) if a in KNOWN_BY_ALT), None)
                     if (op["part"], op["color"]) in KNOWN:
                         bin_stock[(op["part"], op["color"])] += op["qty"]
+                    elif via:
+                        bin_stock[(op["part"], op["color"])] += op["qty"]
+                        hinted.append({"part": op["part"], "as": via})
                     else:
-                        unmapped.append({"part": op["part"], "color": op["color"]})
+                        unmapped.append({"part": op["part"], "color": op["color"], "missing": "part"})
                 elif op["type"] == "set":
                     bin_stock.clear()
                     for item in op["items"]:
@@ -64,7 +71,7 @@ class FakeStudSphere:
                     self.zips.setdefault(op["zip"], Counter()).update(bin_stock)
                     bin_stock.clear()
                 self.last_seq = op["seq"]
-            return Resp(200, {"ok": True, "last_seq": self.last_seq, "unmapped": unmapped})
+            return Resp(200, {"ok": True, "last_seq": self.last_seq, "unmapped": unmapped, "hinted": hinted})
         return Resp(404, {"ok": False, "error": "Unknown action."})
 
 
@@ -143,7 +150,7 @@ def test_resync_sends_current_contents_then_live_pieces(env):
     assert fake.bins["L1-S1-B1"] == Counter({("3070", "17"): 1, ("3070", "1"): 1})
     assert fake.bins["L1-S1-B2"] == Counter({("3070", "17"): 1})
     assert ss.pendingCount() == 0
-    assert syncer.status()["unmapped"] == [{"part": "99999", "color": "17"}]
+    assert syncer.status()["unmapped"] == [{"part": "99999", "color": "17", "missing": "part"}]
     assert syncer.status()["location"] == "Test sorter"
 
 
@@ -222,3 +229,26 @@ def test_normalize_url():
     assert ss.apiUrl("https://s.example/app/", "ops") == "https://s.example/app/api/sorter.php?action=ops"
     with pytest.raises(ValueError):
         ss.normalizeUrl("studsphere.example")
+
+
+def test_hive_numbers_travel_along_as_hints(env):
+    import hive_metadata_cache
+
+    fake, syncer = env
+    hive_metadata_cache.put_cached_part_metadata(
+        "3069p30", "1", {"dimensions": {"physical_parent_part_num": "3069bpr0041", "ldraw_id": "3069bp50"}}, None
+    )
+    hive_metadata_cache.put_cached_part_metadata("3070", "17", {"dimensions": {"physical_parent_part_num": "3070"}}, None)
+    turn_on(syncer)
+    record_piece_distribution(piece("a", 0, part="3069p30", color="1"))
+    record_piece_distribution(piece("b", 0, part="3070", color="17"))  # same number: no hint
+    record_piece_distribution(piece("c", 0, part="5555", color="1"))  # nothing cached
+
+    ops = {op["part"]: op for op in ss._pendingOps(20) if op["type"] == "add"}
+    assert ops["3069p30"]["alt"] == ["3069bpr0041", "3069bp50"]
+    assert "alt" not in ops["3070"] and "alt" not in ops["5555"]
+
+    drain(syncer)
+    assert fake.bins["L1-S1-B1"][("3069p30", "1")] == 1
+    assert syncer.status()["hinted"] == [{"part": "3069p30", "as": "3069bpr0041"}]
+    assert {u["part"] for u in syncer.status()["unmapped"]} == {"5555"}

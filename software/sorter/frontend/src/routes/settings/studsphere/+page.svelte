@@ -29,7 +29,8 @@
 		pending: number;
 		last_sync_at: number | null;
 		last_error: string | null;
-		unmapped: { part: string; color: string }[];
+		unmapped: { part: string; color: string; missing: 'part' | 'color' | 'both' }[];
+		hinted: { part: string; as: string }[];
 	};
 
 	const STATUS_POLL_MS = 3000;
@@ -210,12 +211,31 @@
 			{#if status.last_error}
 				<div class="px-(--pad-panel) py-2"><Alert tone="danger">{status.last_error}</Alert></div>
 			{/if}
+			{#if status.hinted.length}
+				<div class="px-(--pad-panel) py-2 text-sm text-ink-muted">
+					Booked under the number our parts catalog gives for them, because StudSphere had no match for the BrickLink
+					number. Worth a look, they can be a similar part:
+					<ul class="mt-1 font-mono text-ink">
+						{#each status.hinted as h (h.part)}
+							<li>{h.part} <span class="font-sans text-ink-muted">booked as</span> {h.as}</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
 			{#if status.unmapped.length}
 				<div class="px-(--pad-panel) py-2 text-sm text-ink-muted">
-					Not booked, because StudSphere doesn't know this part or color under its BrickLink number:
-					<span class="font-mono text-ink">
-						{status.unmapped.map((u) => `${u.part} / color ${u.color}`).join(', ')}
-					</span>
+					Not booked, because StudSphere doesn't know the part or color under its BrickLink number.
+					"Resync all bins" books them once it does.
+					<ul class="mt-1 font-mono text-ink">
+						{#each status.unmapped as u (`${u.part}|${u.color}`)}
+							<li>
+								{u.part} / color {u.color}
+								<span class="font-sans text-ink-muted">
+									- unknown {u.missing === 'both' ? 'part and color' : u.missing}
+								</span>
+							</li>
+						{/each}
+					</ul>
 				</div>
 			{/if}
 		</Panel>
