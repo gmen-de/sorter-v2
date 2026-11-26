@@ -8,6 +8,12 @@
 		<link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96" />
 		<link rel="icon" href="/favicon-192.png" type="image/png" sizes="192x192" />
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<!-- Opens from the home screen without the browser's bars. credentials: a machine reached over the
+		     internet sits behind a login, and a manifest fetched without the cookie would get the login page. -->
+		<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+		<meta name="theme-color" content="#0055BF" />
+		<meta name="mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<title>Sorter</title>
 		<script>
 			// Before first paint, so a dark page never flashes light ($lib/theme

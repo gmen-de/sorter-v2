@@ -982,6 +982,14 @@ class Positioning(BaseState):
         # (tie-break: fewest pieces) spreads new categories evenly.
         best_combine: Optional[tuple[int, int, BinAddress, "Bin"]] = None
         has_usable_layers = False
+        # The exit bin is kept free: a new category is never assigned to it, so
+        # what lands there is only what has no bin of its own.
+        exit_cfg = _configuredExitBin()
+        exit_key = (
+            (exit_cfg["layer_index"], exit_cfg["section_index"], exit_cfg["bin_index"])
+            if exit_cfg
+            else None
+        )
 
         # Debug trace — categorizes every bin we looked at and why it was
         # skipped. Dumped below when the whole search comes back empty.
@@ -1027,6 +1035,8 @@ class Positioning(BaseState):
                         bins_with_cats += 1
                     if is_full:
                         full_bins += 1
+                    if (layer_idx, section_idx, bin_idx) == exit_key:
+                        continue
                     if not b.category_ids and first_unassigned is None:
                         first_unassigned = (address, b)
                     if (
