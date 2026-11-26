@@ -252,3 +252,17 @@ def test_hive_numbers_travel_along_as_hints(env):
     assert fake.bins["L1-S1-B1"][("3069p30", "1")] == 1
     assert syncer.status()["hinted"] == [{"part": "3069p30", "as": "3069bpr0041"}]
     assert {u["part"] for u in syncer.status()["unmapped"]} == {"5555"}
+
+
+def test_assemblies_get_no_hint(env):
+    import hive_metadata_cache
+
+    for part in ("6014bc01", "3829c01", "737ac04"):
+        hive_metadata_cache.put_cached_part_metadata(
+            part, "5", {"dimensions": {"physical_parent_part_num": "6014b", "ldraw_id": "6014b"}}, None
+        )
+        assert ss.alternates(part, "5") == []
+    # Not assemblies: a plain "c" suffix, or a "c" in the middle of a number.
+    for part in ("4265c", "3684c", "crssprt02"):
+        hive_metadata_cache.put_cached_part_metadata(part, "5", {"dimensions": {"physical_parent_part_num": "9999"}}, None)
+        assert ss.alternates(part, "5") == ["9999"]

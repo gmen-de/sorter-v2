@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import socket
 import threading
 import time
@@ -50,6 +51,8 @@ MAX_BACKOFF_S = 60.0
 REQUEST_TIMEOUT_S = 45.0  # StudSphere may ask Rebrickable for part numbers it doesn't know
 UNMAPPED_KEPT = 50
 HINTED_KEPT = 50
+# BrickLink numbers of assemblies end in c01, c02 ... (3829c01, 6014bc01).
+ASSEMBLY_NUMBER = re.compile(r"c\d{2}[a-z]?$")
 CONDITIONS = ("used", "new")
 
 
@@ -128,6 +131,11 @@ def alternates(part: str, color: str | None) -> list[str]:
     Rebrickable's differ) and the LDraw id. StudSphere tries them only when
     its own ways of matching find nothing, and says so when one was used,
     because they're a hint and not a mapping."""
+    if ASSEMBLY_NUMBER.search(part):
+        # Hive's other number for an assembly is one of its pieces, and
+        # booking the assembly as that piece would count one where there are
+        # several. Better listed as not booked than booked wrong.
+        return []
     try:
         from hive_metadata_cache import get_cached_part_metadata
 

@@ -225,7 +225,9 @@
 			{#if status.unmapped.length}
 				<div class="px-(--pad-panel) py-2 text-sm text-ink-muted">
 					Not booked, because StudSphere doesn't know the part or color under its BrickLink number.
-					"Resync all bins" books them once it does.
+					"Resync all bins" books them once it does. StudSphere asks Rebrickable for only a few unknown numbers per
+					request, so after a large first sync it can take a few resyncs until none are left. Assemblies (c01, c02 ...)
+					are never matched through a hint, so they stay here until StudSphere knows them.
 					<ul class="mt-1 font-mono text-ink">
 						{#each status.unmapped as u (`${u.part}|${u.color}`)}
 							<li>
