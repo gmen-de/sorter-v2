@@ -81,6 +81,10 @@ class PieceWatch:
         self._falls: dict[int, Deque[Sighting]] = {2: deque(maxlen=50), 3: deque(maxlen=50)}
         self._fall_count: dict[int, int] = {2: 0, 3: 0}
         self._started: dict[int, Deque[tuple[int, _Track]]] = {3: deque(maxlen=50), 4: deque(maxlen=50)}
+        # Where each new piece was first seen on C2. C1 has no camera, so there
+        # is no fall to pair them with, but a piece first seen on C2 has just
+        # landed there: the spread of these is where C1's pieces come down.
+        self._first_seen_c2: Deque[Sighting] = deque(maxlen=HANDOFFS_KEPT)
         self._handoffs: dict[int, Deque[Handoff]] = {2: deque(maxlen=HANDOFFS_KEPT), 3: deque(maxlen=HANDOFFS_KEPT)}
         self._frames: dict[int, Deque[np.ndarray]] = {ch: deque(maxlen=FRAMES_KEPT) for ch in (2, 3, 4)}
         self._frame_at: dict[int, float] = {}
@@ -112,7 +116,7 @@ class PieceWatch:
 
     def report(self) -> dict[str, Any]:
         out: dict[str, Any] = {"channels": {}}
-        for channel in _NEXT:
+        for channel, nxt in _NEXT.items():
             hand = self.handoffs(channel)
             entry: dict[str, Any] = {
                 "falls": self._fall_count[channel],
@@ -125,8 +129,11 @@ class PieceWatch:
                     "p50": round(delays[len(delays) // 2], 3),
                     "p90": round(delays[min(len(delays) - 1, int(len(delays) * 0.9))], 3),
                 }
-                entry["landing_on_next_channel"] = _landingSpread(hand, nxt)
+                entry["landing_on_next_channel"] = _landingSpread([h.landed for h in hand], nxt)
             out["channels"][str(channel)] = entry
+        with self._lock:
+            first_c2 = list(self._first_seen_c2)
+        out["channels"]["2"]["landing_from_c1"] = _landingSpread(first_c2, 2)
         out["channels"]["4"] = {"frames": len(self.frames(4))}
         return out
 
@@ -172,6 +179,9 @@ class PieceWatch:
                 tracks[int(track_id)] = track
                 if channel in self._started:
                     self._started[channel].append((int(track_id), track))
+                elif channel == 2:
+                    with self._lock:
+                        self._first_seen_c2.append(seen)
             else:
                 track.last = seen
 
@@ -249,8 +259,8 @@ def _percentile(sorted_values: list[float], share: float) -> float:
     return sorted_values[min(len(sorted_values) - 1, int(len(sorted_values) * share))]
 
 
-def _landingSpread(handoffs: list[Handoff], channel: int) -> dict[str, Any] | None:
-    """Where the pieces that fell onto ``channel`` were first seen there: their
+def _landingSpread(landed: list[Sighting], channel: int) -> dict[str, Any] | None:
+    """Where the pieces that came down onto ``channel`` were first seen there: their
     angles around its ring (as the zones count them), and how long a piece is
     in channel degrees at the exit's radius. The angles are given relative to
     the middle of the channel's drop zone as well, so the spread reads the same
@@ -261,19 +271,19 @@ def _landingSpread(handoffs: list[Handoff], channel: int) -> dict[str, Any] | No
         zones = loadZones().get(channel)
     except Exception:
         zones = None
-    if zones is None or not handoffs:
+    if zones is None or not landed:
         return None
     cx, cy = zones.ring.center
     w, h = zones.frame
     mid = zones.drop.middle
     rel: list[float] = []
     sizes: list[float] = []
-    for hand in handoffs:
-        x, y = hand.landed.at((w, h))
+    for sighting in landed:
+        x, y = sighting.at((w, h))
         angle = math.degrees(math.atan2(y - cy, x - cx)) % 360.0
         rel.append((angle - mid + 180.0) % 360.0 - 180.0)
         if zones.ring.exit_radius > 0:
-            sizes.append(math.degrees(hand.landed.size * w / zones.ring.exit_radius))
+            sizes.append(math.degrees(sighting.size * w / zones.ring.exit_radius))
     rel.sort()
     sizes.sort()
     out: dict[str, Any] = {

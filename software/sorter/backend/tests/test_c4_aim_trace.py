@@ -100,7 +100,7 @@ def test_landing_spread_is_read_relative_to_the_drop_zone_across_zero() -> None:
     store_load = store.loadZones
     store.loadZones = lambda: {4: zones}
     try:
-        spread = watch._landingSpread(hands, 4)
+        spread = watch._landingSpread([h.landed for h in hands], 4)
     finally:
         store.loadZones = store_load
     assert spread["n"] == 5
@@ -108,3 +108,35 @@ def test_landing_spread_is_read_relative_to_the_drop_zone_across_zero() -> None:
     assert spread["from_drop_middle_deg"]["max"] > 25
     assert spread["outside_drop_zone"] == 1
     assert spread["piece_length_deg"]["p50"] > 0
+
+
+def test_the_watch_report_gives_the_landing_spread_for_c2_too() -> None:
+    import math
+    import zones.store as store
+
+    zones = ChannelZones(
+        channel=2,
+        frame=(1000, 1000),
+        ring=Ring((500.0, 500.0), 100.0, 450.0, 400.0, None),
+        drop=Span(160.0, 220.0),
+        exit=Span(60.0, 100.0),
+    )
+    w = watch.PieceWatch(perception_service=None)
+    for angle in (170.0, 190.0, 210.0):
+        x = 500.0 + 300.0 * math.cos(math.radians(angle))
+        y = 500.0 + 300.0 * math.sin(math.radians(angle))
+        w._first_seen_c2.append(watch.Sighting(ts=1.0, u=x / 1000.0, v=y / 1000.0, size=0.05))
+    hand = watch.Sighting(ts=1.0, u=0.5, v=0.2, size=0.05)
+    w._handoffs[2].append(watch.Handoff(2, hand, hand, 1.5))
+    zones3 = ChannelZones(channel=3, frame=(1000, 1000), ring=zones.ring, drop=Span(160.0, 220.0), exit=Span(60.0, 100.0))
+    original = store.loadZones
+    store.loadZones = lambda: {2: zones, 3: zones3}
+    try:
+        report = w.report()
+    finally:
+        store.loadZones = original
+    spread = report["channels"]["2"]["landing_from_c1"]
+    assert spread["n"] == 3
+    assert spread["outside_drop_zone"] == 0
+    assert abs(spread["from_drop_middle_deg"]["p50"]) < 1.0
+    assert report["channels"]["2"]["landing_on_next_channel"]["n"] == 1
