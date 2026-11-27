@@ -121,6 +121,7 @@ from server.routers.recovery import router as recovery_router
 from server.routers.stallguard import router as stallguard_router
 from server.routers.servos import router as servos_router
 from server.routers.chute import router as chute_router
+from server.routers.chute_calibration import router as chute_calibration_router
 from server.routers.bins import router as bins_router
 from server.routers.cameras import router as cameras_router
 from server.routers.camera_feeds import router as camera_feeds_router
@@ -165,6 +166,7 @@ app.include_router(recovery_router)
 app.include_router(stallguard_router)
 app.include_router(servos_router)
 app.include_router(chute_router)
+app.include_router(chute_calibration_router)
 app.include_router(bins_router)
 app.include_router(cameras_router)
 app.include_router(camera_feeds_router)

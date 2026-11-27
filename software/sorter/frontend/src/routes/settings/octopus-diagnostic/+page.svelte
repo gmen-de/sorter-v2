@@ -16,6 +16,7 @@
 	import BinLayoutViz from '../chute-aiming/BinLayoutViz.svelte';
 	import BenchmarkPanel from '$lib/components/settings/BenchmarkPanel.svelte';
 	import DriverTempChart from '$lib/components/settings/DriverTempChart.svelte';
+	import ChuteCalibrationPanel from '$lib/components/settings/ChuteCalibrationPanel.svelte';
 
 	// Everything on the Octopus board in one place: the chute's live encoder/
 	// driver readout + bin wheel (the settings-page equivalent of
@@ -27,7 +28,7 @@
 	const manager = getMachinesContext();
 	const POLL_MS = 400;
 
-	type Tab = 'chute' | 'steppers' | 'drivers' | 'leds' | 'fans' | 'benchmark';
+	type Tab = 'chute' | 'calibration' | 'steppers' | 'drivers' | 'leds' | 'fans' | 'benchmark';
 	let tab = $state<Tab>('chute');
 
 	type Fan = {
@@ -440,6 +441,7 @@
 	bind:value={tab}
 	items={[
 		{ value: 'chute', label: 'Chute' },
+		{ value: 'calibration', label: 'Calibration' },
 		{ value: 'steppers', label: 'Other steppers' },
 		{ value: 'drivers', label: 'Driver temps' },
 		{ value: 'leds', label: 'LEDs' },
@@ -557,6 +559,10 @@
 			</div>
 		</Panel>
 	{/if}
+{:else if tab === 'calibration'}
+	<div class="flex flex-col gap-(--gap-panels)">
+		<ChuteCalibrationPanel />
+	</div>
 {:else if tab === 'steppers'}
 	<div class="flex flex-col gap-(--gap-panels)">
 		<StepperPanel stepperKey="c_channel_1" keyboardShortcuts />

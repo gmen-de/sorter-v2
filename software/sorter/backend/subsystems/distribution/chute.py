@@ -446,6 +446,10 @@ class Chute:
         if target is None:
             self.logger.error(f"Chute: bin {address} is unreachable")
             return None
+        if self.chute_position_sensor == "encoder":
+            # The taught per-bin step correction (the encoder_native firmware
+            # applies it itself in TARGET_BIN) as degrees on this path.
+            target += self.getBinCorrection(address) / CHUTE_ENCODER_USTEPS_PER_REV * 360.0
         self.logger.info(
             f"Chute: moveToBin layer={address.layer_index} section={address.section_index} bin={address.bin_index} -> {target:.2f}°"
         )
@@ -465,6 +469,8 @@ class Chute:
         if target is None:
             self.logger.error(f"Chute: bin {address} is unreachable")
             return None
+        if self.chute_position_sensor == "encoder":
+            target += self.getBinCorrection(address) / CHUTE_ENCODER_USTEPS_PER_REV * 360.0
         return self.moveToAngleBlocking(target, timeout_buffer_ms=timeout_buffer_ms)
 
     def _moveToBinNative(
