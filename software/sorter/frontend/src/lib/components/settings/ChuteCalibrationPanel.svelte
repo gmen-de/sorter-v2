@@ -42,6 +42,8 @@
 	let layerIndex = $state(0);
 	let bins = $state<BinRow[]>([]);
 	let usteps_per_rev = $state(7680);
+	let binCount = $state(0);
+	let sameSizeLayers = $state<number[]>([]);
 
 	let speed = $state('500');
 	let acceleration = $state('5000');
@@ -151,6 +153,8 @@
 			}
 			const data = await res.json();
 			bins = data.bins ?? [];
+			binCount = data.bin_count ?? 0;
+			sameSizeLayers = data.same_size_layers ?? [];
 			if (Number.isFinite(data.usteps_per_rev)) usteps_per_rev = data.usteps_per_rev;
 		} catch {
 			bins = [];
@@ -445,6 +449,13 @@
 				}))}
 			/>
 		</Field>
+		{#if bins.length > 0}
+			<p class="text-sm text-ink-muted">
+				What is taught here holds for every layer with {binCount} bins{sameSizeLayers.length
+					? ` (also ${sameSizeLayers.map((i) => `layer ${i + 1}`).join(', ')})`
+					: ''}.
+			</p>
+		{/if}
 		{#if bins.length === 0}
 			<p class="text-sm text-ink-muted">No bins to show — start the machine first.</p>
 		{/if}

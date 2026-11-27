@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from bin_layout_store import get_chute_bin_corrections, set_chute_bin_correction
+from bin_layout_store import chute_correction_key, get_chute_bin_corrections, set_chute_bin_correction
 from server import shared_state
 from server.routers.steppers import (
     _ensure_manual_motion_allowed,
@@ -196,6 +196,7 @@ def list_bins(layer_index: int = 0) -> Dict[str, Any]:
     if layer_index < 0 or layer_index >= len(layers):
         raise HTTPException(status_code=400, detail=f"Invalid layer index {layer_index}.")
     corrections = get_chute_bin_corrections()
+    bin_count = chute.layerBinCount(layer_index)
     bins: List[Dict[str, Any]] = []
     for section_index, section in enumerate(layers[layer_index].sections):
         for bin_index in range(len(section.bins)):
@@ -204,7 +205,7 @@ def list_bins(layer_index: int = 0) -> Dict[str, Any]:
                 base, _k = _ustep_target(chute, ref)
             except HTTPException:
                 continue
-            key = f"{layer_index}:{section_index}:{bin_index}"
+            key = chute_correction_key(bin_count, section_index, bin_index)
             correction = int(corrections.get(key, 0))
             bins.append(
                 {
@@ -216,7 +217,16 @@ def list_bins(layer_index: int = 0) -> Dict[str, Any]:
                     "taught": key in corrections,
                 }
             )
-    return {"layer_index": layer_index, "usteps_per_rev": CHUTE_ENCODER_USTEPS_PER_REV, "bins": bins}
+    return {
+        "layer_index": layer_index,
+        # What is taught here holds for every layer with this many bins.
+        "bin_count": bin_count,
+        "same_size_layers": [
+            i for i in range(len(layers)) if i != layer_index and chute.layerBinCount(i) == bin_count
+        ],
+        "usteps_per_rev": CHUTE_ENCODER_USTEPS_PER_REV,
+        "bins": bins,
+    }
 
 
 @router.post("/api/chute-calibration/learn-bin")
@@ -232,7 +242,9 @@ def learn_bin(payload: LearnBinPayload) -> Dict[str, Any]:
     # counts; keep the correction the short way round.
     half = CHUTE_ENCODER_USTEPS_PER_REV // 2
     correction = (usteps - base + half) % CHUTE_ENCODER_USTEPS_PER_REV - half
-    set_chute_bin_correction(payload.layer_index, payload.section_index, payload.bin_index, correction)
+    set_chute_bin_correction(
+        chute.layerBinCount(payload.layer_index), payload.section_index, payload.bin_index, correction
+    )
     return {
         "ok": True,
         "geometry_usteps": base,
@@ -243,5 +255,11 @@ def learn_bin(payload: LearnBinPayload) -> Dict[str, Any]:
 
 @router.post("/api/chute-calibration/clear-bin")
 def clear_bin(payload: BinRef) -> Dict[str, Any]:
-    set_chute_bin_correction(payload.layer_index, payload.section_index, payload.bin_index, None)
+    irl = shared_state.getActiveIRL()
+    chute = getattr(irl, "chute", None) if irl is not None else None
+    if chute is None:
+        raise HTTPException(status_code=503, detail="Chute subsystem not available.")
+    set_chute_bin_correction(
+        chute.layerBinCount(payload.layer_index), payload.section_index, payload.bin_index, None
+    )
     return {"ok": True}

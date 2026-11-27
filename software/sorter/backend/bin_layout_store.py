@@ -197,24 +197,56 @@ def set_servo_channel_angle(channel_id: Any, which: str, angle: int | None) -> N
     _write(_STATE_KEY_SERVO_CHANNEL_CALIBRATION, calibration)
 
 
+def chute_correction_key(bin_count: int, section_index: int, bin_index: int) -> str:
+    return f"n{int(bin_count)}:{int(section_index)}:{int(bin_index)}"
+
+
 def get_chute_bin_corrections() -> dict[str, int]:
     """Per-bin chute fine-tune corrections, in microsteps, keyed
-    "layer:section:bin" — encoder_native mode only (see chute.py's
-    getBinCorrection()/TARGET_BIN's correction_usteps). Mirrors
-    get_servo_channel_calibration()'s shape/storage pattern."""
+    "n<bins in the layer>:section:bin" (chute_correction_key()): a calibration
+    taught on one layer holds for every layer with the same number of bins
+    (every 6-, 12- or 18-bin layer), because those are built the same way.
+    encoder_native mode only (see chute.py's getBinCorrection()/TARGET_BIN's
+    correction_usteps)."""
     value = _read(_STATE_KEY_CHUTE_BIN_CORRECTIONS)
     return value if isinstance(value, dict) else {}
 
 
-def set_chute_bin_correction(layer_index: int, section_index: int, bin_index: int, correction_usteps: int | None) -> None:
+def set_chute_bin_correction(bin_count: int, section_index: int, bin_index: int, correction_usteps: int | None) -> None:
     # correction_usteps None clears it back to the default (0)
     corrections = get_chute_bin_corrections()
-    key = f"{layer_index}:{section_index}:{bin_index}"
+    key = chute_correction_key(bin_count, section_index, bin_index)
     if correction_usteps is None:
         corrections.pop(key, None)
     else:
         corrections[key] = int(correction_usteps)
     _write(_STATE_KEY_CHUTE_BIN_CORRECTIONS, corrections)
+
+
+def migrate_chute_corrections_to_bin_count(layer_bin_counts: dict[int, int]) -> int:
+    """Corrections used to be keyed "layer:section:bin". Re-key them by the
+    layer's bin count (see get_chute_bin_corrections()); a value already stored
+    for the count wins, and keys of layers not in `layer_bin_counts` stay as
+    they are. Idempotent. Returns how many keys were moved."""
+    corrections = get_chute_bin_corrections()
+    moved = 0
+    for key in list(corrections):
+        parts = key.split(":")
+        if len(parts) != 3 or parts[0].startswith("n"):
+            continue
+        try:
+            layer, section, bin_index = (int(p) for p in parts)
+        except ValueError:
+            continue
+        count = layer_bin_counts.get(layer)
+        if count is None:
+            continue
+        value = corrections.pop(key)
+        corrections.setdefault(chute_correction_key(count, section, bin_index), value)
+        moved += 1
+    if moved:
+        _write(_STATE_KEY_CHUTE_BIN_CORRECTIONS, corrections)
+    return moved
 
 
 def get_exit_bin() -> dict[str, int] | None:

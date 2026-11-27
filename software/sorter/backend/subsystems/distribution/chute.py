@@ -12,7 +12,11 @@ from hardware_settings.chute import (
     DEFAULT_POSITION_CHECK_EVERY,
     DEFAULT_SECTION_WIDTH_DEG,
 )
-from bin_layout_store import get_chute_bin_corrections
+from bin_layout_store import (
+    chute_correction_key,
+    get_chute_bin_corrections,
+    migrate_chute_corrections_to_bin_count,
+)
 from irl.bin_layout import DistributionLayout
 
 if TYPE_CHECKING:
@@ -122,6 +126,7 @@ class Chute:
         self.pieces_since_check = 0
         self.checking = False
         self.home_correction_usteps = int(home_correction_usteps)
+        self._migrateBinCorrections()
         self._pushAimingToFirmware()
         self._syncHomedFromFirmware()
 
@@ -536,9 +541,31 @@ class Chute:
         self.pieces_since_check += 1
         return estimated_ms
 
+    def layerBinCount(self, layer_index: int) -> int:
+        """How many bins a layer has in all. The taught corrections are kept
+        per bin count, so every layer of the same size shares them."""
+        try:
+            return sum(len(section.bins) for section in self.layout.layers[layer_index].sections)
+        except (IndexError, AttributeError):
+            return 0
+
+    def binCorrectionKey(self, address: BinAddress) -> str:
+        return chute_correction_key(
+            self.layerBinCount(address.layer_index), address.section_index, address.bin_index
+        )
+
     def getBinCorrection(self, address: BinAddress) -> int:
-        key = f"{address.layer_index}:{address.section_index}:{address.bin_index}"
-        return int(get_chute_bin_corrections().get(key, 0))
+        return int(get_chute_bin_corrections().get(self.binCorrectionKey(address), 0))
+
+    def _migrateBinCorrections(self) -> None:
+        """Corrections were once kept per layer; they are kept per bin count now."""
+        try:
+            counts = {i: self.layerBinCount(i) for i in range(len(self.layout.layers))}
+            moved = migrate_chute_corrections_to_bin_count({i: n for i, n in counts.items() if n})
+            if moved:
+                self.logger.info(f"Chute: {moved} taught bin corrections now kept per bin count.")
+        except Exception as exc:
+            self.logger.warning(f"Chute: could not migrate the taught bin corrections: {exc}")
 
     def _pushAimingToFirmware(self) -> None:
         """encoder_native only: push the aiming geometry and home correction

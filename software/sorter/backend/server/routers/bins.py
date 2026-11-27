@@ -28,6 +28,7 @@ from bin_contents import (
 )
 from bin_layout_store import (
     get_bin_categories,
+    chute_correction_key,
     get_chute_bin_corrections,
     get_exit_bin,
     get_not_in_inventory_bins,
@@ -601,6 +602,7 @@ def get_bins_layout() -> Dict[str, Any]:
     layers_out = []
     for layer_idx, layer in enumerate(layout_config.layers):
         sections = layer.sections
+        layer_bin_count = sum(len(section_bins) for section_bins in sections)
         bins_flat = []
         global_bin = 0
         for section_idx, section_bins in enumerate(sections):
@@ -616,7 +618,7 @@ def get_bins_layout() -> Dict[str, Any]:
                     "angle": round(angle, 2),
                     # encoder_native mode only — see chute.py's getBinCorrection().
                     "chute_correction_usteps": chute_corrections.get(
-                        f"{layer_idx}:{section_idx}:{bin_idx}", 0
+                        chute_correction_key(layer_bin_count, section_idx, bin_idx), 0
                     ),
                 })
                 global_bin += 1
@@ -818,8 +820,14 @@ def set_chute_bin_correction_route(payload: ChuteBinCorrectionPayload) -> Dict[s
     """Per-bin chute fine-tune correction, in microsteps - encoder_native mode
     only (see chute.py's getBinCorrection()/TARGET_BIN's correction_usteps).
     None clears the override back to 0."""
+    layers = getBinLayout().layers
+    if payload.layer_index < 0 or payload.layer_index >= len(layers):
+        raise HTTPException(status_code=400, detail=f"Invalid layer index {payload.layer_index}.")
     set_chute_bin_correction(
-        payload.layer_index, payload.section_index, payload.bin_index, payload.correction_usteps
+        sum(len(section_bins) for section_bins in layers[payload.layer_index].sections),
+        payload.section_index,
+        payload.bin_index,
+        payload.correction_usteps,
     )
     return {
         "ok": True,
