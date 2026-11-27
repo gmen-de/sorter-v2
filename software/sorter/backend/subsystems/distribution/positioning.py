@@ -882,6 +882,16 @@ class Positioning(BaseState):
 
         target_servo = self.irl.servos[target_layer_index]
 
+        # The BLE servo board does the whole door setting itself: one command
+        # closes the target and opens every other gate, the servos moving
+        # together, and it answers once all of them are in place. Gates it
+        # cannot reach that way (another backend, an inverted servo) go through
+        # the per-servo path below.
+        on_board = self._selectDoorOnBoard(target_layer_index, target_servo)
+        if on_board is False:
+            return False
+        handled = on_board if on_board is not None else set()
+
         # Never trust shadow state: re-issue the full door configuration
         # before every dispense. Open every other usable layer (park), then
         # command the target closed — even if we stayed on the same layer
@@ -891,7 +901,7 @@ class Positioning(BaseState):
         # noticing until a piece lands in the wrong bin.
         opened_layers: list[int] = []
         for i, servo in enumerate(self.irl.servos):
-            if i == target_layer_index or not self._isLayerUsable(i):
+            if i == target_layer_index or i in handled or not self._isLayerUsable(i):
                 continue
             try:
                 if hasattr(servo, "apply_open_speed"):
@@ -906,18 +916,19 @@ class Positioning(BaseState):
                     f"opening parked servo failed: {exc}",
                 )
 
-        try:
-            if hasattr(target_servo, "apply_close_speed"):
-                target_servo.apply_close_speed()
-            if not target_servo.close():
-                self._markLayerUnavailable(target_layer_index, "its servo refused to close")
+        if target_layer_index not in handled:
+            try:
+                if hasattr(target_servo, "apply_close_speed"):
+                    target_servo.apply_close_speed()
+                if not target_servo.close():
+                    self._markLayerUnavailable(target_layer_index, "its servo refused to close")
+                    return False
+            except Exception as exc:
+                self._markLayerUnavailable(
+                    target_layer_index,
+                    f"closing target servo failed: {exc}",
+                )
                 return False
-        except Exception as exc:
-            self._markLayerUnavailable(
-                target_layer_index,
-                f"closing target servo failed: {exc}",
-            )
-            return False
 
         # Single line capturing the full intended door state for this dispense,
         # so a wrong-layer piece can be traced to exactly what the controller
@@ -927,6 +938,44 @@ class Positioning(BaseState):
             f"opened parked layers {opened_layers}"
         )
         return True
+
+    def _selectDoorOnBoard(self, target_layer_index: int, target_servo) -> Optional[set[int]]:
+        """Set the doors with one SELECT to the servo board. The layers it set
+        (every layer whose servo is on that board), or None when it could not be
+        used (an older firmware, another backend, an inverted servo, a failed
+        link): the caller then sets every door one by one. False when the target
+        door did not close."""
+        select = getattr(target_servo, "select_exclusive", None)
+        if select is None:
+            return None
+        try:
+            result = select()
+        except Exception as exc:
+            self.logger.warning(f"Positioning: door select on the servo board failed ({exc}); one door at a time")
+            return None
+        if result is None:
+            return None
+        board = getattr(target_servo, "bridge", None)
+        on_board = {
+            i
+            for i, servo in enumerate(self.irl.servos)
+            if getattr(servo, "bridge", None) is board and not getattr(servo, "_invert", False)
+        }
+        if result.error:
+            self._markLayerUnavailable(target_layer_index, f"its servo board answered {result.error}")
+            return False
+        for i in on_board:
+            if getattr(self.irl.servos[i], "channel", None) not in result.blocked:
+                continue
+            if i == target_layer_index:
+                self._markLayerUnavailable(i, "its servo did not reach closed")
+                return False
+            self._markLayerUnavailable(i, "its parked servo did not reach open")
+        self.logger.info(
+            f"Door config: closed layer-{target_layer_index} (target), all others opened "
+            f"(one command to the servo board)"
+        )
+        return on_board
 
     def _trainingBinAddress(self) -> Optional[BinAddress]:
         # Training mode can hold every piece to one bin (training_runs), the

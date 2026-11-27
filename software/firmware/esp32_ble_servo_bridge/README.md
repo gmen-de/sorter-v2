@@ -90,6 +90,7 @@ Python client reassembles them on `\n`).
 |---|---|---|
 | `OPEN <gate>` | `<gate> OPEN` / `<gate> BLOCKED` / `<gate> ERR UNCALIBRATED` / `<gate> ERR OFFLINE` | Move the gate open, report whether it got there. |
 | `CLOSE <gate>` | `<gate> CLOSED` / `<gate> BLOCKED` / … | Same, closing. |
+| `SELECT <gate>` | `SELECT <gate> OK` / `SELECT <gate> BLOCKED <g> …` / `SELECT <gate> ERR OFFLINE\|UNCALIBRATED` | Close `<gate>` and open every other gate on the board, all servos at once (one sync write, one move time), then verify every position. `BLOCKED` lists the gates that did not get there. |
 | `STATUS <gate>` | `<gate> OPEN` / `<gate> CLOSED` / `<gate> UNKNOWN` / `<gate> ERR …` | Read current state without moving. |
 | `LEARN` | `LEARNED <gate> OK` / `LEARNED <gate> NOCAL` / `LEARN NONE` / `LEARN ERR …` | Assign the next gate ID to a servo at factory ID 1, then calibrate it. |
 | `CALIBRATE <gate>` | `CALIBRATED <gate>` / `CALIBRATE ERR <gate>` | Re-run calibration on an already-numbered servo. |

@@ -26,7 +26,7 @@
 
 // Bumped deliberately on every firmware change worth telling apart in a BLE
 // scan (see bleDeviceName()) - not auto-generated from anything.
-#define FW_VERSION "1.1.0"
+#define FW_VERSION "1.2.0"
 
 // -- Servo bus -------------------------------------------------------------
 
@@ -329,6 +329,25 @@ bool calibrateServo(uint8_t id, uint16_t &safeMin, uint16_t &safeMax) {
 // Gate-level command handlers
 // ---------------------------------------------------------------------------
 
+// Gate IDs the last bus scan saw (refreshed by refreshKnownGates(), which
+// scanGateIds() also runs), so SELECT does not have to ping 50 IDs every time.
+static uint8_t gKnownIds[MAX_GATE_ID + 1];
+static int gKnownCount = 0;
+
+void refreshKnownGates() {
+  gKnownCount = 0;
+  for (int id = MIN_GATE_ID; id <= MAX_GATE_ID; id++) {
+    if (pingServo((uint8_t)id)) gKnownIds[gKnownCount++] = (uint8_t)id;
+  }
+}
+
+static bool isKnownId(uint8_t id) {
+  for (int i = 0; i < gKnownCount; i++) {
+    if (gKnownIds[i] == id) return true;
+  }
+  return false;
+}
+
 String cmdOpenClose(int gate, bool open) {
   setGateStatus(GATE_STATUS_MOVING);
 
@@ -377,6 +396,91 @@ String cmdOpenClose(int gate, bool open) {
   }
   setGateStatus(GATE_STATUS_BLOCKED);
   return String(gate) + " BLOCKED";
+}
+
+// SELECT <gate>: the whole door setting for one piece in one command. Closes
+// <gate> (it catches the piece) and opens every other gate this board knows
+// (they let it fall past), all servos at once with one sync write, then reads
+// every position back. One round trip and one move time (MOVE_TIME_MS +
+// MOVE_SETTLE_MS) instead of one OPEN or CLOSE per gate, one after another.
+// Every gate is commanded every time, also those already in place: a gate
+// that is already there does not move, and one that drifted is put back.
+// Response: "SELECT <gate> OK", "SELECT <gate> BLOCKED <g> <g> ..." (gates that
+// did not reach their position, the target among them if it failed) or
+// "SELECT <gate> ERR OFFLINE|UNCALIBRATED" (the target itself cannot move).
+String cmdSelect(int target) {
+  setGateStatus(GATE_STATUS_MOVING);
+  String head = "SELECT " + String(target);
+
+  if (gDemoMode) {
+    if (target < 1 || target > DEMO_MAX_GATE) {
+      setGateStatus(GATE_STATUS_BLOCKED);
+      return head + " ERR UNCALIBRATED";
+    }
+    delay(DEMO_DELAY_MS);
+    for (int gate = 1; gate <= DEMO_MAX_GATE; gate++) {
+      if (gDemoGates[gate].known) gDemoGates[gate].open = true;
+    }
+    gDemoGates[target].known = true;
+    gDemoGates[target].open = false;
+    setGateStatus(GATE_STATUS_OK);
+    noteGateOpenState(target, false);
+    return head + " OK";
+  }
+
+  uint8_t targetId = idForGate(target);
+  if (!isKnownId(targetId)) refreshKnownGates();
+  if (!isKnownId(targetId)) {
+    setGateStatus(GATE_STATUS_BLOCKED);
+    return head + " ERR OFFLINE";
+  }
+
+  uint8_t ids[MAX_GATE_ID + 1];
+  uint16_t positions[MAX_GATE_ID + 1];
+  uint16_t times[MAX_GATE_ID + 1];
+  int count = 0;
+  String blocked;
+  for (int i = 0; i < gKnownCount; i++) {
+    uint8_t id = gKnownIds[i];
+    uint16_t minV, maxV;
+    bool readable = readLimits(id, minV, maxV);
+    bool calibrated = readable && isCalibrated(minV, maxV);
+    if (!calibrated) {
+      if (id == targetId) {
+        setGateStatus(GATE_STATUS_BLOCKED);
+        return head + (readable ? " ERR UNCALIBRATED" : " ERR OFFLINE");
+      }
+      blocked += " " + String(gateForId(id));  // cannot be opened: report, leave it alone
+      continue;
+    }
+    ids[count] = id;
+    // Closed is the servo's calibrated min, open its max (see cmdOpenClose()).
+    positions[count] = (id == targetId) ? minV : maxV;
+    times[count] = MOVE_TIME_MS;
+    count++;
+  }
+
+  for (int j = 0; j < count; j++) setTorque(ids[j], true);
+  sc.SyncWritePos(ids, (uint8_t)count, positions, times, nullptr);
+  delay(MOVE_TIME_MS + MOVE_SETTLE_MS);
+
+  bool targetArrived = false;
+  for (int j = 0; j < count; j++) {
+    int pos, load;
+    bool arrived = readPositionAndLoad(ids[j], pos, load) && abs(pos - (int)positions[j]) <= POSITION_TOLERANCE;
+    setTorque(ids[j], false);
+    if (ids[j] == targetId) targetArrived = arrived;
+    if (!arrived) blocked += " " + String(gateForId(ids[j]));
+  }
+
+  if (blocked.length() == 0) {
+    setGateStatus(GATE_STATUS_OK);
+    noteGateOpenState(target, false);
+    return head + " OK";
+  }
+  setGateStatus(GATE_STATUS_BLOCKED);
+  if (targetArrived) noteGateOpenState(target, false);
+  return head + " BLOCKED" + blocked;
 }
 
 String cmdStatus(int gate) {
@@ -495,10 +599,9 @@ String scanGateIds() {
     }
     return gates;
   }
-  for (int id = MIN_GATE_ID; id <= MAX_GATE_ID; id++) {
-    if (pingServo((uint8_t)id)) {
-      gates += " " + String(gateForId((uint8_t)id));
-    }
+  refreshKnownGates();
+  for (int i = 0; i < gKnownCount; i++) {
+    gates += " " + String(gateForId(gKnownIds[i]));
   }
   return gates;
 }
@@ -523,6 +626,11 @@ String handleCommand(const String &line) {
     int gate = rest.toInt();
     if (gate <= 0) return "ERR BAD_GATE";
     return cmdOpenClose(gate, verb == "OPEN");
+  }
+  if (verb == "SELECT") {
+    int gate = rest.toInt();
+    if (gate <= 0) return "ERR BAD_GATE";
+    return cmdSelect(gate);
   }
   if (verb == "STATUS") {
     int gate = rest.toInt();

@@ -20,6 +20,7 @@ import asyncio
 import logging
 import queue
 import threading
+from dataclasses import dataclass
 from typing import Any, Dict
 
 from bleak import BleakClient, BleakScanner
@@ -291,6 +292,15 @@ class WaveshareBleBridge:
     def status_gate(self, gate: int, *, timeout: float = 2.0) -> str:
         return self.command(f"STATUS {gate}", timeout=timeout)
 
+    # None until asked once; False when the firmware answered "unknown command"
+    # (older than v1.2.0), so the per-gate commands are used from then on.
+    supports_select: bool | None = None
+
+    def select_gate(self, gate: int, *, timeout: float = 5.0) -> str:
+        """Close `gate` and open every other gate on the board, all at once
+        (the firmware's SELECT, v1.2.0 and newer). One move time for all of it."""
+        return self.command(f"SELECT {gate}", timeout=timeout)
+
     def learn(self, *, timeout: float = _LEARN_TIMEOUT_S) -> str:
         return self.command("LEARN", timeout=timeout)
 
@@ -362,6 +372,32 @@ _FIRMWARE_STATE = {"OPEN": "open", "CLOSED": "closed", "BLOCKED": "blocked", "UN
 def _firmware_word(response: str) -> str:
     parts = response.split()
     return parts[1] if len(parts) >= 2 else parts[0] if parts else ""
+
+
+@dataclass(frozen=True)
+class GateSelectResult:
+    """The answer to a SELECT: the gates that did not reach their position
+    (the target among them if it failed), or an error word when the target
+    itself cannot move (OFFLINE, UNCALIBRATED)."""
+
+    blocked: tuple[int, ...] = ()
+    error: str | None = None
+
+
+def parse_select_response(response: str, gate: int) -> GateSelectResult | None:
+    """None when the firmware does not know SELECT (an older one)."""
+    parts = response.split()
+    if not parts or parts[0] == "ERR":
+        return None
+    if parts[0] != "SELECT" or len(parts) < 3 or parts[1] != str(gate):
+        raise RuntimeError(f"Unexpected answer to SELECT {gate}: {response!r}")
+    if parts[2] == "OK":
+        return GateSelectResult()
+    if parts[2] == "BLOCKED":
+        return GateSelectResult(blocked=tuple(int(p) for p in parts[3:] if p.isdigit()))
+    if parts[2] == "ERR":
+        return GateSelectResult(error=parts[3] if len(parts) > 3 else "ERR")
+    raise RuntimeError(f"Unexpected answer to SELECT {gate}: {response!r}")
 
 
 class BleGateServo:
@@ -439,6 +475,25 @@ class BleGateServo:
         response = self._bridge.close_gate(self._gate) if not self._invert else self._bridge.open_gate(self._gate)
         self._last_state = self._logical_state(_firmware_word(response))
         return self._last_state == "closed"
+
+    @property
+    def bridge(self) -> WaveshareBleBridge:
+        return self._bridge
+
+    def select_exclusive(self) -> GateSelectResult | None:
+        """Close this gate and open every other gate on the board in one
+        command, the servos moving together. None when that cannot be done
+        here: the firmware is older than v1.2.0, or this servo is inverted
+        (SELECT closes and opens by the firmware's own convention)."""
+        if self._invert or getattr(self._bridge, "supports_select", None) is False:
+            return None
+        result = parse_select_response(self._bridge.select_gate(self._gate), self._gate)
+        if result is None:
+            self._bridge.supports_select = False
+            return None
+        self._bridge.supports_select = True
+        self._last_state = "closed" if self._gate not in result.blocked and not result.error else "blocked"
+        return result
 
     def stop(self) -> None:
         return  # no continuous motion to interrupt — moves are already blocking
