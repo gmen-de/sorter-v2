@@ -165,6 +165,51 @@ _PRE_ADVANCE_DROP_MARGIN_DEG = 3.0
 _overlap_cache: tuple[float, float] = (0.0, 0.0)
 
 
+_c4_cfg_cache: tuple[float, dict] = (0.0, {})
+
+
+def _c4Config() -> dict:
+    """[c4] in machine.toml, read at most once a second (changes need no restart)."""
+    global _c4_cfg_cache
+    now = time.monotonic()
+    if now - _c4_cfg_cache[0] < 1.0:
+        return _c4_cfg_cache[1]
+    cfg: dict = {}
+    try:
+        import machine_toml
+
+        cfg = dict(machine_toml.read().get("c4") or {})
+    except Exception:
+        cfg = {}
+    _c4_cfg_cache = (now, cfg)
+    return cfg
+
+
+def _headAloneAfterS() -> float:
+    """How long the head waits for a next piece before it is ejected alone:
+    [c4] head_alone_after_s, or _HEAD_ALONE_AFTER_S."""
+    try:
+        value = float(_c4Config().get("head_alone_after_s", _HEAD_ALONE_AFTER_S))
+    except (TypeError, ValueError):
+        return _HEAD_ALONE_AFTER_S
+    return min(60.0, max(0.5, value))
+
+
+# A piece the staging stopped short of the holding band can be left with its
+# centre out of the drop zone but its box still in it: the feeder reads the drop
+# zone as occupied, so no next piece can come, yet there is no drop piece to
+# photograph and stage. Waiting then only costs time. [c4] eject_past_straddler
+# (default off) ejects the head after this short settle instead. Off by default:
+# with it on, the channel can turn while C3 is still delivering a piece, which
+# then lands on a moving ring, is never photographed and goes to misc (up to
+# 36 % of pieces on rolling parts in another machine's trial).
+_STRADDLE_SETTLE_S = 1.0
+
+
+def _ejectPastStraddler() -> bool:
+    return bool(_c4Config().get("eject_past_straddler", False))
+
+
 def _overlapStandoffDeg() -> float:
     """The stand-off in output degrees when the overlap is on, else 0."""
     global _overlap_cache
@@ -614,6 +659,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         # The classification channel OWNS the feeder admission gate. Ready only
         # when we are idle between cycles (not mid-rotation) AND the drop zone is
         # clear AND the platter has settled — i.e. "rotation complete, drop empty".
+        self._last_in_drop = bool(state.in_drop)
         ready = self._phase == _Phase.WAITING and (not state.in_drop) and stopped
         self.setClassificationReady(ready, "waiting + drop clear + stopped")
         if not ready:
@@ -1430,7 +1476,15 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         # reads as an occupied drop zone, so no next piece could ever come and
         # only the stall watchdog's sweep moved the channel on.
         since = self._ready_since if self._ready_since is not None else self._phase_started_at
-        if time.monotonic() - since < _HEAD_ALONE_AFTER_S:
+        wait = _headAloneAfterS()
+        straddler = (
+            bool(getattr(self, "_last_in_drop", False))
+            and self._dropPiece() is None
+            and _ejectPastStraddler()
+        )
+        if straddler:
+            wait = min(wait, _STRADDLE_SETTLE_S)
+        if time.monotonic() - since < wait:
             return
         head = self._headPiece()
         if head is None or not self._headReady(head):
@@ -1438,10 +1492,12 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         self._stage_target = None
         self._eject_target = head
         self._enterPhase(_Phase.EJECTING)
-        self.logger.info(
-            f"{LOG_TAG} ROTATE: eject track={head.track_id} alone "
-            f"(no next piece for {_HEAD_ALONE_AFTER_S:.0f} s)"
+        why = (
+            "a piece straddles the drop zone's edge, so no next piece can come"
+            if straddler
+            else f"no next piece for {wait:.0f} s"
         )
+        self.logger.info(f"{LOG_TAG} ROTATE: eject track={head.track_id} alone ({why})")
 
     def _ejecting(self, state, stopped: bool, now: float) -> None:
         target = self._eject_target
