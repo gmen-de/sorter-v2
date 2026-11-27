@@ -154,6 +154,35 @@ _RELINK_TURNED_DEG = 120.0
 # Two ids this close are one piece (a tracker double), not two pieces.
 _SAME_PIECE_DEG = 8.0
 
+# Overlap with the chute: while the chute is still settling or turning to the
+# head's bin, the channel already carries the head to this far short of the
+# fall-off, so only the last bit of the eject waits for the chute. [c4]
+# overlap_chute / overlap_standoff_deg in machine.toml, read at most once a
+# second (no restart needed). The piece in the drop zone rides along but is
+# kept inside the drop zone, so it stays the next piece to stage.
+_PRE_ADVANCE_MIN_DEG = 3.0
+_PRE_ADVANCE_DROP_MARGIN_DEG = 3.0
+_overlap_cache: tuple[float, float] = (0.0, 0.0)
+
+
+def _overlapStandoffDeg() -> float:
+    """The stand-off in output degrees when the overlap is on, else 0."""
+    global _overlap_cache
+    now = time.monotonic()
+    if now - _overlap_cache[0] < 1.0:
+        return _overlap_cache[1]
+    value = 0.0
+    try:
+        import machine_toml
+
+        c4 = machine_toml.read().get("c4") or {}
+        if bool(c4.get("overlap_chute", False)):
+            value = max(0.0, float(c4.get("overlap_standoff_deg", 10.0)))
+    except Exception:
+        value = 0.0
+    _overlap_cache = (now, value)
+    return value
+
 # A second piece that lands while the channel is turning the last one off the
 # drop zone came in unasked: the feeder only adds a piece while the channel
 # stands still with the drop zone clear. Seen this long, it and the piece it
@@ -1339,6 +1368,8 @@ class TwoPieceClassificationChannel(Rev01BaseState):
             self._rotation_started_at = time.monotonic()
             self._cycles.rotated(time.time(), ejecting=False)
             self.logger.info(f"{LOG_TAG} ROTATE: stage track={drop.track_id} (no head)")
+        elif not self._headReady(head):
+            self._maybePreAdvance(head, drop)
         elif self._headReady(head):
             self._stage_target = drop
             self._eject_target = head
@@ -1348,6 +1379,49 @@ class TwoPieceClassificationChannel(Rev01BaseState):
             self.logger.info(
                 f"{LOG_TAG} ROTATE: eject track={head.track_id} + stage track={drop.track_id}"
             )
+
+    def _maybePreAdvance(self, head: _TrackedPiece, drop: _TrackedPiece) -> None:
+        """Carry a placed head (the chute is aiming for it) to the overlap
+        stand-off short of the fall-off while the chute is not ready yet. Once
+        per head; never so far that the drop-zone piece leaves the drop zone or
+        a waiting piece comes up to the exit."""
+        standoff = _overlapStandoffDeg()
+        if standoff <= 0 or getattr(self, "_pre_advanced_track", None) == head.track_id:
+            return
+        obj = head.known_object
+        if not head.placed or head.ejected or obj is None or obj.stage != PieceStage.distributing:
+            return
+        if head.gap_to_exit is None:
+            return
+        self._pre_advanced_track = head.track_id
+        move = float(head.gap_to_exit) - standoff
+        precise = self._preciseSpanDeg()
+        if precise is None or drop.gap_to_exit is None:
+            return
+        move = min(move, float(drop.gap_to_exit) - precise - _PRE_ADVANCE_DROP_MARGIN_DEG)
+        limit = self._keepOnLimit(exclude=head)
+        if limit is not None:
+            move = min(move, limit)
+        move = min(move, float(self.ctx.config.discharge_max_move_output_deg))
+        if move < _PRE_ADVANCE_MIN_DEG:
+            return
+        self.logger.info(
+            f"{LOG_TAG} PRE-ADVANCE head track={head.track_id} by {move:.1f} deg "
+            f"(stand-off {standoff:.0f} deg) while the chute gets ready"
+        )
+        self.startOutputMove(C4_TRAVEL_SIGN * move, self.ctx.config.discharge_speed_usteps_per_s)
+
+    def _preciseSpanDeg(self) -> Optional[float]:
+        """The precise (holding) band's width: the gap between the drop zone's
+        end and the fall-off. None when unknown."""
+        perception_service = getattr(self.gc, "perception_service", None)
+        channels = perception_service.channels() if perception_service is not None else {}
+        channel = channels.get(4)
+        if channel is None or not channel.precise_sections:
+            return None
+        from perception.channel import SECTION_DEG
+
+        return len(channel.precise_sections) * SECTION_DEG
 
     def _maybeEjectHeadAlone(self) -> None:
         # Counted from when the feeder was let in, or, while its gate stays shut

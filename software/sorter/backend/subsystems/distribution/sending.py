@@ -33,11 +33,39 @@ FALLBACK_SETTLE_MS = 2000
 MIN_SETTLE_MS = 100
 
 
+_settle_override_cache: tuple[float, Optional[int]] = (0.0, None)
+
+
+def chuteSettleOverrideMs() -> Optional[int]:
+    """[chute] settle_ms in machine.toml: one settle wait for every layer, in
+    place of the per-layer one worked out below (the per-layer adjustment
+    still comes on top). None when it is not set. Read at most once a second,
+    so a change takes effect without a restart."""
+    global _settle_override_cache
+    now = time.monotonic()
+    if now - _settle_override_cache[0] < 1.0:
+        return _settle_override_cache[1]
+    value: Optional[int] = None
+    try:
+        import machine_toml
+
+        raw = (machine_toml.read().get("chute") or {}).get("settle_ms")
+        if raw is not None and 200 <= int(raw) <= 5000:
+            value = int(raw)
+    except Exception:
+        pass
+    _settle_override_cache = (now, value)
+    return value
+
+
 def chuteSettleMsForLayer(layer_index: Optional[int]) -> float:
     """Milliseconds to wait after a drop before the piece has settled
     (fallen + slid clear) on the given layer (0 = topmost, hit first)."""
     if layer_index is None or layer_index < 0:
         return FALLBACK_SETTLE_MS
+    override = chuteSettleOverrideMs()
+    if override is not None:
+        return float(override)
     n = layer_index + 1
     fall_distance_m = FALL_DISTANCE_BASE_M + FALL_DISTANCE_PER_LAYER_M * (n - 1)
     fall_time_s = math.sqrt(2 * fall_distance_m / GRAVITY_M_S2)
