@@ -59,3 +59,13 @@ ring, was never photographed and went to misc as a "stray" (up to 36 % of
 pieces). With these settings strays went to 0-4 %.
 
 Lowering C4 `rotate_speed_usteps_per_s` to 5500 did not help.
+
+## On this branch
+
+- `[chute] settle_ms` replaces the settle wait worked out per layer (fall time
+  + slide time); the per-layer adjustment from the storage-layers settings is
+  still added on top. Unset, the per-layer wait applies as before.
+- `[c4] eject_past_straddler` is **off** by default (see the rolling-parts note
+  above for why). Switch it on only to try it.
+- `[c4] overlap_chute` and `[c4] head_alone_after_s` are as above; every value
+  is read live from `machine.toml`, no restart.
