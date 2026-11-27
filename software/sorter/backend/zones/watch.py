@@ -13,6 +13,7 @@ someone looks at them before they are kept.
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections import deque
@@ -124,6 +125,7 @@ class PieceWatch:
                     "p50": round(delays[len(delays) // 2], 3),
                     "p90": round(delays[min(len(delays) - 1, int(len(delays) * 0.9))], 3),
                 }
+                entry["landing_on_next_channel"] = _landingSpread(hand, nxt)
             out["channels"][str(channel)] = entry
         out["channels"]["4"] = {"frames": len(self.frames(4))}
         return out
@@ -241,6 +243,58 @@ class PieceWatch:
         fn = getattr(self._logger, level, None)
         if fn is not None:
             fn(message)
+
+
+def _percentile(sorted_values: list[float], share: float) -> float:
+    return sorted_values[min(len(sorted_values) - 1, int(len(sorted_values) * share))]
+
+
+def _landingSpread(handoffs: list[Handoff], channel: int) -> dict[str, Any] | None:
+    """Where the pieces that fell onto ``channel`` were first seen there: their
+    angles around its ring (as the zones count them), and how long a piece is
+    in channel degrees at the exit's radius. The angles are given relative to
+    the middle of the channel's drop zone as well, so the spread reads the same
+    across 0/360. This is what the drop zone and the precise width are set by."""
+    try:
+        from .store import loadZones
+
+        zones = loadZones().get(channel)
+    except Exception:
+        zones = None
+    if zones is None or not handoffs:
+        return None
+    cx, cy = zones.ring.center
+    w, h = zones.frame
+    mid = zones.drop.middle
+    rel: list[float] = []
+    sizes: list[float] = []
+    for hand in handoffs:
+        x, y = hand.landed.at((w, h))
+        angle = math.degrees(math.atan2(y - cy, x - cx)) % 360.0
+        rel.append((angle - mid + 180.0) % 360.0 - 180.0)
+        if zones.ring.exit_radius > 0:
+            sizes.append(math.degrees(hand.landed.size * w / zones.ring.exit_radius))
+    rel.sort()
+    sizes.sort()
+    out: dict[str, Any] = {
+        "n": len(rel),
+        "drop_zone": {"start": round(zones.drop.start, 2), "end": round(zones.drop.end, 2), "middle": round(mid, 2)},
+        "from_drop_middle_deg": {
+            "min": round(rel[0], 1),
+            "p02": round(_percentile(rel, 0.02), 1),
+            "p50": round(_percentile(rel, 0.5), 1),
+            "p98": round(_percentile(rel, 0.98), 1),
+            "max": round(rel[-1], 1),
+        },
+        "outside_drop_zone": sum(1 for r in rel if abs(r) > zones.drop.width / 2.0),
+    }
+    if sizes:
+        out["piece_length_deg"] = {
+            "p50": round(_percentile(sizes, 0.5), 1),
+            "p90": round(_percentile(sizes, 0.9), 1),
+            "max": round(sizes[-1], 1),
+        }
+    return out
 
 
 _watch: PieceWatch | None = None

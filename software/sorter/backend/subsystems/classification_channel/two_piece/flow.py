@@ -22,6 +22,7 @@ from .channel_clear import (
     ChannelClearResult,
     clearChannelByAdvancing,
 )
+from . import aim_trace
 from .constants import C4_TRAVEL_SIGN
 from .context import SimpleStateMachineRev01Context
 
@@ -270,6 +271,9 @@ class _TrackedPiece:
         self.progress_gap: Optional[float] = None
         self.created_at = now
         self.last_seen = now
+        # When it was classified, aimed for and ejected, and where it stood
+        # each time (aim_trace.py).
+        self.trace: dict = {"track_id": track_id, "first_seen_at": time.time()}
         # Burst capture (drop zone only) has finished -> safe to rotate the piece
         # out of the drop zone.
         self.capture_done = False
@@ -603,6 +607,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         # Classification results arrive on background threads — apply them every
         # tick regardless of phase.
         self._applyResults(now)
+        self._traceAimReady()
 
         if self._phase == _Phase.WAITING:
             if stopped:
@@ -1128,6 +1133,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         tp.capture_done = True
         self._cycles.multiDrop()
         tp.result_applied = True
+        self._traceEvent(tp, "classified")
         self.noteProgress()
         self._ensureKnownObject(tp)
         obj = tp.known_object
@@ -1240,6 +1246,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
             if result is not None or error is not None:
                 tp.worker.updateKnownObjectWithResult(result, error)
                 tp.result_applied = True
+                self._traceEvent(tp, "classified")
                 self.noteProgress()
                 self._checkCircling(tp)
             elif (now - ctx.classify_started_at) > ctx.config.classify_timeout_s:
@@ -1253,6 +1260,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
                 )
                 tp.worker.updateKnownObjectWithResult(None, "timeout")
                 tp.result_applied = True
+                self._traceEvent(tp, "classified")
                 self.noteProgress()
 
     def _aimChuteForHead(self, now: float) -> None:
@@ -1285,6 +1293,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
                     )
                     tp.worker.emitKnownObject()
                 tp.result_applied = True
+                self._traceEvent(tp, "classified")
                 self.logger.warning(
                     f"{LOG_TAG} stray head track={tp.track_id} never classified -> misc"
                 )
@@ -1301,6 +1310,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
             obj.classification_status = ClassificationStatus.unknown
         self.transport.placePieceForDistribution(obj)
         tp.placed = True
+        self._traceEvent(tp, "aim_requested")
         self.noteProgress()
         self.logger.info(
             f"{LOG_TAG} aiming chute for head track={tp.track_id} "
@@ -1683,9 +1693,48 @@ class TwoPieceClassificationChannel(Rev01BaseState):
             exit_turn=lambda: turn,
         )
 
+    def _traceEvent(self, tp: _TrackedPiece, name: str) -> None:
+        """Note a moment in this piece's trace: when, where it stood (gap to the
+        exit, zone) and whether the platter was turning. First time only."""
+        if f"{name}_at" in tp.trace:
+            return
+        gap = tp.gap_to_exit
+        tp.trace[f"{name}_at"] = time.time()
+        tp.trace[f"{name}_gap_deg"] = None if gap is None else round(float(gap), 1)
+        tp.trace[f"{name}_zone"] = {
+            _ZONE_DROP: "drop", _ZONE_EXIT: "exit", _ZONE_PRECISE: "precise",
+        }.get(tp.zone, "between")
+        tp.trace[f"{name}_platter_turning"] = self._phase != _Phase.WAITING
+
+    def _traceAimReady(self) -> None:
+        """The chute is aimed for the placed piece (distribution's READY): note
+        it the first time, for the piece holding the slot."""
+        tp = self._pendingPlacedPiece()
+        if tp is not None and "aim_ready_at" not in tp.trace and self._headReady(tp):
+            self._traceEvent(tp, "aim_ready")
+
+    def _finishTrace(self, tp: _TrackedPiece) -> None:
+        trace = tp.trace
+        self._traceEvent(tp, "ejected")
+        obj = tp.known_object
+        if obj is not None:
+            trace["piece_uuid"] = obj.uuid
+            trace["part_id"] = obj.part_id
+            trace["classification_status"] = str(getattr(obj.classification_status, "value", obj.classification_status))
+            dest = getattr(obj, "destination_bin", None)
+            trace["destination_bin"] = list(dest) if dest else None
+            trace["chute_move_started_at"] = obj.distribution_motion_started_at
+            trace["positioned_at"] = obj.distribution_positioned_at
+        trace["double_feed"] = tp.double_feed
+        aim_trace.finish(trace)
+
     def _commitToDistribution(self, tp: _TrackedPiece) -> None:
         # The placed piece leaves the platter into the chute: move it to
         # distribution's drop slot and count it as a C4 exit.
+        try:
+            self._finishTrace(tp)
+        except Exception as exc:
+            self.logger.warning(f"{LOG_TAG} aim trace failed: {exc}")
         self.transport.advanceTransport()
         tp.ejected = True
         tp.ejected_at = time.monotonic()
