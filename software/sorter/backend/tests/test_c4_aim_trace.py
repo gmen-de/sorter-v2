@@ -140,3 +140,39 @@ def test_the_watch_report_gives_the_landing_spread_for_c2_too() -> None:
     assert spread["outside_drop_zone"] == 0
     assert abs(spread["from_drop_middle_deg"]["p50"]) < 1.0
     assert report["channels"]["2"]["landing_on_next_channel"]["n"] == 1
+
+
+def test_staging_stops_the_platter_once_the_drop_zone_has_been_clear_a_moment() -> None:
+    ch = _channel(_Phase.STAGING)
+    stops = []
+    ch.stopStepper = lambda: stops.append(1)  # type: ignore[method-assign]
+    ch._stopWhenDropClear(False, 1.0)
+    ch._stopWhenDropClear(True, 1.1)
+    assert not stops
+    ch._stopWhenDropClear(True, 1.1 + two_piece._STAGE_EARLY_STOP_CLEAR_S - 0.01)
+    assert not stops
+    ch._stopWhenDropClear(True, 1.1 + two_piece._STAGE_EARLY_STOP_CLEAR_S + 0.01)
+    assert len(stops) == 1
+
+
+def test_a_piece_in_the_drop_zone_again_restarts_the_early_stop_wait() -> None:
+    ch = _channel(_Phase.STAGING)
+    stops = []
+    ch.stopStepper = lambda: stops.append(1)  # type: ignore[method-assign]
+    ch._stopWhenDropClear(True, 1.0)
+    ch._stopWhenDropClear(False, 1.05)
+    ch._stopWhenDropClear(True, 1.1)
+    ch._stopWhenDropClear(True, 1.15)
+    assert not stops
+
+
+def test_ready_is_noted_once_for_the_pieces_that_left_the_drop_zone() -> None:
+    ch, tp = _channel(), _piece(zone=two_piece._ZONE_PRECISE)
+    ch._pieces[1] = tp
+    ch._traceReady()
+    assert "ready_at" not in tp.trace
+    ch._traceZones()
+    ch._traceReady()
+    first = tp.trace["ready_at"]
+    ch._traceReady()
+    assert tp.trace["ready_at"] == first

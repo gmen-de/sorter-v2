@@ -28,6 +28,7 @@ STRETCHES = (
     # before it not yet ejected).
     ("classified_to_left_drop", "classified_at", "left_drop_at"),
     ("left_drop_to_aim_requested", "left_drop_at", "aim_requested_at"),
+    ("left_drop_to_ready", "left_drop_at", "ready_at"),
     ("prev_ejected_to_aim_requested", "prev_ejected_at", "aim_requested_at"),
     ("aim_ready_to_at_exit", "aim_ready_at", "at_exit_at"),
     ("at_exit_to_ejected", "at_exit_at", "ejected_at"),

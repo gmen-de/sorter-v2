@@ -222,6 +222,10 @@ _RESUME_GAP_S = 1.0
 # Safety ceilings so a move that never resolves can't wedge the machine forever.
 _EJECT_TIMEOUT_S = 15.0
 _STAGE_TIMEOUT_S = 15.0
+# Staging stops the platter as soon as the drop zone has been clear this long,
+# instead of finishing the move to the holding band: the feeder may send the next
+# piece once the channel reports ready, which it only does when the platter stands.
+_STAGE_EARLY_STOP_CLEAR_S = 0.12
 
 # Stall-watchdog progress signal: a tracked piece's gap-to-exit must change by
 # more than this (output deg) to count as the piece actually moving. Well above
@@ -373,6 +377,10 @@ class TwoPieceClassificationChannel(Rev01BaseState):
 
     # When the last piece was ejected (wall clock), for the aim trace.
     _last_ejected_wall: Optional[float] = None
+    # Was the channel reporting ready on the previous tick (for the aim trace),
+    # and since when has the drop zone been clear while the platter turns in staging.
+    _was_ready: bool = False
+    _stage_clear_since: Optional[float] = None
 
     def __init__(
         self,
@@ -594,6 +602,9 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         # clear AND the platter has settled — i.e. "rotation complete, drop empty".
         ready = self._phase == _Phase.WAITING and (not state.in_drop) and stopped
         self.setClassificationReady(ready, "waiting + drop clear + stopped")
+        if ready and not self._was_ready:
+            self._traceReady()
+        self._was_ready = ready
         if not ready:
             self._ready_since = None
         elif self._ready_since is None:
@@ -1491,11 +1502,13 @@ class TwoPieceClassificationChannel(Rev01BaseState):
             self._stage_target = None
             self._enterPhase(_Phase.WAITING)
             return
-        if not stopped:
-            return
         drop_clear = (not state.in_drop) and not any(
             tp.zone == _ZONE_DROP for tp in self._pieces.values()
         )
+        if not stopped:
+            self._stopWhenDropClear(drop_clear, now)
+            return
+        self._stage_clear_since = None
         if drop_clear:
             self.logger.info(f"{LOG_TAG} staged -> holding (drop clear)")
             if self._stage_target is not None:
@@ -1542,6 +1555,22 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         self.startOutputMove(
             C4_TRAVEL_SIGN * move, self.ctx.config.precise_converge_speed_usteps_per_s
         )
+
+    def _stopWhenDropClear(self, drop_clear: bool, now: float) -> None:
+        """Staging only needs the drop zone clear: stop the platter once it has
+        been for a moment, rather than after the whole move to the holding band.
+        The piece rests wherever it is (the head logic treats the gap between
+        zones as part of the queue), and the channel reports ready sooner."""
+        if not drop_clear:
+            self._stage_clear_since = None
+            return
+        if self._stage_clear_since is None:
+            self._stage_clear_since = now
+            return
+        if now - self._stage_clear_since >= _STAGE_EARLY_STOP_CLEAR_S:
+            self.logger.info(f"{LOG_TAG} staging: drop zone clear, stopping the platter early")
+            self._stage_clear_since = None
+            self.stopStepper()
 
     def _pushOffLingeringEject(self, now: float) -> bool:
         """Push off a piece that was committed as ejected but still sits at the
@@ -1713,7 +1742,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         tp.trace[f"{name}_zone"] = {
             _ZONE_DROP: "drop", _ZONE_EXIT: "exit", _ZONE_PRECISE: "precise",
         }.get(tp.zone, "between")
-        tp.trace[f"{name}_platter_turning"] = self._phase != _Phase.WAITING
+        tp.trace[f"{name}_platter_turning"] = getattr(self, "_phase", _Phase.WAITING) != _Phase.WAITING
 
     def _traceAimReady(self) -> None:
         """The chute is aimed for the placed piece (distribution's READY): note
@@ -1721,6 +1750,13 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         tp = self._pendingPlacedPiece()
         if tp is not None and "aim_ready_at" not in tp.trace and self._headReady(tp):
             self._traceEvent(tp, "aim_ready")
+
+    def _traceReady(self) -> None:
+        """The channel just reported ready for the feeder: note it for the pieces
+        that have left the drop zone since the last time it did."""
+        for tp in self._pieces.values():
+            if "left_drop_at" in tp.trace and "ready_at" not in tp.trace:
+                self._traceEvent(tp, "ready")
 
     def _traceZones(self) -> None:
         """Note the first time each piece stands out of the drop zone ("left_drop")
