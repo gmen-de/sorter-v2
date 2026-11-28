@@ -371,6 +371,9 @@ class TwoPieceClassificationChannel(Rev01BaseState):
     The single-piece SIMPLE_STATE_MACHINE_REV01 path is untouched.
     """
 
+    # When the last piece was ejected (wall clock), for the aim trace.
+    _last_ejected_wall: Optional[float] = None
+
     def __init__(
         self,
         irl,
@@ -403,7 +406,6 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         self._multi_drop_last_ts = -1.0
         # Monotonic counter for multi_drop_group ids; advanced once per new clump.
         self._multi_drop_seq = 0
-        self._last_ejected_wall: Optional[float] = None  # for the aim trace
         # A pair seen landing in the drop zone (see _PAIR_DEG): until when a
         # piece that lands still joins it, and its multi_drop_group.
         self._pair_until = 0.0
@@ -1068,6 +1070,10 @@ class TwoPieceClassificationChannel(Rev01BaseState):
                 )
                 return None
             self._unplace(tp)
+            self.logger.warning(
+                f"{LOG_TAG} track={tp.track_id} revised to a double feed: withdrew it from "
+                f"distribution to aim again for misc"
+            )
         if group is None:
             self._multi_drop_seq += 1
             group = self._multi_drop_seq

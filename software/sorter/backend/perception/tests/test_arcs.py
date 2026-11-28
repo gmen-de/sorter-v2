@@ -18,6 +18,7 @@ from perception.arcs import (
     exitComForwardDeg,
     exitNearEdgeSection,
     forwardClearanceToExitDeg,
+    orderedPieceObservations,
 )
 from perception.channel import ChannelDef, buildChannelDef
 
@@ -316,6 +317,15 @@ def test_com_in_precise_zone_is_the_eject_trigger() -> None:
     assert comInPreciseZone([_bbox_at_angle(200.0)], ch) is False  # before precise
     assert comInPreciseZone([_bbox_at_angle(270.0)], ch) is False  # in exit, past precise
     assert comInPreciseZone([], ch) is False                        # no piece
+
+
+def test_a_piece_is_named_by_the_zones_its_channel_has_now() -> None:
+    """Zones saved while running give the channel a new ChannelDef. A piece at
+    90 degrees is in the drop zone until the drop zone is moved off it."""
+    piece = [_bbox_at_angle(90.0)]
+    assert orderedPieceObservations(piece, _channel(drop_arc=(75.0, 105.0)))[0][2] == 1
+    assert orderedPieceObservations(piece, _channel(drop_arc=(20.0, 50.0)))[0][2] == 0
+    assert orderedPieceObservations(piece, _channel(drop_arc=(75.0, 105.0)))[0][2] == 1
 
 
 # Suppress unused-import warning; cv2 is used transitively via buildChannelDef.

@@ -215,6 +215,63 @@ def test_ready_goes_idle_when_positioned_piece_is_withdrawn() -> None:
     assert ready.step() == DistributionState.IDLE
 
 
+def test_ready_goes_idle_when_the_positioned_piece_is_placed_again_for_a_new_aim() -> None:
+    transport = ClassificationChannelTransport()
+    shared = _mkShared(transport)
+    ready = Ready(SimpleNamespace(), _mkGc(), shared)  # type: ignore[arg-type]
+    obj = _positioned(transport, shared)
+    assert ready.step() is None
+
+    # One classification step: withdrawn, unplaced, placed again. The slot never
+    # looks empty to READY, but the piece is no longer 'distributing'.
+    assert transport.clearPieceForDistribution(obj)
+    obj.stage = PieceStage.created
+    transport.placePieceForDistribution(obj)
+
+    assert ready.step() == DistributionState.IDLE
+    assert Idle(SimpleNamespace(), _mkGc(), shared).step() == DistributionState.POSITIONING  # type: ignore[arg-type]
+
+
+def test_head_revised_to_double_feed_while_its_chute_moves_is_aimed_again() -> None:
+    """The 17-minute wedge of 2026-11-11: C4 aimed for a classified head and
+    Positioning set off for its set bin, then a second piece showed up beside it.
+    C4 withdrew it and placed the same record again as a double feed in one step;
+    READY saw the same uuid and waited for a drop, C4 waited for a fresh aim."""
+    transport = ClassificationChannelTransport()
+    shared = _mkShared(transport)
+    gc = _mkGc()
+    ch = _mkChannel(transport, shared)
+    obj = KnownObject(part_id="3001", color_id="1")
+    obj.classification_status = ClassificationStatus.classified
+    head = _addPiece(ch, 1347, gap_to_exit=37.0, obj=obj)
+    ch._aimChuteForHead(time.monotonic())
+    # Positioning's init: aimed at the piece's own set bin, chute on its way.
+    shared.set_distribution_gate(False, reason="positioning")
+    obj.stage = PieceStage.distributing
+    obj.destination_bin = (0, 4, 0)
+    shared.distribution_positioned_uuid = obj.uuid
+
+    ch._reviseToDoubleFeed(head, None, "a second piece showed up beside it")
+    ch._aimChuteForHead(time.monotonic())  # same tick: placed again, for misc
+    assert transport.getPieceForDistributionPositioning() is obj
+    drop = _addPiece(ch, 1351, gap_to_exit=265.0)
+    drop.zone, drop.capture_done = 1, True
+
+    ready = Ready(SimpleNamespace(), gc, shared)  # type: ignore[arg-type]
+    assert ready.step() == DistributionState.IDLE  # not "waiting for a drop"
+    ch._maybeStartRotation()
+    assert ch._phase == _Phase.WAITING  # not ejected into the set bin (0, 4, 0)
+
+    assert Idle(SimpleNamespace(), gc, shared).step() == DistributionState.POSITIONING  # type: ignore[arg-type]
+    obj.stage, obj.destination_bin = PieceStage.distributing, None  # aimed again, for misc
+    shared.distribution_positioned_uuid = obj.uuid
+    ready = Ready(SimpleNamespace(), gc, shared)  # type: ignore[arg-type]
+    assert ready.step() is None and shared.distribution_ready
+    ch._maybeStartRotation()
+    assert ch._phase == _Phase.EJECTING
+    assert ch._eject_target is head and ch._stage_target is drop
+
+
 def test_sending_does_not_record_an_already_committed_piece_again() -> None:
     transport = ClassificationChannelTransport()
     previous = KnownObject()

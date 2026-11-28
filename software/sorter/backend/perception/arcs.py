@@ -481,15 +481,18 @@ def exitComForwardToCenterDeg(
 _AREA_GRID_N = 12  # 12x12 = 144 sample points per bbox; ample for area majority
 
 # Per-channel cached region lookup: section_id → 0=none 1=drop 2=exit_only 3=precise.
-# Keyed by channel_id; built once on first call and reused. The section sets are
-# immutable after ChannelDef construction so this never goes stale.
-_region_lookup_cache: dict[int, np.ndarray] = {}
+# Kept per channel_id together with the section sets it was built from: zones
+# saved while running give the channel a new ChannelDef with new sets, and a
+# table kept by channel_id alone went on naming each piece's zone by the old
+# ones until the next start.
+_region_lookup_cache: dict[int, tuple[tuple[frozenset[int], ...], np.ndarray]] = {}
 
 
 def _region_lookup(channel: ChannelDef) -> np.ndarray:
+    zones = (channel.drop_sections, channel.exit_sections, channel.precise_sections)
     cached = _region_lookup_cache.get(channel.channel_id)
-    if cached is not None:
-        return cached
+    if cached is not None and all(a is b for a, b in zip(cached[0], zones)):
+        return cached[1]
     exit_only = channel.exit_sections - channel.precise_sections
     lut = np.zeros(SECTION_COUNT, dtype=np.int8)
     for s in channel.drop_sections:
@@ -498,7 +501,7 @@ def _region_lookup(channel: ChannelDef) -> np.ndarray:
         lut[int(s) % SECTION_COUNT] = 2
     for s in channel.precise_sections:
         lut[int(s) % SECTION_COUNT] = 3
-    _region_lookup_cache[channel.channel_id] = lut
+    _region_lookup_cache[channel.channel_id] = (zones, lut)
     return lut
 
 
