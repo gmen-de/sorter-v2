@@ -403,6 +403,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         self._multi_drop_last_ts = -1.0
         # Monotonic counter for multi_drop_group ids; advanced once per new clump.
         self._multi_drop_seq = 0
+        self._last_ejected_wall: Optional[float] = None  # for the aim trace
         # A pair seen landing in the drop zone (see _PAIR_DEG): until when a
         # piece that lands still joins it, and its multi_drop_group.
         self._pair_until = 0.0
@@ -608,6 +609,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         # tick regardless of phase.
         self._applyResults(now)
         self._traceAimReady()
+        self._traceZones()
 
         if self._phase == _Phase.WAITING:
             if stopped:
@@ -1310,6 +1312,7 @@ class TwoPieceClassificationChannel(Rev01BaseState):
             obj.classification_status = ClassificationStatus.unknown
         self.transport.placePieceForDistribution(obj)
         tp.placed = True
+        tp.trace["prev_ejected_at"] = self._last_ejected_wall
         self._traceEvent(tp, "aim_requested")
         self.noteProgress()
         self.logger.info(
@@ -1713,9 +1716,20 @@ class TwoPieceClassificationChannel(Rev01BaseState):
         if tp is not None and "aim_ready_at" not in tp.trace and self._headReady(tp):
             self._traceEvent(tp, "aim_ready")
 
+    def _traceZones(self) -> None:
+        """Note the first time each piece stands out of the drop zone ("left_drop")
+        and at the exit ("at_exit"), so the aim trace can tell whether a piece
+        waited for the platter or for distribution's single slot."""
+        for tp in self._pieces.values():
+            if tp.zone != _ZONE_DROP:
+                self._traceEvent(tp, "left_drop")
+            if tp.zone == _ZONE_EXIT:
+                self._traceEvent(tp, "at_exit")
+
     def _finishTrace(self, tp: _TrackedPiece) -> None:
         trace = tp.trace
         self._traceEvent(tp, "ejected")
+        self._last_ejected_wall = trace.get("ejected_at")
         obj = tp.known_object
         if obj is not None:
             trace["piece_uuid"] = obj.uuid

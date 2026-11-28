@@ -23,6 +23,14 @@ STRETCHES = (
     ("chute_moving_to_positioned", "chute_move_started_at", "positioned_at"),
     ("aim_requested_to_aim_ready", "aim_requested_at", "aim_ready_at"),
     ("aim_ready_to_ejected", "aim_ready_at", "ejected_at"),
+    # Which of the two waits before the aim request is the long one: the piece
+    # still in the drop zone (the platter), or distribution's slot (the piece
+    # before it not yet ejected).
+    ("classified_to_left_drop", "classified_at", "left_drop_at"),
+    ("left_drop_to_aim_requested", "left_drop_at", "aim_requested_at"),
+    ("prev_ejected_to_aim_requested", "prev_ejected_at", "aim_requested_at"),
+    ("aim_ready_to_at_exit", "aim_ready_at", "at_exit_at"),
+    ("at_exit_to_ejected", "at_exit_at", "ejected_at"),
 )
 
 
